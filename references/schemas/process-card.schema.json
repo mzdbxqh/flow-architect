@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "process-card",
+  "title": "Process Card",
+  "description": "流程卡片，包含流程级元数据、边界和绩效指标",
+  "type": "object",
+  "required": [
+    "process_id", "name", "level", "is_leaf", "description",
+    "purpose", "owner", "parent_process_name", "inputs", "outputs",
+    "start", "end_results", "performance_indicators"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "process_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+      "description": "稳定 ID"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "流程名称"
+    },
+    "level": {
+      "type": "string",
+      "enum": ["L1", "L2", "L3", "L4"],
+      "description": "流程层级"
+    },
+    "is_leaf": {
+      "type": "boolean",
+      "description": "是否末端流程，只有末端 L4 为 true 时生成一图两表"
+    },
+    "description": {
+      "type": "string",
+      "description": "流程描述"
+    },
+    "purpose": {
+      "type": "string",
+      "description": "流程目的"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "description": "流程责任人（角色引用）"
+    },
+    "parent_process_name": {
+      "type": ["string", "null"],
+      "description": "上一层流程名称"
+    },
+    "inputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "流程级输入"
+    },
+    "outputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "流程级输出"
+    },
+    "start": {
+      "type": "object",
+      "required": ["event_id", "name", "event_type"],
+      "additionalProperties": false,
+      "properties": {
+        "event_id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$" },
+        "name": { "type": "string", "minLength": 1 },
+        "event_type": {
+          "type": "string",
+          "enum": ["NONE", "MESSAGE", "TIMER", "SIGNAL", "CONDITIONAL"],
+          "description": "事件类型"
+        }
+      },
+      "description": "起点触发事实和事件类型"
+    },
+    "end_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_id", "name"],
+        "additionalProperties": false,
+        "properties": {
+          "event_id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$" },
+          "name": { "type": "string", "minLength": 1 }
+        }
+      },
+      "minItems": 1,
+      "description": "一个或多个业务终点"
+    },
+    "performance_indicators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["indicator_id", "name"],
+        "additionalProperties": false,
+        "properties": {
+          "indicator_id": { "type": "string" },
+          "name": { "type": "string", "minLength": 1 },
+          "target": { "type": "string" },
+          "unit": { "type": "string" }
+        }
+      },
+      "description": "流程绩效指标"
+    }
+  }
+}

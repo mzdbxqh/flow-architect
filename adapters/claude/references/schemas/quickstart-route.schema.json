@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quickstart-route",
+  "title": "Quickstart Route Result",
+  "description": "scripts/quickstart-route.mjs 的确定性路由输出合同。路由阶段零写入、零联网；该结果只描述候选与规范化任务，不代表已执行业务副作用。",
+  "type": "object",
+  "required": [
+    "status",
+    "candidates",
+    "selected_method",
+    "normalized_task",
+    "missing",
+    "ignored_directives",
+    "unrecognized",
+    "evidence"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["ROUTED", "NEEDS_CHOICE", "MISSING_INFO", "NO_MATCH"]
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "method_id",
+          "title",
+          "skill",
+          "claude_entry",
+          "codex_entry",
+          "side_effects",
+          "requires_output_dir",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "method_id": { "type": "string" },
+          "title": { "type": "string" },
+          "skill": { "type": "string" },
+          "claude_entry": { "type": "string" },
+          "codex_entry": { "type": "string" },
+          "side_effects": { "type": "string" },
+          "requires_output_dir": { "type": "boolean" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "selected_method": { "type": ["string", "null"] },
+    "normalized_task": {
+      "type": ["object", "null"],
+      "required": ["method_id", "title", "skill", "claude_entry", "codex_entry", "params"],
+      "additionalProperties": false,
+      "properties": {
+        "method_id": { "type": "string" },
+        "title": { "type": "string" },
+        "skill": { "type": "string" },
+        "claude_entry": { "type": "string" },
+        "codex_entry": { "type": "string" },
+        "params": {
+          "type": "object",
+          "required": ["target_paths", "output_dir"],
+          "additionalProperties": false,
+          "properties": {
+            "target_paths": { "type": "array", "items": { "type": "string" } },
+            "output_dir": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "missing": { "type": "array", "items": { "type": "string" } },
+    "ignored_directives": { "type": "array", "items": { "type": "string" } },
+    "unrecognized": { "type": "array", "items": { "type": "string" } },
+    "evidence": {
+      "type": "object",
+      "required": ["request", "intent", "facts", "params", "user_choice"],
+      "additionalProperties": false,
+      "properties": {
+        "request": { "type": "string" },
+        "intent": {
+          "type": ["string", "null"],
+          "enum": ["REVIEW", "CREATE_DRAFT", "CREATE_MEETING_PACKAGE", null]
+        },
+        "facts": {
+          "type": "object",
+          "required": ["architecture_count", "diagram_count", "has_v2_draft"],
+          "additionalProperties": false,
+          "properties": {
+            "architecture_count": { "type": "number" },
+            "diagram_count": { "type": "number" },
+            "has_v2_draft": { "type": "boolean" }
+          }
+        },
+        "params": { "type": "object" },
+        "user_choice": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@flow-architect/runtime-docx",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Flow Architect runtime DOCX dependencies",
+  "dependencies": {
+    "mammoth": "1.12.0"
+  }
+}

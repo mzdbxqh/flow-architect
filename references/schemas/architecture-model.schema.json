@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow-architect/schemas/architecture-model.schema.json",
+  "title": "Architecture Model",
+  "description": "Structured representation of an architecture extracted from documents.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "nodes", "relationships", "metadata"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "node_id",
+          "type",
+          "name",
+          "parent_id",
+          "roles",
+          "inputs",
+          "outputs",
+          "rasci",
+          "source_refs",
+          "rules_refs"
+        ],
+        "properties": {
+          "node_id": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["L3", "L4", "L5", "L6", "SOP"]
+          },
+          "name": { "type": "string" },
+          "parent_id": { "type": ["string", "null"] },
+          "roles": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" }
+              }
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" }
+              }
+            }
+          },
+          "rasci": {
+            "type": "string",
+            "enum": ["R", "A", "S", "C", "I"]
+          },
+          "source_refs": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "rules_refs": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from_node_id", "to_node_id", "type"],
+        "properties": {
+          "from_node_id": { "type": "string" },
+          "to_node_id": { "type": "string" },
+          "type": { "type": "string" }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object"
+    }
+  }
+}

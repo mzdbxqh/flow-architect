@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context-budget",
+  "title": "ContextBudget",
+  "description": "统一 Token 预算报告，包含三类分项、阈值状态和来源定位",
+  "type": "object",
+  "required": [
+    "formula_version",
+    "fixed",
+    "content",
+    "metadata",
+    "total",
+    "limit",
+    "ratio",
+    "status",
+    "split_required",
+    "source_ids"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "formula_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20
+    },
+    "fixed": { "$ref": "#/$defs/tokenBreakdown" },
+    "content": { "$ref": "#/$defs/tokenBreakdown" },
+    "metadata": { "$ref": "#/$defs/tokenBreakdown" },
+    "total": { "$ref": "#/$defs/tokenBreakdown" },
+    "estimated_tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "总估算 token 数（total.estimated_tokens 的顶层快捷访问）"
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ratio": {
+      "type": "number",
+      "minimum": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": ["BUDGET_OK", "BUDGET_ATTENTION", "BUDGET_SPLIT_REQUIRED"]
+    },
+    "split_required": {
+      "type": "boolean"
+    },
+    "source_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "maxItems": 1000
+    }
+  },
+  "$defs": {
+    "tokenBreakdown": {
+      "type": "object",
+      "required": ["han_chars", "ascii_chars", "other_chars", "estimated_tokens"],
+      "additionalProperties": false,
+      "properties": {
+        "han_chars": { "type": "integer", "minimum": 0 },
+        "ascii_chars": { "type": "integer", "minimum": 0 },
+        "other_chars": { "type": "integer", "minimum": 0 },
+        "estimated_tokens": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

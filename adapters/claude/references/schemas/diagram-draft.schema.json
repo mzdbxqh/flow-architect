@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "diagram-draft",
+  "title": "Diagram Draft",
+  "description": "V2 业务图模型，包含泳道、节点、流转、任务绑定和布局版本",
+  "type": "object",
+  "required": ["lanes", "nodes", "flows", "task_bindings", "layout_version"],
+  "additionalProperties": false,
+  "properties": {
+    "lanes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["lane_id", "name", "role_id"],
+        "additionalProperties": false,
+        "properties": {
+          "lane_id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "role_id": { "type": "string", "minLength": 1 }
+        }
+      },
+      "description": "泳道数组"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["node_id", "node_type", "name", "lane_id"],
+        "additionalProperties": false,
+        "properties": {
+          "node_id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$" },
+          "node_type": {
+            "type": "string",
+            "enum": [
+              "MAIN_TASK",
+              "CONFIRMATION_TASK",
+              "GATEWAY_XOR",
+              "GATEWAY_AND",
+              "GATEWAY_OR",
+              "START_EVENT",
+              "INTERMEDIATE_MESSAGE_CATCH",
+              "INTERMEDIATE_MESSAGE_THROW",
+              "INTERMEDIATE_TIMER_CATCH",
+              "INTERMEDIATE_LINK_CATCH",
+              "INTERMEDIATE_LINK_THROW",
+              "END_EVENT"
+            ],
+            "description": "V2 节点类型"
+          },
+          "name": { "type": "string" },
+          "lane_id": { "type": ["string", "null"] }
+        }
+      },
+      "description": "节点数组"
+    },
+    "flows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["flow_id", "source_ref", "target_ref", "condition"],
+        "additionalProperties": false,
+        "properties": {
+          "flow_id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$" },
+          "source_ref": { "type": "string" },
+          "target_ref": { "type": "string" },
+          "condition": {
+            "type": ["object", "null"],
+            "properties": {
+              "label": { "type": "string" },
+              "source_activity_id": { "type": "string" },
+              "source_output": { "type": "string" },
+              "operator": { "type": "string", "enum": ["EQUALS", "NOT_EQUALS", "GREATER_THAN", "LESS_THAN", "IS_TRUE", "IS_FALSE", "CONTAINS"] },
+              "value": { "type": "string" }
+            },
+            "required": ["label"],
+            "additionalProperties": false,
+            "description": "结构化网关条件"
+          }
+        }
+      },
+      "description": "流转关系数组"
+    },
+    "task_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["activity_id", "main_task_id"],
+        "additionalProperties": false,
+        "properties": {
+          "activity_id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$" },
+          "main_task_id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$" },
+          "confirmation_task_id": { "type": ["string", "null"] }
+        }
+      },
+      "description": "任务绑定数组"
+    },
+    "layout_version": {
+      "type": "string",
+      "const": "2.0.0",
+      "description": "布局版本"
+    }
+  }
+}
