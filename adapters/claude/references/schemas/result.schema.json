@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow-architect/schemas/result.schema.json",
+  "title": "Stage Result",
+  "description": "Output produced by a stage task execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "stage_id",
+    "attempt",
+    "status",
+    "summary",
+    "outputs",
+    "warnings",
+    "blocking_reason",
+    "degradation",
+    "producer",
+    "evidence"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "run_id": { "type": "string" },
+    "stage_id": { "type": "string" },
+    "attempt": { "type": "number", "minimum": 1 },
+    "status": {
+      "type": "string",
+      "enum": [
+        "SUCCEEDED",
+        "SUCCEEDED_WITH_WARNINGS",
+        "FAILED",
+        "BLOCKED",
+        "NEEDS_INPUT",
+        "CANCELLED"
+      ]
+    },
+    "decision": {
+      "type": ["string", "null"],
+      "enum": ["PASS", "WARN", "FAIL", "BLOCKED", null]
+    },
+    "summary": { "type": "string" },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "description"],
+        "properties": {
+          "path": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "blocking_reason": {
+      "type": ["string", "null"]
+    },
+    "degradation": {
+      "type": ["string", "null"]
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executor", "name", "skill"],
+      "properties": {
+        "executor": { "type": "string" },
+        "name": { "type": "string" },
+        "skill": { "type": "string" }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

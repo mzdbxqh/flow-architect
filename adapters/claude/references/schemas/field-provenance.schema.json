@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "field-provenance",
+  "title": "Field Provenance",
+  "description": "JSON Pointer 字段证据，通过路径旁路关联业务对象的确定性和证据来源",
+  "type": "object",
+  "additionalProperties": false,
+  "patternProperties": {
+    "^/": {
+      "type": "object",
+      "required": ["certainty", "evidence_refs"],
+      "additionalProperties": false,
+      "properties": {
+        "certainty": {
+          "type": "string",
+          "enum": ["EXPLICIT", "INFERRED", "MISSING", "CONFLICT", "NOT_APPLICABLE"],
+          "description": "确定性状态"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" },
+          "description": "关联的证据块 ID"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "flow-architect",
+  "version": "0.4.0",
+  "description": "Process architecture review, draft, and meeting package skill family",
+  "author": {
+    "name": "flow-architect contributors"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "architecture",
+    "review",
+    "draft",
+    "meeting",
+    "bpmn",
+    "process",
+    "diagram"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Flow Architect",
+    "shortDescription": "Process architecture review",
+    "longDescription": "Skill family for reviewing process architectures, drafting process models, and building meeting packages from BPMN diagrams",
+    "developerName": "flow-architect contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": "Review my process architecture for defects"
+  }
+}

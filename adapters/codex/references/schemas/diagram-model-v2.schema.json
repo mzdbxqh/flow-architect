@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow-architect/schemas/diagram-model-v2.schema.json",
+  "title": "Diagram Model V2",
+  "description": "Structured representation of a V2 diagram extracted from BPMN 2.0 XML.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "diagram", "metadata"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "2.0.0" },
+    "diagram": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lanes", "nodes", "flows", "task_bindings", "layout_version"],
+      "properties": {
+        "lanes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["lane_id", "name", "role_id"],
+            "properties": {
+              "lane_id": { "type": "string" },
+              "name": { "type": "string" },
+              "role_id": { "type": "string" }
+            }
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["node_id", "node_type", "name", "lane_id"],
+            "properties": {
+              "node_id": { "type": "string" },
+              "node_type": {
+                "type": "string",
+                "enum": [
+                  "MAIN_TASK",
+                  "CONFIRMATION_TASK",
+                  "GATEWAY_XOR",
+                  "GATEWAY_AND",
+                  "GATEWAY_OR",
+                  "START_EVENT",
+                  "END_EVENT",
+                  "INTERMEDIATE_MESSAGE_CATCH",
+                  "INTERMEDIATE_MESSAGE_THROW",
+                  "INTERMEDIATE_TIMER_CATCH",
+                  "INTERMEDIATE_LINK_CATCH",
+                  "INTERMEDIATE_LINK_THROW"
+                ]
+              },
+              "name": { "type": "string" },
+              "lane_id": { "type": ["string", "null"] },
+              "activity_id": { "type": ["string", "null"] },
+              "event_definition": { "type": ["object", "null"] }
+            }
+          }
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["flow_id", "source_ref", "target_ref"],
+            "properties": {
+              "flow_id": { "type": "string" },
+              "source_ref": { "type": "string" },
+              "target_ref": { "type": "string" },
+              "condition": {
+                "type": ["object", "null"],
+                "additionalProperties": false,
+                "properties": {
+                  "label": { "type": "string" },
+                  "source_output": { "type": ["string", "null"] },
+                  "operator": {
+                    "type": ["string", "null"],
+                    "enum": [
+                      "EQUALS",
+                      "NOT_EQUALS",
+                      "GREATER_THAN",
+                      "LESS_THAN",
+                      "GREATER_THAN_OR_EQUAL",
+                      "LESS_THAN_OR_EQUAL",
+                      "CONTAINS",
+                      "IS_TRUE",
+                      "IS_FALSE",
+                      null
+                    ]
+                  },
+                  "value": { "type": ["string", "null"] }
+                }
+              }
+            }
+          }
+        },
+        "task_bindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["activity_id", "main_task_id"],
+            "properties": {
+              "activity_id": { "type": "string" },
+              "main_task_id": { "type": "string" },
+              "confirmation_task_id": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "layout_version": { "type": "string", "const": "2.0.0" }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parse_mode", "source_format", "confidence", "warnings"],
+      "properties": {
+        "parse_mode": { "type": "string" },
+        "source_format": { "type": "string" },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
