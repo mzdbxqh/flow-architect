@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { formatCapabilities } from './lib/input-classifier.mjs';
+import { importRuntimePackage } from './lib/runtime-loader.mjs';
 
 /**
  * Inspect a set of input files and produce an InputManifest.
@@ -100,7 +101,7 @@ async function classifyFile(filePath, warnings) {
  */
 async function classifyPdf(filePath, content, artifact, warnings) {
   try {
-    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const pdfjsLib = await importRuntimePackage('pdf', 'pdfjs-dist/legacy/build/pdf.mjs');
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(content) });
     const pdf = await loadingTask.promise;
 
@@ -131,9 +132,9 @@ async function classifyPdf(filePath, content, artifact, warnings) {
 
     await loadingTask.destroy();
   } catch (err) {
-    warnings.push(`PDF analysis failed for ${filePath}: ${err.message}`);
+    warnings.push(`PDF analysis failed for ${filePath}: [${err.code || 'UNKNOWN'}] ${err.message}`);
     artifact.confidence = 0.3;
-    artifact.degradation_reason = `PDF parsing error: ${err.message}`;
+    artifact.degradation_reason = `PDF parsing error: [${err.code || 'UNKNOWN'}] ${err.message}`;
   }
 
   return artifact;
@@ -144,7 +145,7 @@ async function classifyPdf(filePath, content, artifact, warnings) {
  */
 async function classifyDocx(filePath, content, artifact, warnings) {
   try {
-    const mammoth = await import('mammoth');
+    const mammoth = await importRuntimePackage('docx', 'mammoth');
     const result = await mammoth.extractRawText({ buffer: content });
     const text = result.value;
     if (!text || text.trim().length === 0) {
@@ -173,7 +174,7 @@ async function classifyDocx(filePath, content, artifact, warnings) {
  */
 async function classifyXlsx(filePath, content, artifact, warnings) {
   try {
-    const ExcelJS = (await import('exceljs')).default;
+    const ExcelJS = await importRuntimePackage('xlsx', 'exceljs');
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(content);
 
