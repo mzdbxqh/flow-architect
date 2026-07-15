@@ -19,9 +19,15 @@ test('Claude help command is discoverable and read-only', () => {
   const { frontmatter, body } = command('help');
   assert.match(frontmatter.description, /帮助|能力|状态/);
   assert.match(frontmatter['allowed-tools'], /runtime-manager\.mjs/);
-  assert.match(body, /\$CLAUDE_PLUGIN_ROOT\/scripts\/runtime-manager\.mjs" check --json/);
-  assert.match(body, /\$CLAUDE_PLUGIN_ROOT\/scripts\/runtime-manager\.mjs" doctor --json/);
+  assert.match(body, /\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/runtime-manager\.mjs" check --json/);
+  assert.match(body, /\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/runtime-manager\.mjs" doctor --json/);
   assert.doesNotMatch(body, /runtime-manager\.mjs" install/);
+  assert.match(body, /flow-architect`=只读盘点输入并自动路由/);
+  assert.match(body, /组件 ID 是 `pdf`、包名是 `pdfjs-dist`/);
+  assert.match(body, /不得把任何入口描述成建模、生成、渲染或自动修复/);
+  assert.match(body, /不得显示解析后的插件绝对路径/);
+  assert.match(body, /不得建议向插件目录安装依赖/);
+  assert.match(body, /不得改写成 `OK`/);
   assert.match(body, /零写入/);
   assert.match(body, /零联网/);
 });
@@ -43,6 +49,9 @@ test('Claude setup command is manual and enforces plan-confirm-install-doctor', 
   assert.ok(install < doctor, 'install 后必须 doctor');
   assert.match(body, /--accept-plan\s+<plan_sha256>/);
   assert.match(body, /取消.*无副作用|拒绝.*无副作用/s);
+  assert.match(body, /core 启用 BPMN、SVG、JSON、YAML、Markdown/);
+  assert.match(body, /不得用笼统的 XML 代替 BPMN\/SVG/);
+  assert.match(body, /请只读评审 <架构文件> 与 <流程图文件>/);
 });
 
 test('Codex help/setup skills keep discovery and side-effect boundaries explicit', () => {
