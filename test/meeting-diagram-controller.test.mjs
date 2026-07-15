@@ -31,13 +31,12 @@ async function openFixture(t) {
   return { browser, page };
 }
 
-test('XOR branch creation rolls back all elements on failure', async t => {
+test('XOR branch creation rolls back all elements and sequence flows on failure', async t => {
   const { page } = await openFixture(t);
   await page.locator('[data-element-id="Task_Review"]').click();
 
-  const beforeCount = await page.evaluate(() =>
-    window.__FLOW_ARCHITECT__.modeler.get('elementRegistry').filter(e =>
-      e.type === 'bpmn:ExclusiveGateway' || e.type === 'bpmn:Task').length);
+  const beforeXml = await page.evaluate(async () =>
+    (await window.__FLOW_ARCHITECT__.modeler.saveXML({ format: true })).xml);
 
   await page.evaluate(() => {
     const dc = window.__FLOW_ARCHITECT__.diagramController;
@@ -56,10 +55,23 @@ test('XOR branch creation rolls back all elements on failure', async t => {
     window.__FLOW_ARCHITECT__.modeler.get('autoPlace').append = origAppend;
   });
 
-  const afterCount = await page.evaluate(() =>
-    window.__FLOW_ARCHITECT__.modeler.get('elementRegistry').filter(e =>
-      e.type === 'bpmn:ExclusiveGateway' || e.type === 'bpmn:Task').length);
-  assert.equal(afterCount, beforeCount);
+  const afterXml = await page.evaluate(async () =>
+    (await window.__FLOW_ARCHITECT__.modeler.saveXML({ format: true })).xml);
+
+  const extractIds = (xml) => {
+    const elements = new Set();
+    const flows = new Set();
+    for (const m of xml.matchAll(/id="(Task_|Gateway_|Activity_|StartEvent_|EndEvent_)[^"]*"/g)) elements.add(m[0]);
+    for (const m of xml.matchAll(/id="Flow_[^"]*"/g)) flows.add(m[0]);
+    for (const m of xml.matchAll(/id="SequenceFlow_[^"]*"/g)) flows.add(m[0]);
+    return { elements, flows };
+  };
+
+  const before = extractIds(beforeXml);
+  const after = extractIds(afterXml);
+  assert.deepEqual(after.elements, before.elements);
+  assert.deepEqual(after.flows, before.flows);
+  assert.equal(afterXml, beforeXml);
 });
 
 test('question pre-export validation rejects duplicate IDs', async t => {

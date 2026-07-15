@@ -43,6 +43,22 @@ node scripts/build-single-diagram-html.mjs \
   --output procurement-r01.html
 ```
 
+When the BPMN contains multiple processes, you must specify which one to build:
+
+```bash
+node scripts/build-single-diagram-html.mjs \
+  --bpmn ./multi-process.bpmn \
+  --questions ./questions.json \
+  --title "Order Process" \
+  --revision r01 \
+  --package-id order-process \
+  --process-id Process_Order \
+  --run-dir ./runs/meeting-package \
+  --output order-r01.html
+```
+
+When the BPMN contains exactly one process, `--process-id` can be omitted and is auto-inferred.
+
 The generated HTML:
 - Opens and edits offline without network access
 - Supports bidirectional navigation between questions and process elements

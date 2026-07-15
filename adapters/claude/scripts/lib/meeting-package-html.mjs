@@ -13,9 +13,9 @@ const DATA_RE = /<script id="fa-package-data" type="application\/json">([A-Za-z0
 export function validateProcessId(bpmnXml, processId) {
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' });
   const parsed = parser.parse(bpmnXml);
-  const definitions = parsed?.definitions;
+  const definitions = parsed?.definitions ?? parsed?.['bpmn:definitions'];
   if (!definitions) throw new Error('BPMN 文件无法解析：缺少 definitions');
-  let processes = definitions.process;
+  let processes = definitions.process ?? definitions['bpmn:process'];
   if (!processes) throw new Error('BPMN 文件中未找到 process');
   if (!Array.isArray(processes)) processes = [processes];
   if (processes.length === 1) {

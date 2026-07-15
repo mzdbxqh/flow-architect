@@ -231,3 +231,47 @@ test('offline package emits no network request', async t => {
   await page.locator('#fa-canvas svg[data-element-id]').waitFor();
   assert.deepEqual(requests, []);
 });
+
+async function clickAndWaitForAlert(page, btnName) {
+  const alertPromise = new Promise(resolve => {
+    const handler = async dialog => {
+      page.removeListener('dialog', handler);
+      resolve(dialog.message());
+      await dialog.accept();
+    };
+    page.on('dialog', handler);
+  });
+  await page.getByRole('button', { name: btnName }).click();
+  return alertPromise;
+}
+
+test('export with illegal question status shows Chinese error, no download', async t => {
+  const { page } = await openFixture(t);
+  await page.evaluate(() => {
+    window.__FLOW_ARCHITECT__.payload.questions[0].status = 'BOGUS';
+  });
+  const alertMsg = await clickAndWaitForAlert(page, '导出新版本');
+  assert.match(alertMsg, /[一-鿿]/);
+  assert.ok(!alertMsg.includes('Unhandled'));
+});
+
+test('export with dangling element ref shows Chinese error, no download', async t => {
+  const { page } = await openFixture(t);
+  await page.evaluate(() => {
+    window.__FLOW_ARCHITECT__.payload.questions[0].element_ids.push('Ghost_Element');
+  });
+  const alertMsg = await clickAndWaitForAlert(page, '导出新版本');
+  assert.match(alertMsg, /[一-鿿]/);
+  assert.match(alertMsg, /Ghost_Element|不存在|引用/);
+});
+
+test('all four export buttons catch async errors with Chinese alert', async t => {
+  const { page } = await openFixture(t);
+  await page.evaluate(() => {
+    window.__FLOW_ARCHITECT__.payload.questions[0].text = '';
+  });
+  for (const btn of ['导出新版本', '导出 BPMN', '导出问题']) {
+    const alertMsg = await clickAndWaitForAlert(page, btn);
+    assert.match(alertMsg, /[一-鿿]/);
+  }
+});

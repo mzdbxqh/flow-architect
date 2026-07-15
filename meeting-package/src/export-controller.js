@@ -6,15 +6,27 @@ export function nextRevision(revision) {
   return `r${String(Number(match[1]) + 1).padStart(match[1].length, '0')}`;
 }
 
-function validateQuestionsBeforeExport(questions) {
+const VALID_STATUSES = new Set(['OPEN', 'CONFIRMED', 'NOT_APPLICABLE']);
+const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+function validateQuestionsBeforeExport(questions, modeler, processId) {
   const ids = new Set();
+  const registry = modeler?.get('elementRegistry');
   for (const q of questions) {
     if (!q.id || typeof q.id !== 'string') throw new Error('问题 ID 不能为空');
+    if (!ID_PATTERN.test(q.id)) throw new Error(`问题 ID 格式非法：${q.id}`);
     if (ids.has(q.id)) throw new Error(`问题 ID 重复：${q.id}`);
     ids.add(q.id);
     if (!q.text || !q.text.trim()) throw new Error(`问题 ${q.id} 的描述不能为空`);
+    if (!VALID_STATUSES.has(q.status)) throw new Error(`问题 ${q.id} 的状态非法：${q.status}`);
     if (!Array.isArray(q.element_ids) || q.element_ids.length === 0) {
       throw new Error(`问题 ${q.id} 必须关联至少一个图元素`);
+    }
+    if (registry) {
+      for (const eid of q.element_ids) {
+        if (eid === processId) continue;
+        if (!registry.get(eid)) throw new Error(`问题 ${q.id} 引用了不存在的图元素：${eid}`);
+      }
     }
   }
 }
@@ -26,7 +38,7 @@ export class ExportController {
   }
 
   async currentPayload() {
-    validateQuestionsBeforeExport(this.payload.questions);
+    validateQuestionsBeforeExport(this.payload.questions, this.modeler, this.payload.metadata.process_id);
     const { xml } = await this.modeler.saveXML({ format: true });
     const next = {
       metadata: {

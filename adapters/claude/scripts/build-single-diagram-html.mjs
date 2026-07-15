@@ -63,6 +63,8 @@ try {
   const outputPath = validatePath(args.output, runDir);
   const tempPath = validatePath(args.output + '.tmp', runDir);
 
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
   const processId = validateProcessId(bpmnXml, args.processId || null);
 
   const html = buildMeetingPackageHtml({

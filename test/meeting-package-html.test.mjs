@@ -9,6 +9,7 @@ import {
   buildMeetingPackageHtml,
   extractMeetingPackageHtml,
   compareMeetingPackages,
+  validateProcessId,
 } from '../scripts/lib/meeting-package-html.mjs';
 
 const bpmnXml = fs.readFileSync(fixture('meeting-package/single-process.bpmn'), 'utf8');
@@ -202,4 +203,26 @@ test('CLI accepts explicit --process-id for multi-process BPMN', () => {
   assert.equal(result.status, 0);
   const out = JSON.parse(result.stdout);
   assert.equal(out.status, 'SUCCEEDED');
+});
+
+test('validateProcessId supports prefixed bpmn: namespace', () => {
+  const prefixedBpmn = fs.readFileSync(fixture('diagrams/valid.bpmn'), 'utf8');
+  assert.equal(validateProcessId(prefixedBpmn, 'Process_Order'), 'Process_Order');
+  assert.throws(() => validateProcessId(prefixedBpmn, 'NonExistent'), /不存在/);
+});
+
+test('nested output directory is created inside runDir', () => {
+  const runDir = makeRunDir('nested-output');
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
+    '--bpmn', fixture('meeting-package/single-process.bpmn'),
+    '--questions', fixture('meeting-package/questions.valid.json'),
+    '--title', '采购审批流程', '--revision', 'r01',
+    '--package-id', 'procurement-approval', '--run-dir', runDir,
+    '--output', 'nested/deep/output.html',
+  ], { encoding: 'utf8' });
+  assert.equal(result.status, 0);
+  const out = JSON.parse(result.stdout);
+  assert.equal(out.status, 'SUCCEEDED');
+  assert.ok(fs.existsSync(path.join(runDir, 'nested', 'deep', 'output.html')));
 });

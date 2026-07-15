@@ -64,6 +64,22 @@ node scripts/build-single-diagram-html.mjs \
   --output procurement-r01.html
 ```
 
+当 BPMN 包含多个 process 时，必须通过 `--process-id` 显式指定要构建的流程：
+
+```bash
+node scripts/build-single-diagram-html.mjs \
+  --bpmn ./multi-process.bpmn \
+  --questions ./questions.json \
+  --title "订单流程" \
+  --revision r01 \
+  --package-id order-process \
+  --process-id Process_Order \
+  --run-dir ./runs/meeting-package \
+  --output order-r01.html
+```
+
+当 BPMN 恰好包含一个 process 时，`--process-id` 可省略，自动推断。
+
 生成的 HTML：
 - 无需联网即可打开和编辑
 - 支持问题与流程元素双向定位

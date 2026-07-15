@@ -96,19 +96,19 @@ import { ExportController } from './export-controller.js';
   });
 
   document.querySelector('#fa-export-html').addEventListener('click', () => {
-    exportController.downloadNewHtml();
+    exportController.downloadNewHtml().catch(e => alert(`导出失败：${e.message}`));
   });
 
   document.querySelector('#fa-export-bpmn').addEventListener('click', () => {
-    exportController.downloadBpmn();
+    exportController.downloadBpmn().catch(e => alert(`导出失败：${e.message}`));
   });
 
   document.querySelector('#fa-export-svg').addEventListener('click', () => {
-    exportController.downloadSvg();
+    exportController.downloadSvg().catch(e => alert(`导出失败：${e.message}`));
   });
 
   document.querySelector('#fa-export-questions').addEventListener('click', () => {
-    exportController.downloadQuestions();
+    exportController.downloadQuestions().catch(e => alert(`导出失败：${e.message}`));
   });
 
   window.__FLOW_ARCHITECT__ = { modeler, payload, questionController, diagramController, exportController };
