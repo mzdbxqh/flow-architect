@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "runtime_version": "1.0.0",
+  "plugin_compatibility": ">=0.1.2 <0.2.0",
+  "components": [
+    {
+      "name": "core",
+      "required": true,
+      "packages": {
+        "ajv": "8.20.0",
+        "fast-xml-parser": "4.5.7",
+        "yaml": "2.9.0"
+      }
+    },
+    {
+      "name": "pdf",
+      "required": false,
+      "packages": {
+        "pdfjs-dist": "4.10.38"
+      }
+    },
+    {
+      "name": "docx",
+      "required": false,
+      "packages": {
+        "mammoth": "1.12.0"
+      }
+    },
+    {
+      "name": "xlsx",
+      "required": false,
+      "packages": {
+        "exceljs": "4.4.0"
+      }
+    }
+  ]
+}
