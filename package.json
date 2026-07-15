@@ -6,10 +6,13 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "node scripts/build-adapters.mjs",
-    "build:check": "node scripts/build-adapters.mjs --check",
+    "build": "pnpm build:meeting && node scripts/build-adapters.mjs",
+    "build:check": "pnpm build:meeting:check && node scripts/build-adapters.mjs --check",
+    "build:meeting": "node scripts/build-meeting-editor.mjs",
+    "build:meeting:check": "node scripts/build-meeting-editor.mjs --check",
     "check:skills": "node scripts/check-skills.mjs",
     "test": "node --test test/*.test.mjs",
+    "test:browser": "node --test test/meeting-package-browser.test.mjs",
     "test:contract": "node scripts/check-skills.mjs && node scripts/build-adapters.mjs --check",
     "test:smoke": "node --test test/integrated-review.test.mjs"
   },

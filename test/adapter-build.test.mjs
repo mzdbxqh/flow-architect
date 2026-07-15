@@ -68,3 +68,11 @@ test('repository root has Claude marketplace.json', () => {
     'Repository root should have .claude-plugin/marketplace.json'
   );
 });
+
+test('meeting package runtime is copied to both adapters', () => {
+  const outputs = buildAdapterOutputs(new URL('..', import.meta.url));
+  for (const adapter of ['codex', 'claude']) {
+    assert.ok(outputs.has(`adapters/${adapter}/runtime/meeting-package/editor.bundle.js`));
+    assert.ok(outputs.has(`adapters/${adapter}/skills/flow-architect-build-meeting-package/SKILL.md`));
+  }
+});

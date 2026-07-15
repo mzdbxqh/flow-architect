@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>流程讨论包</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <style>__FA_STYLE__</style>
+</head>
+<body>
+  <div id="fa-app">
+    <header id="fa-toolbar">
+      <h1 id="fa-title"></h1>
+      <span id="fa-revision"></span>
+      <nav id="fa-edit-controls">
+        <button type="button" id="fa-rename" aria-label="修改名称">修改名称</button>
+        <button type="button" id="fa-insert-task" aria-label="后插活动">后插活动</button>
+        <button type="button" id="fa-add-gateway" aria-label="增加判断">增加判断</button>
+        <button type="button" id="fa-delete" aria-label="删除活动">删除活动</button>
+        <button type="button" id="fa-undo" aria-label="撤销">撤销</button>
+        <button type="button" id="fa-redo" aria-label="重做">重做</button>
+      </nav>
+      <nav id="fa-export-controls">
+        <button type="button" id="fa-export-html" aria-label="导出新版本">导出新版本</button>
+        <button type="button" id="fa-export-bpmn" aria-label="导出 BPMN">导出 BPMN</button>
+        <button type="button" id="fa-export-svg" aria-label="导出 SVG">导出 SVG</button>
+        <button type="button" id="fa-export-questions" aria-label="导出问题">导出问题</button>
+      </nav>
+    </header>
+    <main id="fa-main">
+      <div id="fa-canvas"></div>
+      <aside id="fa-questions"></aside>
+    </main>
+    <dialog id="fa-rename-dialog">
+      <form method="dialog">
+        <label>活动名称<input type="text" id="fa-rename-input" aria-label="活动名称" required></label>
+        <menu><button type="button" id="fa-rename-cancel">取消</button><button type="submit" id="fa-rename-confirm">确认修改</button></menu>
+      </form>
+    </dialog>
+    <dialog id="fa-insert-dialog">
+      <form method="dialog">
+        <label>新活动名称<input type="text" id="fa-insert-input" aria-label="新活动名称" required></label>
+        <menu><button type="button" id="fa-insert-cancel">取消</button><button type="submit" id="fa-insert-confirm">确认新增</button></menu>
+      </form>
+    </dialog>
+    <dialog id="fa-gateway-dialog">
+      <form method="dialog">
+        <label>判断问题<input type="text" id="fa-gateway-question" aria-label="判断问题" required></label>
+        <label>是分支活动<input type="text" id="fa-gateway-yes" aria-label="是分支活动" required></label>
+        <label>否分支活动<input type="text" id="fa-gateway-no" aria-label="否分支活动" required></label>
+        <menu><button type="button" id="fa-gateway-cancel">取消</button><button type="submit" id="fa-gateway-confirm">确认新增判断</button></menu>
+      </form>
+    </dialog>
+  </div>
+  <script id="fa-package-data" type="application/json">__FA_PAYLOAD__</script>
+  <script>__FA_SCRIPT__</script>
+</body>
+</html>

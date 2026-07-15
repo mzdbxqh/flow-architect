@@ -11,6 +11,7 @@ const ROOT = path.resolve(__dirname, '..');
 
 const ENTRY_SKILLS = [
   'flow-architect',
+  'flow-architect-build-meeting-package',
   'flow-architect-flow-review-integrated',
   'flow-architect-flow-review-architecture',
   'flow-architect-flow-review-diagram',
