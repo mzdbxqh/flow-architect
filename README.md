@@ -50,7 +50,7 @@ Phase 2 adds `flow-architect-draft-process`, a **creation** skill that generates
 
 **During the meeting:** Open the HTML in a browser (no network required). Edit process elements, answer questions, and mark confidence. Export a new revision at any time.
 
-**After the meeting:** Import the exported HTML revision back into the run directory. The system merges answered questions and BPMN changes, then generates updated artifacts.
+**After the meeting:** Extract the exported HTML revision using `extract-meeting-package.mjs`, compare it against the original draft with `compare-package-revisions.mjs`, and feed the confirmed changes back as the next iteration's input.
 
 ## Process Draft — Cache and Recovery
 

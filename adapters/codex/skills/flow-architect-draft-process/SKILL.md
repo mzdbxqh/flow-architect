@@ -140,7 +140,7 @@ node "$PLUGIN_ROOT/scripts/runtime-manager.mjs" doctor --json
 错误: Batch exceeds 12000 chars
 ```
 
-**解决**: 拆分输入文件或增加批次大小限制
+**解决**: 拆分源材料或缩小单个结构块，保持 12,000 字符硬预算不变
 
 ### 多流程候选
 
