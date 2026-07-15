@@ -58,3 +58,67 @@ test('question answer and status update the in-memory payload', async t => {
   assert.equal(question.status, 'CONFIRMED');
   assert.equal(await page.locator('[data-overlay-question-id="Q-001"]').count(), 0);
 });
+
+test('business edit controls rename, insert, branch, delete, undo and redo', async t => {
+  const { browser, page } = await openFixture(t);
+  await page.locator('[data-element-id="Task_Review"]').click();
+  await page.getByRole('button', { name: '修改名称' }).click();
+  await page.locator('#fa-rename-input').fill('复核采购申请');
+  await page.getByRole('button', { name: '确认修改' }).click();
+  assert.equal(await page.locator('[data-element-id="Task_Review"] text').textContent(), '复核采购申请');
+  await page.getByRole('button', { name: '撤销' }).click();
+  assert.equal(await page.locator('[data-element-id="Task_Review"] text').textContent(), '审核采购申请');
+  await page.getByRole('button', { name: '重做' }).click();
+  assert.equal(await page.locator('[data-element-id="Task_Review"] text').textContent(), '复核采购申请');
+  await browser.close();
+});
+
+test('insert, branch and protected delete use business controls', async t => {
+  const { page } = await openFixture(t);
+  await page.locator('[data-element-id="Task_Review"]').click();
+  await page.getByRole('button', { name: '后插活动' }).click();
+  await page.locator('#fa-insert-input').fill('记录复核结果');
+  await page.getByRole('button', { name: '确认新增' }).click();
+  assert.equal(await page.locator('.djs-element[data-element-id^="Activity_"]').count() > 0, true);
+
+  await page.locator('[data-element-id="Task_Review"]').click();
+  await page.getByRole('button', { name: '增加判断' }).click();
+  await page.locator('#fa-gateway-question').fill('申请是否完整？');
+  await page.locator('#fa-gateway-yes').fill('继续审批');
+  await page.locator('#fa-gateway-no').fill('退回补充');
+  await page.getByRole('button', { name: '确认新增判断' }).click();
+  assert.equal(await page.locator('.djs-element[data-element-id^="Gateway_"]').count() > 0, true);
+
+  await page.locator('[data-element-id="Task_Review"]').click();
+  let dialogMessage = '';
+  page.on('dialog', async dialog => {
+    dialogMessage = dialog.message();
+    await dialog.accept();
+  });
+  await page.getByRole('button', { name: '删除活动' }).click();
+  await page.waitForTimeout(500);
+  assert.match(dialogMessage, /请先处理关联问题：Q-001/);
+  assert.equal(await page.locator('[data-element-id="Task_Review"]').count(), 1);
+});
+
+test('native drag and reconnect persist BPMN DI and flow refs', async t => {
+  const { page } = await openFixture(t);
+  const task = page.locator('[data-element-id="Task_Review"] .djs-hit');
+  await task.dragTo(page.locator('#fa-canvas'), {
+    targetPosition: { x: 520, y: 260 },
+  });
+  await page.evaluate(() => {
+    const modeler = window.__FLOW_ARCHITECT__.modeler;
+    const registry = modeler.get('elementRegistry');
+    modeler.get('modeling').reconnectEnd(
+      registry.get('Flow_Review_Approve'),
+      registry.get('Task_Rework'),
+      { x: 680, y: 340 },
+    );
+  });
+  const xml = await page.evaluate(async () =>
+    (await window.__FLOW_ARCHITECT__.modeler.saveXML({ format: true })).xml);
+  assert.match(xml, /BPMNShape[^>]+bpmnElement="Task_Review"/);
+  assert.match(xml, /<di:waypoint/);
+  assert.match(xml, /sequenceFlow[^>]+id="Flow_Review_Approve"[^>]+targetRef="Task_Rework"/);
+});
