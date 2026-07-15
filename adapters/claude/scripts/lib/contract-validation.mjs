@@ -1,8 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-// Use 2020-12 dialect import — documented at https://ajv.js.org/guide/schema-language.html
-import Ajv from 'ajv/dist/2020.js';
+import { requireRuntimePackage } from './runtime-loader.mjs';
+
+// Use 2020-12 dialect — lazy loaded via runtime loader for isolated Marketplace support
+function getAjvConstructor() {
+  return requireRuntimePackage('core', 'ajv/dist/2020.js');
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +29,7 @@ let _validators = null;
 function getValidators() {
   if (_validators) return _validators;
 
-  const ajv = new Ajv({ allErrors: true });
+  const ajv = new (getAjvConstructor())({ allErrors: true });
   _validators = new Map();
 
   for (const [kind, filename] of Object.entries(SCHEMA_FILES)) {

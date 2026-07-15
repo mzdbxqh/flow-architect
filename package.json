@@ -1,6 +1,6 @@
 {
   "name": "@flow-architect/plugin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
@@ -12,12 +12,14 @@
     "test:smoke": "node --test test/integrated-review.test.mjs"
   },
   "dependencies": {
-    "ajv": ">=8.11.0",
-    "fast-xml-parser": "^4",
-    "yaml": "^2",
-    "exceljs": "^4",
-    "mammoth": "^1",
-    "pdfjs-dist": "^4"
+    "ajv": "8.20.0",
+    "fast-xml-parser": "4.5.7",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "exceljs": "4.4.0",
+    "mammoth": "1.12.0",
+    "pdfjs-dist": "4.10.38"
   },
   "files": [
     "skills/",
@@ -26,6 +28,8 @@
     "agents/",
     "adapters/",
     "docs/",
+    "commands/",
+    "runtime/",
     ".agents/",
     ".claude-plugin/",
     ".codex-plugin/",

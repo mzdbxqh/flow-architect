@@ -9,23 +9,24 @@ importers:
   .:
     dependencies:
       ajv:
-        specifier: ^8
+        specifier: 8.20.0
         version: 8.20.0
-      exceljs:
-        specifier: ^4
-        version: 4.4.0
       fast-xml-parser:
-        specifier: ^4
+        specifier: 4.5.7
         version: 4.5.7
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      exceljs:
+        specifier: 4.4.0
+        version: 4.4.0
       mammoth:
-        specifier: ^1
+        specifier: 1.12.0
         version: 1.12.0
       pdfjs-dist:
-        specifier: ^4
+        specifier: 4.10.38
         version: 4.10.38
-      yaml:
-        specifier: ^2
-        version: 2.9.0
 
 packages:
 

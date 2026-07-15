@@ -1,0 +1,11 @@
+{
+  "name": "@flow-architect/runtime-core",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Flow Architect runtime core dependencies",
+  "dependencies": {
+    "ajv": "8.20.0",
+    "fast-xml-parser": "4.5.7",
+    "yaml": "2.9.0"
+  }
+}

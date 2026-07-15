@@ -18,20 +18,14 @@ Flow Architect 是面向 Codex 与 Claude Code 的只读流程架构和流程图
 - Node.js 22 或更高版本；
 - 已安装并登录 Codex 或 Claude Code。
 
-Codex Marketplace 安装会自动安装本插件声明的 Node.js 生产依赖。插件当前没有 Python 运行时依赖，也不要求用户安装本项目自行研发的 npm 包。
-
-Claude Code 当前推荐使用源码目录加载。这个路径还需要 pnpm；可通过 Node.js 自带的 Corepack 启用：
-
-```bash
-corepack enable
-```
+插件当前没有 Python 运行时依赖，也不要求用户安装本项目自行研发的 npm 包。第三方 Node.js 依赖不会提交到 Git，也不会塞进 GitHub Release 源码包：Codex 可使用插件声明的精确 core 依赖；Claude Code 安装插件后通过 `/flow-architect:setup` 把选定依赖安装到用户缓存。
 
 ## 3. Codex 安装
 
 ### 3.1 从 GitHub 安装稳定版
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.1
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.2
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```
@@ -54,24 +48,67 @@ codex plugin list
 
 ## 4. Claude Code 安装
 
-Claude Code 当前的完整支持路径是“源码检出 + 安装生产依赖 + `--plugin-dir` 加载”：
+### 4.1 从 Claude Marketplace 安装（推荐）
+
+```bash
+/plugin marketplace add mzdbxqh/flow-architect
+/plugin install flow-architect@flow-architect
+/reload-plugins
+```
+
+安装完成后，使用 help 查看能力：
+
+```bash
+/flow-architect:help
+```
+
+首次使用需要初始化运行时：
+
+```bash
+/flow-architect:setup
+```
+
+### 4.2 从本地源码安装（开发者）
+
+适合开发、验证或试用尚未发布的改动：
 
 ```bash
 git clone https://github.com/mzdbxqh/flow-architect.git
 cd flow-architect
 corepack enable
-pnpm install --prod --frozen-lockfile
+pnpm install --frozen-lockfile
 claude --plugin-dir "$PWD/adapters/claude"
 ```
 
-如需非交互执行：
+### 4.3 运行时组件
+
+Flow Architect 使用组件化运行时管理：
+
+- **核心组件 `core`（默认安装）：** ajv、fast-xml-parser、yaml
+- **可选组件（由用户选择，可多选或不选）：**
+  - `pdf`：pdfjs-dist（PDF 文本提取）
+  - `docx`：mammoth（DOCX 文本提取）
+  - `xlsx`：exceljs（XLSX 结构读取）
+
+运行时安装在用户缓存目录，不在插件目录内：
+
+- macOS: `~/Library/Caches/flow-architect/`
+- Linux: `~/.cache/flow-architect/`
+- Windows: `%LOCALAPPDATA%\flow-architect\`
+
+### 4.4 诊断与维护
+
+检查运行时状态：
 
 ```bash
-claude -p --plugin-dir "$PWD/adapters/claude" \
-  '使用 /flow-architect:flow-architect 评审 ./examples 下的流程架构和流程图，只读，不修改原文件。'
+/flow-architect:help
 ```
 
-仓库包含 Claude Marketplace 元数据，但 v0.1.1 不把第三方 Node.js 依赖打进发布制品，Claude Marketplace 安装也不会自动为普通技能脚本安装这些依赖。因此 v0.1.1 不把远程 Marketplace 安装列为 Claude Code 的完整支持路径。后续版本会通过初始化能力改善这一体验。
+重新初始化运行时：
+
+```bash
+/flow-architect:setup
+```
 
 ## 5. 怎么使用
 
@@ -118,7 +155,7 @@ $flow-architect-flow-review-diagram
 
 ### 5.4 Claude Code 示例
 
-在通过 `--plugin-dir` 启动的 Claude Code 会话中输入：
+在 Claude Code 会话中输入：
 
 ```text
 /flow-architect:flow-architect
@@ -159,14 +196,16 @@ codex plugin add flow-architect@flow-architect
 
 完成后新建一个 Codex 任务，避免旧任务继续使用已加载的旧技能定义。
 
-### 7.2 Claude Code 源码目录
+### 7.2 Claude Marketplace
 
 ```bash
-cd /path/to/flow-architect
-git pull --ff-only
-pnpm install --prod --frozen-lockfile
-claude --plugin-dir "$PWD/adapters/claude"
+/plugin marketplace update flow-architect
+/plugin uninstall flow-architect@flow-architect
+/plugin install flow-architect@flow-architect
+/reload-plugins
 ```
+
+更新后再次运行 `/flow-architect:help` 检查版本与状态；runtime 版本不兼容时再运行 `/flow-architect:setup`。
 
 ## 8. 卸载
 
@@ -177,7 +216,14 @@ codex plugin remove flow-architect@flow-architect
 codex plugin marketplace remove flow-architect
 ```
 
-Claude Code 使用 `--plugin-dir` 时没有持久安装项；退出会话并停止传入该参数即可。源码目录可在确认不再需要后自行删除。
+Claude Code：
+
+```bash
+/plugin uninstall flow-architect@flow-architect
+/plugin marketplace remove flow-architect
+```
+
+默认卸载会清理 Claude Code 的插件缓存。Flow Architect 的独立 runtime 缓存不会被插件卸载命令自动删除，避免误删用户数据；如需释放空间，请先用 help/doctor 确认路径，再由用户自行删除对应 `flow-architect` 缓存目录。
 
 ## 9. 常见问题
 
@@ -198,14 +244,14 @@ codex plugin list
 
 ### Claude Code 报 Node.js 模块缺失
 
-确认是在仓库根目录执行过：
+先运行：
 
 ```bash
-corepack enable
-pnpm install --prod --frozen-lockfile
+/flow-architect:help
+/flow-architect:setup
 ```
 
-然后使用仓库中的绝对适配器路径重新启动 `claude --plugin-dir`。
+setup 默认安装 core，并允许选择 PDF、DOCX、XLSX。若仍失败，保留 help/doctor 输出中的结构化错误码；不要在插件缓存目录内手工运行 npm。
 
 ### 输入很多，但报告结论很少
 
@@ -217,8 +263,8 @@ pnpm install --prod --frozen-lockfile
 
 ## 10. 当前限制
 
-- v0.1.1 不提供 `flow-architect-init` 初始化命令；
-- Claude Code 尚未提供依赖自动初始化，推荐使用源码目录加载；
+- v0.1.2 的 setup 仅管理第三方 Node.js 运行时组件，不安装 Python 环境；
+- setup 需要 Node.js 22+、npm 和可访问的 npm Registry；离线环境只能复用已验证缓存；
 - V1 不创建模型、不自动修复原始制品；
 - 视觉输入不能替代 BPMN XML 等结构化源文件；
 - 业务正确性仍依赖用户提供足够的业务上下文。

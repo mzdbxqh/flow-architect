@@ -1,4 +1,13 @@
-import { XMLParser } from 'fast-xml-parser';
+import { requireRuntimePackage } from './lib/runtime-loader.mjs';
+
+let _XMLParser;
+function getXMLParser() {
+  if (!_XMLParser) {
+    const mod = requireRuntimePackage('core', 'fast-xml-parser');
+    _XMLParser = mod.XMLParser;
+  }
+  return _XMLParser;
+}
 
 /**
  * Extract a DiagramModel from BPMN 2.0 XML.
@@ -13,7 +22,7 @@ export function extractBpmn(xml) {
     throw new Error('BPMN input rejected: contains DOCTYPE or ENTITY declarations (XXE risk)');
   }
 
-  const parser = new XMLParser({
+  const parser = new (getXMLParser())({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
     allowBooleanAttributes: true,

@@ -7,19 +7,21 @@ Flow Architect 是面向 Codex 与 Claude Code 的只读流程架构与流程图
 Codex 稳定版：
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.1
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.2
 codex plugin add flow-architect@flow-architect
 ```
 
-Claude Code 当前推荐源码目录加载：
+Claude Code Marketplace（推荐）：
 
 ```bash
-git clone https://github.com/mzdbxqh/flow-architect.git
-cd flow-architect
-corepack enable
-pnpm install --prod --frozen-lockfile
-claude --plugin-dir "$PWD/adapters/claude"
+/plugin marketplace add mzdbxqh/flow-architect
+/plugin install flow-architect@flow-architect
+/reload-plugins
+/flow-architect:help
+/flow-architect:setup
 ```
+
+`setup` 默认安装 core，并让用户选择 PDF、DOCX、XLSX；依赖写入用户缓存，不写入 Git 仓库或插件目录。
 
 完整的安装、入口选择、提示词示例、更新、卸载和故障排查见[中文用户手册](docs/zh-CN/user-guide.md)。
 
@@ -31,6 +33,8 @@ claude --plugin-dir "$PWD/adapters/claude"
 | `flow-architect-flow-review-integrated` | 联合评审流程架构与流程图 |
 | `flow-architect-flow-review-architecture` | 仅评审 L4/L5/L6/SOP 分层架构 |
 | `flow-architect-flow-review-diagram` | 仅评审 BPMN、Mermaid、SVG、PNG 或 PDF 流程图 |
+| `flow-architect-help` | 查看能力、格式、状态、示例和诊断 |
+| `flow-architect-setup` | 初始化 core 和用户选择的可选运行时组件 |
 
 默认入口 Skill（`flow-architect`）盘点输入文件、识别制品族并路由至对应评审流程。三个流程 Skill 也可在已知评审需求时直接调用。
 

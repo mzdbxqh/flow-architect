@@ -14,6 +14,8 @@ const ENTRY_SKILLS = [
   'flow-architect-flow-review-integrated',
   'flow-architect-flow-review-architecture',
   'flow-architect-flow-review-diagram',
+  'flow-architect-help',
+  'flow-architect-setup',
 ];
 
 function readJson(relativePath) {
@@ -38,14 +40,14 @@ test('plugin.json skills path resolves to existing directory', () => {
   assert.ok(fs.existsSync(resolved), `skills path "${parsed.skills}" must resolve to an existing directory`);
 });
 
-test('all public plugin manifests use version 0.1.1', () => {
+test('all public plugin manifests use version 0.1.2', () => {
   const manifests = [
     '.codex-plugin/plugin.json',
     'adapters/codex/.codex-plugin/plugin.json',
     'adapters/claude/.claude-plugin/plugin.json',
   ];
   for (const manifest of manifests) {
-    assert.equal(readJson(manifest).version, '0.1.1', `${manifest} must use version 0.1.1`);
+    assert.equal(readJson(manifest).version, '0.1.2', `${manifest} must use version 0.1.2`);
   }
 });
 
@@ -70,7 +72,7 @@ test('claude marketplace points to the generated adapter', () => {
   assert.equal(marketplace.plugins.length, 1);
   assert.equal(marketplace.plugins[0].name, 'flow-architect');
   assert.equal(marketplace.plugins[0].source, './adapters/claude');
-  assert.equal(marketplace.plugins[0].version, '0.1.1');
+  assert.equal(marketplace.plugins[0].version, '0.1.2');
 });
 
 test('legacy Claude adapter marketplace is not published', () => {

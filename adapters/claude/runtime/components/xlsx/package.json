@@ -1,0 +1,9 @@
+{
+  "name": "@flow-architect/runtime-xlsx",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Flow Architect XLSX runtime dependencies",
+  "dependencies": {
+    "exceljs": "4.4.0"
+  }
+}

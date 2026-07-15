@@ -1,6 +1,6 @@
 {
   "name": "flow-architect",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Read-only process architecture and diagram review skill family",
   "author": {
     "name": "flow-architect contributors"
@@ -13,5 +13,9 @@
     "process",
     "diagram"
   ],
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "commands": [
+    "./commands/help.md",
+    "./commands/setup.md"
+  ]
 }

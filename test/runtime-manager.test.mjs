@@ -836,11 +836,11 @@ test('cacheRoot returns platform-specific path', async () => {
   assert.equal(customPath, '/custom/cache/path', 'should use FLOW_ARCHITECT_CACHE_DIR');
 
   // 各平台路径
-  assert.equal(mod.cacheRoot({ env: {}, platform: 'darwin', homedir: '/Users/test' }), '/Users/test/Library/Caches/flow-architect');
-  assert.equal(mod.cacheRoot({ env: {}, platform: 'linux', homedir: '/home/test' }), '/home/test/.cache/flow-architect');
-  assert.equal(mod.cacheRoot({ env: { XDG_CACHE_HOME: '/xdg/cache' }, platform: 'linux', homedir: '/home/test' }), '/xdg/cache/flow-architect');
-  assert.equal(mod.cacheRoot({ env: {}, platform: 'win32', homedir: 'C:\\Users\\test' }), path.join('C:\\Users\\test', 'AppData', 'Local', 'flow-architect'));
-  assert.equal(mod.cacheRoot({ env: { LOCALAPPDATA: 'D:\\Local' }, platform: 'win32', homedir: 'C:\\Users\\test' }), path.join('D:\\Local', 'flow-architect'));
+  assert.equal(mod.cacheRoot({ env: {}, platform: 'darwin', homedir: '/tmp/fa-home' }), '/tmp/fa-home/Library/Caches/flow-architect');
+  assert.equal(mod.cacheRoot({ env: {}, platform: 'linux', homedir: '/tmp/fa-home' }), '/tmp/fa-home/.cache/flow-architect');
+  assert.equal(mod.cacheRoot({ env: { XDG_CACHE_HOME: '/xdg/cache' }, platform: 'linux', homedir: '/tmp/fa-home' }), '/xdg/cache/flow-architect');
+  assert.equal(mod.cacheRoot({ env: {}, platform: 'win32', homedir: 'C:\\Temp\\fa-home' }), path.join('C:\\Temp\\fa-home', 'AppData', 'Local', 'flow-architect'));
+  assert.equal(mod.cacheRoot({ env: { LOCALAPPDATA: 'D:\\Local' }, platform: 'win32', homedir: 'C:\\Temp\\fa-home' }), path.join('D:\\Local', 'flow-architect'));
 });
 
 // 测试 17: readManifest 正确解析 manifest

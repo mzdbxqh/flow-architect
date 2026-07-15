@@ -6,14 +6,14 @@
 - Node.js 22 or newer
 - Codex and/or Claude Code
 
-The plugin has Node.js production dependencies and no Python runtime dependencies. Codex installs the declared Node.js dependencies in its plugin cache. Claude Code v0.1.1 uses a source checkout with pnpm so those dependencies remain outside the Git repository and release source archive.
+The plugin has no Python runtime dependency and no project-developed npm package. Third-party Node.js dependencies are not committed to Git or bundled into the GitHub source archive. Codex can install the exact core dependencies declared by the plugin; Claude Code users initialize the selected runtime components into a user cache after installing the plugin.
 
 ## Codex
 
 Install the stable GitHub release:
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.1
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.2
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```
@@ -36,24 +36,27 @@ codex plugin marketplace remove flow-architect
 
 ## Claude Code
 
-The fully supported v0.1.1 path is a source checkout loaded with `--plugin-dir`:
+Install from the public Claude Marketplace:
+
+```bash
+/plugin marketplace add mzdbxqh/flow-architect
+/plugin install flow-architect@flow-architect
+/reload-plugins
+/flow-architect:help
+/flow-architect:setup
+```
+
+`/flow-architect:setup` always selects `core` and asks whether to add PDF, DOCX, or XLSX support. It shows a deterministic plan and requires explicit confirmation before running npm or writing the user cache. Then invoke `/flow-architect:flow-architect` for a review.
+
+For local plugin development:
 
 ```bash
 git clone https://github.com/mzdbxqh/flow-architect.git
 cd flow-architect
 corepack enable
-pnpm install --prod --frozen-lockfile
+pnpm install --frozen-lockfile
 claude --plugin-dir "$PWD/adapters/claude"
 ```
-
-Then invoke `/flow-architect:flow-architect`. For non-interactive use:
-
-```bash
-claude -p --plugin-dir "$PWD/adapters/claude" \
-  'Use /flow-architect:flow-architect to review ./review-inputs without modifying source files.'
-```
-
-The repository includes Claude marketplace metadata, but v0.1.1 does not bundle third-party dependencies and Claude marketplace installation does not install ordinary skill-script dependencies. It is therefore not documented as the fully supported Claude Code path yet.
 
 ## Tests
 

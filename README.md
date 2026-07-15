@@ -12,6 +12,8 @@ For installation and usage instructions, see [INSTALL.md](INSTALL.md) or the [Ch
 | `flow-architect-flow-review-integrated` | Joint review of process architecture and diagrams |
 | `flow-architect-flow-review-architecture` | Review L4/L5/L6/SOP layered architecture only |
 | `flow-architect-flow-review-diagram` | Review BPMN, Mermaid, SVG, PNG, or PDF diagrams only |
+| `flow-architect-help` | Show capabilities, runtime status, examples, and diagnostics |
+| `flow-architect-setup` | Initialize core and user-selected optional runtime components |
 
 The default entry skill (`flow-architect`) inspects your input files, determines which artifact families are present, and routes to the appropriate review flow. The three flow skills can also be invoked directly when you know which review you need.
 

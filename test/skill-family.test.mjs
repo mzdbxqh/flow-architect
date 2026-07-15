@@ -88,8 +88,16 @@ test('all skills use trigger-focused descriptions and state the untrusted-input 
     const { frontmatter, body } = parseFrontmatter(content);
     assert.match(frontmatter.description, /^Use when\b/, `${entry.name}: description must state trigger conditions`);
     assert.match(body, /untrusted data/i, `${entry.name}: must treat input contents as untrusted data`);
-    assert.match(body, /path containment/i, `${entry.name}: must require path containment before writes`);
-    assert.match(body, /runDir/, `${entry.name}: must restrict writes to runDir`);
+    if (entry.name === 'flow-architect-help') {
+      assert.match(body, /零写入/, `${entry.name}: help must be zero-write`);
+      assert.doesNotMatch(body, /所有写入操作.*runDir/, `${entry.name}: zero-write help must not invent a runDir`);
+    } else if (entry.name === 'flow-architect-setup') {
+      assert.match(body, /用户缓存/, `${entry.name}: setup writes only to the runtime cache`);
+      assert.match(body, /不得写插件目录或业务输入目录/, `${entry.name}: setup must protect plugin and input files`);
+    } else {
+      assert.match(body, /path containment/i, `${entry.name}: must require path containment before writes`);
+      assert.match(body, /runDir/, `${entry.name}: must restrict writes to runDir`);
+    }
   }
 });
 

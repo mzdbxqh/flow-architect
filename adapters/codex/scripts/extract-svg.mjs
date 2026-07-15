@@ -1,4 +1,13 @@
-import { XMLParser } from 'fast-xml-parser';
+import { requireRuntimePackage } from './lib/runtime-loader.mjs';
+
+let _XMLParser;
+function getXMLParser() {
+  if (!_XMLParser) {
+    const mod = requireRuntimePackage('core', 'fast-xml-parser');
+    _XMLParser = mod.XMLParser;
+  }
+  return _XMLParser;
+}
 
 /**
  * Extract a DiagramModel from SVG content.
@@ -10,7 +19,7 @@ import { XMLParser } from 'fast-xml-parser';
  * @returns {import('./types.mjs').DiagramModel} Structured diagram model.
  */
 export function extractSvg(svg) {
-  const parser = new XMLParser({
+  const parser = new (getXMLParser())({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
     processEntities: false,

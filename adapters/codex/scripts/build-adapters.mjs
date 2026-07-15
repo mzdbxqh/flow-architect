@@ -5,7 +5,7 @@ import os from 'node:os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PLUGIN_VERSION = '0.1.1';
+const PLUGIN_VERSION = '0.1.2';
 
 /**
  * Build adapter outputs for both Codex and Claude platforms.
@@ -24,7 +24,7 @@ export function buildAdapterOutputs(pluginRoot) {
   const outputs = new Map();
 
   // Shared directories copied to both adapters
-  const sharedDirs = ['skills', 'references', 'scripts'];
+  const sharedDirs = ['skills', 'references', 'scripts', 'runtime'];
 
   // Build adapters
   for (const adapter of ['codex', 'claude']) {
@@ -43,6 +43,12 @@ export function buildAdapterOutputs(pluginRoot) {
       if (fs.existsSync(agentsDir)) {
         collectFiles(agentsDir, root, `${adapterPrefix}/agents`, outputs);
       }
+
+      // Copy commands/ to Claude adapter
+      const commandsDir = path.join(root, 'commands');
+      if (fs.existsSync(commandsDir)) {
+        collectFiles(commandsDir, root, `${adapterPrefix}/commands`, outputs);
+      }
     }
 
     // Generate platform-specific plugin.json
@@ -54,7 +60,11 @@ export function buildAdapterOutputs(pluginRoot) {
         author: { name: 'flow-architect contributors' },
         license: 'Apache-2.0',
         keywords: ['architecture', 'review', 'bpmn', 'process', 'diagram'],
-        skills: './skills/'
+        skills: './skills/',
+        commands: [
+          './commands/help.md',
+          './commands/setup.md'
+        ]
       }, null, 2) + '\n';
       outputs.set(`${adapterPrefix}/.claude-plugin/plugin.json`, {
         content: Buffer.from(claudePluginJson),
