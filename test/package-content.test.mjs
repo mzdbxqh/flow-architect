@@ -42,6 +42,12 @@ function forbiddenPaths() {
   return parsed.forbiddenPaths || [];
 }
 
+function assertPackContains(expectedPath) {
+  const result = packFileList();
+  const paths = (result.files || []).map(f => f.path.replace(/^package\//, ''));
+  assert.ok(paths.includes(expectedPath), `Published package must contain ${expectedPath}`);
+}
+
 // --- Test: Published package excludes private parent paths ---
 
 test('published package does not contain artifacts/ files', () => {
@@ -127,6 +133,18 @@ test('pack file list contains agents/ directory entries', () => {
   const agentFiles = (result.files || [])
     .filter(f => f.path.includes('agents/'));
   assert.ok(agentFiles.length > 0, 'Package should contain agents/ files');
+});
+
+test('pack file list contains the Chinese user guide', () => {
+  assertPackContains('docs/zh-CN/user-guide.md');
+});
+
+test('pack file list contains the Codex marketplace', () => {
+  assertPackContains('.agents/plugins/marketplace.json');
+});
+
+test('pack file list contains the Claude marketplace', () => {
+  assertPackContains('.claude-plugin/marketplace.json');
 });
 
 test('pack file list is non-empty and has reasonable size', () => {

@@ -1,0 +1,28 @@
+{
+  "name": "flow-architect",
+  "description": "Read-only process architecture and diagram review skills for Claude Code",
+  "owner": {
+    "name": "flow-architect contributors"
+  },
+  "plugins": [
+    {
+      "name": "flow-architect",
+      "source": "./adapters/claude",
+      "description": "Read-only process architecture and diagram review skill family",
+      "version": "0.1.1",
+      "author": {
+        "name": "flow-architect contributors"
+      },
+      "repository": "https://github.com/mzdbxqh/flow-architect",
+      "license": "Apache-2.0",
+      "keywords": [
+        "architecture",
+        "review",
+        "bpmn",
+        "process",
+        "diagram"
+      ],
+      "category": "productivity"
+    }
+  ]
+}

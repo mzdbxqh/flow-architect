@@ -16,6 +16,10 @@ const ENTRY_SKILLS = [
   'flow-architect-flow-review-diagram',
 ];
 
+function readJson(relativePath) {
+  return JSON.parse(fs.readFileSync(path.join(ROOT, relativePath), 'utf8'));
+}
+
 // --- Plugin loading tests ---
 
 test('codex plugin.json exists and is valid JSON', () => {
@@ -32,6 +36,45 @@ test('plugin.json skills path resolves to existing directory', () => {
   const parsed = JSON.parse(fs.readFileSync(pluginJsonPath, 'utf8'));
   const resolved = path.resolve(ROOT, parsed.skills);
   assert.ok(fs.existsSync(resolved), `skills path "${parsed.skills}" must resolve to an existing directory`);
+});
+
+test('all public plugin manifests use version 0.1.1', () => {
+  const manifests = [
+    '.codex-plugin/plugin.json',
+    'adapters/codex/.codex-plugin/plugin.json',
+    'adapters/claude/.claude-plugin/plugin.json',
+  ];
+  for (const manifest of manifests) {
+    assert.equal(readJson(manifest).version, '0.1.1', `${manifest} must use version 0.1.1`);
+  }
+});
+
+test('codex marketplace points to the root plugin', () => {
+  const marketplace = readJson('.agents/plugins/marketplace.json');
+  assert.equal(marketplace.name, 'flow-architect');
+  assert.equal(marketplace.interface.displayName, 'Flow Architect');
+  assert.equal(marketplace.plugins.length, 1);
+  assert.equal(marketplace.plugins[0].name, 'flow-architect');
+  assert.deepEqual(marketplace.plugins[0].source, { source: 'local', path: './' });
+  assert.deepEqual(marketplace.plugins[0].policy, {
+    installation: 'AVAILABLE',
+    authentication: 'ON_INSTALL',
+  });
+  assert.equal(marketplace.plugins[0].category, 'Productivity');
+});
+
+test('claude marketplace points to the generated adapter', () => {
+  const marketplace = readJson('.claude-plugin/marketplace.json');
+  assert.equal(marketplace.name, 'flow-architect');
+  assert.equal(marketplace.owner.name, 'flow-architect contributors');
+  assert.equal(marketplace.plugins.length, 1);
+  assert.equal(marketplace.plugins[0].name, 'flow-architect');
+  assert.equal(marketplace.plugins[0].source, './adapters/claude');
+  assert.equal(marketplace.plugins[0].version, '0.1.1');
+});
+
+test('legacy Claude adapter marketplace is not published', () => {
+  assert.equal(fs.existsSync(path.join(ROOT, 'adapters', 'claude', 'marketplace.json')), false);
 });
 
 test('skills directory contains at least 16 skill subdirectories', () => {

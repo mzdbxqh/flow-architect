@@ -1,108 +1,70 @@
 # Installation
 
+## Requirements
+
+- Git
+- Node.js 22 or newer
+- Codex and/or Claude Code
+
+The plugin has Node.js production dependencies and no Python runtime dependencies. Codex installs the declared Node.js dependencies in its plugin cache. Claude Code v0.1.1 uses a source checkout with pnpm so those dependencies remain outside the Git repository and release source archive.
+
 ## Codex
 
-Codex installs published plugins from a configured marketplace. After the
-public repository or marketplace is available, add that source and install the
-plugin using the marketplace name reported by Codex:
+Install the stable GitHub release:
 
 ```bash
-codex plugin marketplace add <owner/repository>
-codex plugin marketplace list
-codex plugin add flow-architect@<marketplace-name>
-```
-
-For an unpublished source checkout, validate the adapter locally instead of
-claiming it is installed:
-
-```bash
-python3 /path/to/plugin-creator/scripts/validate_plugin.py packages/flow-architect/adapters/codex
-```
-
-List marketplace plugins and installed state:
-
-```bash
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.1
+codex plugin add flow-architect@flow-architect
 codex plugin list
 ```
 
-### Uninstall (Codex)
+For a local source checkout:
 
 ```bash
-codex plugin remove flow-architect@<marketplace-name>
+git clone https://github.com/mzdbxqh/flow-architect.git
+cd flow-architect
+codex plugin marketplace add "$PWD"
+codex plugin add flow-architect@flow-architect
+```
+
+Use `$flow-architect` in a new Codex task. Uninstall with:
+
+```bash
+codex plugin remove flow-architect@flow-architect
+codex plugin marketplace remove flow-architect
 ```
 
 ## Claude Code
 
-### Option A: Plugin directory
+The fully supported v0.1.1 path is a source checkout loaded with `--plugin-dir`:
 
 ```bash
-claude -p --plugin-dir ./packages/flow-architect/adapters/claude
+git clone https://github.com/mzdbxqh/flow-architect.git
+cd flow-architect
+corepack enable
+pnpm install --prod --frozen-lockfile
+claude --plugin-dir "$PWD/adapters/claude"
 ```
 
-### Option B: Published marketplace
-
-After a Claude marketplace has been published, add it and install the plugin:
+Then invoke `/flow-architect:flow-architect`. For non-interactive use:
 
 ```bash
-claude plugin marketplace add <owner/repository>
-claude plugin install flow-architect@<marketplace-name>
+claude -p --plugin-dir "$PWD/adapters/claude" \
+  'Use /flow-architect:flow-architect to review ./review-inputs without modifying source files.'
 ```
 
-Verify:
+The repository includes Claude marketplace metadata, but v0.1.1 does not bundle third-party dependencies and Claude marketplace installation does not install ordinary skill-script dependencies. It is therefore not documented as the fully supported Claude Code path yet.
+
+## Tests
+
+From the parent workspace root:
 
 ```bash
-claude plugin list
-```
-
-### Uninstall (Claude Code)
-
-If installed from a marketplace:
-
-```bash
-claude plugin uninstall flow-architect@<marketplace-name>
-```
-
-If using `--plugin-dir`, no uninstall step is needed; simply stop passing the flag.
-
-## Running Tests
-
-From the workspace root:
-
-```bash
-pnpm install
-pnpm test
-pnpm build
-pnpm build:check
-```
-
-Or from the plugin directory:
-
-```bash
-cd packages/flow-architect
-pnpm test
-```
-
-## Contract and Smoke Tests
-
-```bash
-# Skill structure and worker binding validation
+pnpm --dir packages/flow-architect test
 pnpm --dir packages/flow-architect test:contract
-
-# Integrated review smoke test
 pnpm --dir packages/flow-architect test:smoke
-
-# Dry-run pack to verify package contents
-cd packages/flow-architect && pnpm pack --dry-run
+pnpm --dir packages/flow-architect build:check
+pnpm --dir packages/flow-architect pack --json --dry-run
 ```
 
-## Verifying Package Contents
-
-To verify the published package does not contain private material:
-
-```bash
-# From the workspace root
-pnpm public:verify
-
-# From the plugin directory
-pnpm pack --json --dry-run
-```
+The full Chinese guide is at [docs/zh-CN/user-guide.md](docs/zh-CN/user-guide.md).

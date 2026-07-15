@@ -1,0 +1,20 @@
+{
+  "name": "flow-architect",
+  "interface": {
+    "displayName": "Flow Architect"
+  },
+  "plugins": [
+    {
+      "name": "flow-architect",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

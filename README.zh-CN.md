@@ -2,6 +2,27 @@
 
 Flow Architect 是面向 Codex 与 Claude Code 的只读流程架构与流程图评审技能族。
 
+## 快速安装
+
+Codex 稳定版：
+
+```bash
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.1
+codex plugin add flow-architect@flow-architect
+```
+
+Claude Code 当前推荐源码目录加载：
+
+```bash
+git clone https://github.com/mzdbxqh/flow-architect.git
+cd flow-architect
+corepack enable
+pnpm install --prod --frozen-lockfile
+claude --plugin-dir "$PWD/adapters/claude"
+```
+
+完整的安装、入口选择、提示词示例、更新、卸载和故障排查见[中文用户手册](docs/zh-CN/user-guide.md)。
+
 ## 入口 Skill
 
 | Skill | 用途 |

@@ -61,10 +61,10 @@ test('shared files have identical content across adapters', () => {
   }
 });
 
-test('claude adapter has marketplace.json', () => {
+test('repository root has Claude marketplace.json', () => {
   const outputs = buildAdapterOutputs(new URL('..', import.meta.url));
   assert.ok(
-    outputs.has('adapters/claude/marketplace.json'),
-    'Claude adapter should have marketplace.json'
+    outputs.has('.claude-plugin/marketplace.json'),
+    'Repository root should have .claude-plugin/marketplace.json'
   );
 });

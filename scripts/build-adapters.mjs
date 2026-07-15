@@ -5,6 +5,7 @@ import os from 'node:os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PLUGIN_VERSION = '0.1.1';
 
 /**
  * Build adapter outputs for both Codex and Claude platforms.
@@ -48,7 +49,7 @@ export function buildAdapterOutputs(pluginRoot) {
     if (adapter === 'claude') {
       const claudePluginJson = JSON.stringify({
         name: 'flow-architect',
-        version: '0.1.0',
+        version: PLUGIN_VERSION,
         description: 'Read-only process architecture and diagram review skill family',
         author: { name: 'flow-architect contributors' },
         license: 'Apache-2.0',
@@ -60,24 +61,12 @@ export function buildAdapterOutputs(pluginRoot) {
         mode: 0o644
       });
 
-      const marketplaceJson = JSON.stringify({
-        name: 'flow-architect',
-        version: '0.1.0',
-        description: 'Read-only process architecture and diagram review skill family',
-        category: 'Productivity',
-        capabilities: ['Read'],
-        entrypoint: './skills/'
-      }, null, 2) + '\n';
-      outputs.set(`${adapterPrefix}/marketplace.json`, {
-        content: Buffer.from(marketplaceJson),
-        mode: 0o644
-      });
     }
 
     if (adapter === 'codex') {
       const codexPluginJson = JSON.stringify({
         name: 'flow-architect',
-        version: '0.1.0',
+        version: PLUGIN_VERSION,
         description: 'Read-only process architecture and diagram review skill family',
         author: { name: 'flow-architect contributors' },
         license: 'Apache-2.0',
@@ -103,7 +92,7 @@ export function buildAdapterOutputs(pluginRoot) {
   // Generate root .codex-plugin/plugin.json
   const rootCodexPluginJson = JSON.stringify({
     name: 'flow-architect',
-    version: '0.1.0',
+    version: PLUGIN_VERSION,
     description: 'Read-only process architecture and diagram review skill family',
     author: { name: 'flow-architect contributors' },
     license: 'Apache-2.0',
@@ -121,6 +110,56 @@ export function buildAdapterOutputs(pluginRoot) {
   }, null, 2) + '\n';
   outputs.set('.codex-plugin/plugin.json', {
     content: Buffer.from(rootCodexPluginJson),
+    mode: 0o644
+  });
+
+  // Generate repository-level marketplace manifests. Codex installs the root
+  // plugin directly; Claude Code installs the generated Claude adapter.
+  const codexMarketplaceJson = JSON.stringify({
+    name: 'flow-architect',
+    interface: {
+      displayName: 'Flow Architect'
+    },
+    plugins: [{
+      name: 'flow-architect',
+      source: {
+        source: 'local',
+        path: './'
+      },
+      policy: {
+        installation: 'AVAILABLE',
+        authentication: 'ON_INSTALL'
+      },
+      category: 'Productivity'
+    }]
+  }, null, 2) + '\n';
+  outputs.set('.agents/plugins/marketplace.json', {
+    content: Buffer.from(codexMarketplaceJson),
+    mode: 0o644
+  });
+
+  const claudeMarketplaceJson = JSON.stringify({
+    name: 'flow-architect',
+    description: 'Read-only process architecture and diagram review skills for Claude Code',
+    owner: {
+      name: 'flow-architect contributors'
+    },
+    plugins: [{
+      name: 'flow-architect',
+      source: './adapters/claude',
+      description: 'Read-only process architecture and diagram review skill family',
+      version: PLUGIN_VERSION,
+      author: {
+        name: 'flow-architect contributors'
+      },
+      repository: 'https://github.com/mzdbxqh/flow-architect',
+      license: 'Apache-2.0',
+      keywords: ['architecture', 'review', 'bpmn', 'process', 'diagram'],
+      category: 'productivity'
+    }]
+  }, null, 2) + '\n';
+  outputs.set('.claude-plugin/marketplace.json', {
+    content: Buffer.from(claudeMarketplaceJson),
     mode: 0o644
   });
 
