@@ -79,8 +79,11 @@ test('published dependency declaration keeps exact core and test-only optional p
     yaml: '2.9.0',
   });
   assert.deepEqual(pkg.devDependencies, {
-    exceljs: '4.4.0',
-    mammoth: '1.12.0',
+    '@playwright/test': '1.61.1',
+    'bpmn-js': '18.21.0',
+    'esbuild': '0.28.1',
+    'exceljs': '4.4.0',
+    'mammoth': '1.12.0',
     'pdfjs-dist': '4.10.38',
   });
 });
