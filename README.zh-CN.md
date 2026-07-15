@@ -33,6 +33,7 @@ Claude Code Marketplace（推荐）：
 | `flow-architect-flow-review-integrated` | 联合评审流程架构与流程图 |
 | `flow-architect-flow-review-architecture` | 仅评审 L4/L5/L6/SOP 分层架构 |
 | `flow-architect-flow-review-diagram` | 仅评审 BPMN、Mermaid、SVG、PNG 或 PDF 流程图 |
+| `flow-architect-build-meeting-package` | 从 BPMN + 问题 JSON 构建离线 HTML 讨论包 |
 | `flow-architect-help` | 查看能力、格式、状态、示例和诊断 |
 | `flow-architect-setup` | 初始化 core 和用户选择的可选运行时组件 |
 
@@ -47,6 +48,27 @@ Claude Code Marketplace（推荐）：
 ## V1 范围
 
 V1 为**只读**。它评审现有制品并输出结构化 Finding，但不修改、创建或修复任何用户文件。
+
+## 离线会议包构建
+
+从 BPMN XML 和问题 JSON 构建可在 Chrome/Edge 打开的离线 HTML 讨论包：
+
+```bash
+node scripts/build-single-diagram-html.mjs \
+  --bpmn ./process.bpmn \
+  --questions ./questions.json \
+  --title "采购审批流程" \
+  --revision r01 \
+  --package-id procurement-approval \
+  --run-dir ./runs/meeting-package \
+  --output procurement-r01.html
+```
+
+生成的 HTML：
+- 无需联网即可打开和编辑
+- 支持问题与流程元素双向定位
+- 支持撤销、重做和业务编辑
+- 可导出新版本 HTML、BPMN、SVG 和问题 JSON
 
 ## 置信度降级
 

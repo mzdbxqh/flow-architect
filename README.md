@@ -12,6 +12,7 @@ For installation and usage instructions, see [INSTALL.md](INSTALL.md) or the [Ch
 | `flow-architect-flow-review-integrated` | Joint review of process architecture and diagrams |
 | `flow-architect-flow-review-architecture` | Review L4/L5/L6/SOP layered architecture only |
 | `flow-architect-flow-review-diagram` | Review BPMN, Mermaid, SVG, PNG, or PDF diagrams only |
+| `flow-architect-build-meeting-package` | Build offline HTML discussion package from BPMN + questions JSON |
 | `flow-architect-help` | Show capabilities, runtime status, examples, and diagnostics |
 | `flow-architect-setup` | Initialize core and user-selected optional runtime components |
 
@@ -26,6 +27,27 @@ The default entry skill (`flow-architect`) inspects your input files, determines
 ## V1 Scope
 
 V1 is **read-only**. It reviews existing artifacts and produces structured findings, but does not modify, create, or fix any user files.
+
+## Offline Meeting Package
+
+Build an offline HTML discussion package from BPMN XML and questions JSON:
+
+```bash
+node scripts/build-single-diagram-html.mjs \
+  --bpmn ./process.bpmn \
+  --questions ./questions.json \
+  --title "Procurement Approval" \
+  --revision r01 \
+  --package-id procurement-approval \
+  --run-dir ./runs/meeting-package \
+  --output procurement-r01.html
+```
+
+The generated HTML:
+- Opens and edits offline without network access
+- Supports bidirectional navigation between questions and process elements
+- Supports undo, redo, and business-friendly editing
+- Exports new HTML versions, BPMN, SVG, and questions JSON
 
 ## Confidence Degradation
 

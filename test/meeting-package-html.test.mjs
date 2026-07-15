@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { fixture } from './helpers/fixture.mjs';
+import { fixture, makeRunDir } from './helpers/fixture.mjs';
 import {
   buildMeetingPackageHtml,
   extractMeetingPackageHtml,
@@ -47,4 +50,52 @@ test('revision comparison reports BPMN and question changes', () => {
   assert.equal(diff.from_revision, 'r01');
   assert.equal(diff.to_revision, 'r02');
   assert.deepEqual(diff.question_changes.map(x => x.id), ['Q-001']);
+});
+
+test('malicious question text remains inert text', () => {
+  const maliciousQuestions = [{
+    id: 'Q-XSS',
+    text: '</script><img src=x onerror="globalThis.pwned=1">',
+    element_ids: ['Task_Review'], status: 'OPEN', answer: '',
+  }];
+  const html = buildMeetingPackageHtml({ bpmnXml, questions: maliciousQuestions, metadata });
+  assert.doesNotMatch(html, /<img src=x/);
+  assert.deepEqual(extractMeetingPackageHtml(html).questions, maliciousQuestions);
+});
+
+function rewritePayload(html, mutate) {
+  const payload = structuredClone(extractMeetingPackageHtml(html));
+  mutate(payload);
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
+  return html.replace(
+    /(<script id="fa-package-data" type="application\/json">)[A-Za-z0-9+/=]+(<\/script>)/,
+    `$1${encoded}$2`,
+  );
+}
+
+test('extractor enforces size and schema limits without executing HTML', () => {
+  assert.throws(() => extractMeetingPackageHtml('x'.repeat(20 * 1024 * 1024 + 1)), /20 MiB/);
+  const html = buildMeetingPackageHtml({ bpmnXml, questions, metadata });
+  const unknown = rewritePayload(html, payload => { payload.metadata.schema_version = '9.9.9'; });
+  assert.throws(() => extractMeetingPackageHtml(unknown), /schema_version|payload/i);
+  globalThis.__meetingPackageExecuted = false;
+  const hostile = html.replace('</body>', '<script>globalThis.__meetingPackageExecuted=true</script></body>');
+  extractMeetingPackageHtml(hostile);
+  assert.equal(globalThis.__meetingPackageExecuted, false);
+});
+
+test('builder rejects XML declarations and unsafe output paths', () => {
+  assert.throws(() => buildMeetingPackageHtml({
+    bpmnXml: '<!DOCTYPE x><definitions/>', questions, metadata,
+  }), /DOCTYPE/);
+  const safeRunDir = makeRunDir('path-containment');
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
+    '--bpmn', fixture('meeting-package/single-process.bpmn'),
+    '--questions', fixture('meeting-package/questions.valid.json'),
+    '--title', '采购审批流程', '--revision', 'r01',
+    '--package-id', 'procurement-approval', '--run-dir', safeRunDir,
+    '--output', '../escape.html',
+  ], { encoding: 'utf8' });
+  assert.equal(result.status, 2);
 });

@@ -35,7 +35,11 @@ export function extractMeetingPackageHtml(html) {
   if (Buffer.byteLength(html) > 20 * 1024 * 1024) throw new Error('Meeting package exceeds 20 MiB extraction limit');
   const match = html.match(DATA_RE);
   if (!match) throw new Error('Meeting package data container not found');
-  return decodeMeetingPayload(match[1]);
+  const payload = decodeMeetingPayload(match[1]);
+  if (!payload.metadata?.schema_version || payload.metadata.schema_version !== '1.0.0') {
+    throw new Error('Invalid payload schema_version');
+  }
+  return payload;
 }
 
 export function compareMeetingPackages(base, current) {
