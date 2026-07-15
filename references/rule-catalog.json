@@ -1,0 +1,690 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "rules": [
+    {
+      "rule_id": "FA-L4-001",
+      "title": "4D Boundary Check",
+      "category": "L4",
+      "default_severity": "BLOCKER",
+      "applicability": "L4 sub-process step must operate within a single 4D boundary (department, system, time, location).",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-001"
+    },
+    {
+      "rule_id": "FA-L4-002",
+      "title": "4D Attribution Check",
+      "category": "L4",
+      "default_severity": "CRITICAL",
+      "applicability": "Every L4 step must have explicit attribution for all four dimensions (who, which system, when, where).",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-002"
+    },
+    {
+      "rule_id": "FA-L4-003",
+      "title": "Terminal Org Check",
+      "category": "L4",
+      "default_severity": "CRITICAL",
+      "applicability": "L4 steps must not route to organizational units that have no further defined actions.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-003"
+    },
+    {
+      "rule_id": "FA-L4-004",
+      "title": "Cross-Org Exceptions",
+      "category": "L4",
+      "default_severity": "MAJOR",
+      "applicability": "Cross-organizational handoffs must be explicitly documented with exception handling.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-004"
+    },
+    {
+      "rule_id": "FA-L4-005",
+      "title": "Quantity Consistency",
+      "category": "L4",
+      "default_severity": "MAJOR",
+      "applicability": "Input and output quantities referenced in L4 steps must be consistent across connected steps.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l4-review.md#FA-L4-005"
+    },
+    {
+      "rule_id": "FA-L4-006",
+      "title": "Wait Step Validation",
+      "category": "L4",
+      "default_severity": "MAJOR",
+      "applicability": "Wait or hold steps must have explicit timeout or escalation conditions defined.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-006"
+    },
+    {
+      "rule_id": "FA-L4-007",
+      "title": "Duplicate Entry Detection",
+      "category": "L4",
+      "default_severity": "MAJOR",
+      "applicability": "L4 flow must not contain duplicate entry points for the same trigger condition.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l4-review.md#FA-L4-007"
+    },
+    {
+      "rule_id": "FA-L4-008",
+      "title": "System Switch Check",
+      "category": "L4",
+      "default_severity": "CRITICAL",
+      "applicability": "Transitions between systems within a single L4 step must be explicitly documented.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-008"
+    },
+    {
+      "rule_id": "FA-L4-009",
+      "title": "Unnecessary Approval Detection",
+      "category": "L4",
+      "default_severity": "MINOR",
+      "applicability": "Approval steps that add no business value or duplicate prior approvals should be flagged.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-009"
+    },
+    {
+      "rule_id": "FA-L4-010",
+      "title": "L4 Step Completeness",
+      "category": "L4",
+      "default_severity": "CRITICAL",
+      "applicability": "Every L4 step must have a name, assigned role, input, output, and successor or terminal condition.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l4-review.md#FA-L4-010"
+    },
+    {
+      "rule_id": "FA-L5-001",
+      "title": "Single Main Role",
+      "category": "L5",
+      "default_severity": "CRITICAL",
+      "applicability": "Each L5 sub-process must have exactly one main Responsible role.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l5-review.md#FA-L5-001"
+    },
+    {
+      "rule_id": "FA-L5-002",
+      "title": "Business Output Four Questions",
+      "category": "L5",
+      "default_severity": "MAJOR",
+      "applicability": "Each L5 output must answer: What is delivered? To whom? In what format? By when?",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l5-review.md#FA-L5-002"
+    },
+    {
+      "rule_id": "FA-L5-003",
+      "title": "Verb-Object Naming Convention",
+      "category": "L5",
+      "default_severity": "MAJOR",
+      "applicability": "L5 process names must follow verb-object pattern (e.g. 'Approve Request', 'Validate Data').",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l5-review.md#FA-L5-003"
+    },
+    {
+      "rule_id": "FA-L5-004",
+      "title": "R0 Anti-Pattern: Missing Input",
+      "category": "L5",
+      "default_severity": "BLOCKER",
+      "applicability": "L5 process must not start without a clearly defined trigger or input artifact.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l5-review.md#FA-L5-004"
+    },
+    {
+      "rule_id": "FA-L5-005",
+      "title": "R1 Anti-Pattern: Orphan Output",
+      "category": "L5",
+      "default_severity": "BLOCKER",
+      "applicability": "L5 output must connect to a downstream consumer or be a final deliverable.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l5-review.md#FA-L5-005"
+    },
+    {
+      "rule_id": "FA-L5-006",
+      "title": "R2 Anti-Pattern: Role Mismatch",
+      "category": "L5",
+      "default_severity": "CRITICAL",
+      "applicability": "The assigned role must be capable of performing the described action in the given system context.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l5-review.md#FA-L5-006"
+    },
+    {
+      "rule_id": "FA-L5-007",
+      "title": "R3 Anti-Pattern: System Mismatch",
+      "category": "L5",
+      "default_severity": "CRITICAL",
+      "applicability": "The referenced system must support the described operation for the assigned role.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l5-review.md#FA-L5-007"
+    },
+    {
+      "rule_id": "FA-L5-008",
+      "title": "IPO Structure Check",
+      "category": "L5",
+      "default_severity": "MAJOR",
+      "applicability": "Each L5 process must have identifiable Input, Process, and Output structure.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l5-review.md#FA-L5-008"
+    },
+    {
+      "rule_id": "FA-L5-009",
+      "title": "Good Product Conditions",
+      "category": "L5",
+      "default_severity": "MAJOR",
+      "applicability": "L5 outputs must define what constitutes a good product: measurable quality criteria.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l5-review.md#FA-L5-009"
+    },
+    {
+      "rule_id": "FA-L5-010",
+      "title": "Tool Decoupling",
+      "category": "L5",
+      "default_severity": "MINOR",
+      "applicability": "L5 process description should describe business logic independent of specific tool implementations.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l5-review.md#FA-L5-010"
+    },
+    {
+      "rule_id": "FA-L6-001",
+      "title": "One-Breath Granularity",
+      "category": "L6",
+      "default_severity": "MAJOR",
+      "applicability": "Each L6 step must be describable in one breath (approximately 15 seconds of speaking).",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l6-review.md#FA-L6-001"
+    },
+    {
+      "rule_id": "FA-L6-002",
+      "title": "Verb-Object Naming at L6",
+      "category": "L6",
+      "default_severity": "MAJOR",
+      "applicability": "L6 step names must follow verb-object pattern consistently with parent L5 naming.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l6-review.md#FA-L6-002"
+    },
+    {
+      "rule_id": "FA-L6-003",
+      "title": "Business Semantics Only",
+      "category": "L6",
+      "default_severity": "CRITICAL",
+      "applicability": "L6 steps must describe business actions, not technical system operations.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l6-review.md#FA-L6-003"
+    },
+    {
+      "rule_id": "FA-L6-004",
+      "title": "Tool Leakage Detection",
+      "category": "L6",
+      "default_severity": "MAJOR",
+      "applicability": "L6 steps must not contain references to specific tool names, API endpoints, or database tables.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l6-review.md#FA-L6-004"
+    },
+    {
+      "rule_id": "FA-L6-005",
+      "title": "Role Leakage Detection",
+      "category": "L6",
+      "default_severity": "MAJOR",
+      "applicability": "L6 steps must not embed role assignments that belong to the L4 or L5 layer.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l6-review.md#FA-L6-005"
+    },
+    {
+      "rule_id": "FA-L6-006",
+      "title": "L6 Step Completeness",
+      "category": "L6",
+      "default_severity": "CRITICAL",
+      "applicability": "Each L6 step must have a name, input reference, output reference, and link to parent L5.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l6-review.md#FA-L6-006"
+    },
+    {
+      "rule_id": "FA-SOP-001",
+      "title": "Scenario Context Required",
+      "category": "SOP",
+      "default_severity": "CRITICAL",
+      "applicability": "Every SOP must declare the business scenario or context in which it applies.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-001"
+    },
+    {
+      "rule_id": "FA-SOP-002",
+      "title": "Five Signals Check",
+      "category": "SOP",
+      "default_severity": "MAJOR",
+      "applicability": "SOP must identify trigger signals: who, what, when, where, and why for each procedure entry.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-002"
+    },
+    {
+      "rule_id": "FA-SOP-003",
+      "title": "Specialization Fields",
+      "category": "SOP",
+      "default_severity": "MAJOR",
+      "applicability": "SOP must specify specialization fields such as applicable product lines, regions, or departments.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-003"
+    },
+    {
+      "rule_id": "FA-SOP-004",
+      "title": "Non-Empty L6 Reference",
+      "category": "SOP",
+      "default_severity": "CRITICAL",
+      "applicability": "Every SOP entry must reference at least one L6 step or explain why no L6 decomposition exists.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-004"
+    },
+    {
+      "rule_id": "FA-SOP-005",
+      "title": "SOP Attribution",
+      "category": "SOP",
+      "default_severity": "MAJOR",
+      "applicability": "SOP entries must attribute ownership to a specific role or organizational unit.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-005"
+    },
+    {
+      "rule_id": "FA-SOP-006",
+      "title": "Reference Validity",
+      "category": "SOP",
+      "default_severity": "BLOCKER",
+      "applicability": "All references from SOP to L4/L5/L6 nodes must resolve to existing nodes in the architecture model.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-006"
+    },
+    {
+      "rule_id": "FA-SOP-007",
+      "title": "Applicability Scope",
+      "category": "SOP",
+      "default_severity": "MAJOR",
+      "applicability": "SOP must declare its applicability scope: universal, conditional, or exception-only.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-007"
+    },
+    {
+      "rule_id": "FA-HIER-001",
+      "title": "Orphan Node Detection",
+      "category": "HIERARCHY",
+      "default_severity": "BLOCKER",
+      "applicability": "Every node (except root) must have a valid parent reference. Orphan nodes are not allowed.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-001"
+    },
+    {
+      "rule_id": "FA-HIER-002",
+      "title": "Dangling Reference Detection",
+      "category": "HIERARCHY",
+      "default_severity": "BLOCKER",
+      "applicability": "All parent_id and relationship references must point to existing nodes.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-002"
+    },
+    {
+      "rule_id": "FA-HIER-003",
+      "title": "Cycle Detection",
+      "category": "HIERARCHY",
+      "default_severity": "BLOCKER",
+      "applicability": "The hierarchy must be a directed acyclic graph. No cycles are permitted.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-003"
+    },
+    {
+      "rule_id": "FA-HIER-004",
+      "title": "Fan-Out Limit",
+      "category": "HIERARCHY",
+      "default_severity": "MAJOR",
+      "applicability": "A single node should not have an excessive number of children (warn above 10, block above 20).",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-004"
+    },
+    {
+      "rule_id": "FA-HIER-005",
+      "title": "Attribution Conflict",
+      "category": "HIERARCHY",
+      "default_severity": "CRITICAL",
+      "applicability": "Child node attribution must not contradict parent node attribution in the same dimension.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-005"
+    },
+    {
+      "rule_id": "FA-HIER-006",
+      "title": "Coverage Completeness",
+      "category": "HIERARCHY",
+      "default_severity": "MAJOR",
+      "applicability": "All leaf nodes at the lowest declared level must be reachable from the root.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-006"
+    },
+    {
+      "rule_id": "FA-HIER-007",
+      "title": "Output Chain Continuity",
+      "category": "HIERARCHY",
+      "default_severity": "MAJOR",
+      "applicability": "Outputs from child nodes must chain into the parent node's output or a sibling node's input.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-007"
+    },
+    {
+      "rule_id": "FA-HIER-008",
+      "title": "Layer Skip Detection",
+      "category": "HIERARCHY",
+      "default_severity": "CRITICAL",
+      "applicability": "A node must not skip a layer in the hierarchy (e.g. L3 directly containing L6).",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-008"
+    },
+    {
+      "rule_id": "FA-HIER-009",
+      "title": "Naming Consistency",
+      "category": "HIERARCHY",
+      "default_severity": "MINOR",
+      "applicability": "Child node names should be consistent in style with their parent node names.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-009"
+    },
+    {
+      "rule_id": "FA-HIER-010",
+      "title": "Version Consistency",
+      "category": "HIERARCHY",
+      "default_severity": "MAJOR",
+      "applicability": "All nodes in a single architecture model must belong to the same version.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-010"
+    },
+    {
+      "rule_id": "FA-BPMN-001",
+      "title": "Start Event Presence",
+      "category": "BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "Every BPMN process must have at least one start event.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-001"
+    },
+    {
+      "rule_id": "FA-BPMN-002",
+      "title": "End Event Presence",
+      "category": "BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "Every BPMN process must have at least one end event.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-002"
+    },
+    {
+      "rule_id": "FA-BPMN-003",
+      "title": "Event Type Declaration",
+      "category": "BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "All events in a BPMN diagram must have a declared event definition type.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-003"
+    },
+    {
+      "rule_id": "FA-BPMN-004",
+      "title": "Gateway Pairing",
+      "category": "BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "Split gateways must have a corresponding merge gateway of the same type.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-004"
+    },
+    {
+      "rule_id": "FA-BPMN-005",
+      "title": "Default Flow on Exclusive Gateway",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "Every exclusive gateway with multiple outgoing flows must designate exactly one default flow.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-005"
+    },
+    {
+      "rule_id": "FA-BPMN-006",
+      "title": "Dangling Sequence Flow",
+      "category": "BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "Every sequence flow must have valid source and target references.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-006"
+    },
+    {
+      "rule_id": "FA-BPMN-007",
+      "title": "Orphan Task Detection",
+      "category": "BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "Every task, sub-process, and event must be connected to at least one sequence flow.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-007"
+    },
+    {
+      "rule_id": "FA-BPMN-008",
+      "title": "Pool and Lane Usage",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "In multi-pool diagrams, all tasks must be assigned to a lane within a pool.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-008"
+    },
+    {
+      "rule_id": "FA-BPMN-009",
+      "title": "Sequence Flow vs Message Flow Distinction",
+      "category": "BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "Sequence flows must connect elements within the same pool; message flows must connect across pools.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-009"
+    },
+    {
+      "rule_id": "FA-BPMN-010",
+      "title": "Sub-Process Boundary Completeness",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "Sub-processes should have clearly defined input and output connections.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-010"
+    },
+    {
+      "rule_id": "FA-BPMN-011",
+      "title": "Exception and Error Path",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "Processes with external interactions should define exception or error handling paths.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-011"
+    },
+    {
+      "rule_id": "FA-BPMN-012",
+      "title": "Rollback Path Presence",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "Multi-step transactional processes should define rollback or compensation paths.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-012"
+    },
+    {
+      "rule_id": "FA-BPMN-013",
+      "title": "Task Label Completeness",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "All tasks in a BPMN diagram must have non-empty names.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-013"
+    },
+    {
+      "rule_id": "FA-BPMN-014",
+      "title": "Intermediate Event Placement",
+      "category": "BPMN",
+      "default_severity": "MINOR",
+      "applicability": "Intermediate events should be placed at meaningful positions in the process flow.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-014"
+    },
+    {
+      "rule_id": "FA-BPMN-015",
+      "title": "Data Object Association",
+      "category": "BPMN",
+      "default_severity": "MINOR",
+      "applicability": "Data objects should be associated with at least one task or sub-process.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-015"
+    },
+    {
+      "rule_id": "FA-VIS-001",
+      "title": "Line Crossing Detection",
+      "category": "VISUAL",
+      "default_severity": "MAJOR",
+      "applicability": "Flow lines should not cross each other.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-001"
+    },
+    {
+      "rule_id": "FA-VIS-002",
+      "title": "Flow Direction Consistency",
+      "category": "VISUAL",
+      "default_severity": "MAJOR",
+      "applicability": "All sequence flows should follow a consistent primary direction.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-002"
+    },
+    {
+      "rule_id": "FA-VIS-003",
+      "title": "Backflow Detection",
+      "category": "VISUAL",
+      "default_severity": "CRITICAL",
+      "applicability": "Flows should not go backward relative to the primary reading direction.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-003"
+    },
+    {
+      "rule_id": "FA-VIS-004",
+      "title": "Diagram Density",
+      "category": "VISUAL",
+      "default_severity": "MINOR",
+      "applicability": "Diagrams should not contain excessive elements in a single view.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-004"
+    },
+    {
+      "rule_id": "FA-VIS-005",
+      "title": "Label Readability",
+      "category": "VISUAL",
+      "default_severity": "MAJOR",
+      "applicability": "All element labels must be readable with sufficient font size and no truncation.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-005"
+    },
+    {
+      "rule_id": "FA-VIS-006",
+      "title": "Spacing Consistency",
+      "category": "VISUAL",
+      "default_severity": "MINOR",
+      "applicability": "Elements should have consistent spacing throughout the diagram.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-006"
+    },
+    {
+      "rule_id": "FA-VIS-007",
+      "title": "Color Dependency",
+      "category": "VISUAL",
+      "default_severity": "MAJOR",
+      "applicability": "Diagrams must not rely solely on color to convey meaning.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-007"
+    },
+    {
+      "rule_id": "FA-VIS-008",
+      "title": "Legend Presence",
+      "category": "VISUAL",
+      "default_severity": "MINOR",
+      "applicability": "Diagrams with custom symbols or colors should include a legend.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-008"
+    },
+    {
+      "rule_id": "FA-VIS-009",
+      "title": "Title and Metadata",
+      "category": "VISUAL",
+      "default_severity": "MINOR",
+      "applicability": "Diagrams should have a title or caption identifying the process.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-009"
+    },
+    {
+      "rule_id": "FA-VIS-010",
+      "title": "Minimum Element Separation",
+      "category": "VISUAL",
+      "default_severity": "MINOR",
+      "applicability": "Adjacent elements must have sufficient separation to be visually distinguishable.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-010"
+    },
+    {
+      "rule_id": "FA-CONS-001",
+      "title": "L4 to Sub-Process Mapping",
+      "category": "CONSISTENCY",
+      "default_severity": "BLOCKER",
+      "applicability": "Every L4 sub-process node must have a corresponding SUB_PROCESS in the diagram.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-001"
+    },
+    {
+      "rule_id": "FA-CONS-002",
+      "title": "L5 to Task Mapping",
+      "category": "CONSISTENCY",
+      "default_severity": "CRITICAL",
+      "applicability": "Every L5 process node must have a corresponding TASK in the diagram.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-002"
+    },
+    {
+      "rule_id": "FA-CONS-003",
+      "title": "Role to Lane Mapping",
+      "category": "CONSISTENCY",
+      "default_severity": "CRITICAL",
+      "applicability": "Roles assigned to architecture nodes should correspond to lanes in the diagram.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-003"
+    },
+    {
+      "rule_id": "FA-CONS-004",
+      "title": "Deliverable to Data Object Mapping",
+      "category": "CONSISTENCY",
+      "default_severity": "MAJOR",
+      "applicability": "Input and output deliverables should have corresponding DATA_OBJECT elements in the diagram.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-004"
+    },
+    {
+      "rule_id": "FA-CONS-005",
+      "title": "Cross-Org Message Flow Mapping",
+      "category": "CONSISTENCY",
+      "default_severity": "MAJOR",
+      "applicability": "Cross-organizational interactions should be represented as MESSAGE_FLOW elements.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-005"
+    },
+    {
+      "rule_id": "FA-CONS-006",
+      "title": "Exception Path Mapping",
+      "category": "CONSISTENCY",
+      "default_severity": "MAJOR",
+      "applicability": "Exception handling paths in the architecture should be represented in the diagram.",
+      "deterministic_check": false,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-006"
+    },
+    {
+      "rule_id": "FA-CONS-007",
+      "title": "Architecture Completeness Coverage",
+      "category": "CONSISTENCY",
+      "default_severity": "CRITICAL",
+      "applicability": "All L4 and L5 architecture nodes must be represented in the diagram model.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-007"
+    },
+    {
+      "rule_id": "FA-CONS-008",
+      "title": "Diagram Extra Elements",
+      "category": "CONSISTENCY",
+      "default_severity": "MINOR",
+      "applicability": "Diagram elements without matching architecture nodes may indicate undocumented processes.",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-008"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "flow-architect",
+  "version": "0.1.0",
+  "description": "Read-only process architecture and diagram review skill family",
+  "category": "Productivity",
+  "capabilities": [
+    "Read"
+  ],
+  "entrypoint": "./skills/"
+}

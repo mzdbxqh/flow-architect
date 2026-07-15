@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "550e8400-e29b-41d4-a716-446655440000",
+  "stage_id": "architecture-parse",
+  "attempt": 1,
+  "status": "SUCCEEDED",
+  "decision": "PASS",
+  "summary": "Architecture parsed successfully from input document.",
+  "outputs": [
+    {
+      "path": "artifacts/architecture-model.json",
+      "description": "Parsed architecture model"
+    }
+  ],
+  "warnings": [],
+  "blocking_reason": null,
+  "degradation": null,
+  "producer": {
+    "executor": "l4-worker",
+    "name": "architecture-parse",
+    "skill": "flow-architect-review-l4-worker"
+  },
+  "evidence": []
+}

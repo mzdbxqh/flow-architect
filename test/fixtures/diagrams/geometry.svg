@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect x="10" y="10" width="180" height="80" fill="#4CAF50" stroke="#333" />
+  <text x="100" y="55" text-anchor="middle" fill="white" font-size="16">Start Process</text>
+
+  <rect x="210" y="10" width="180" height="80" fill="#2196F3" stroke="#333" />
+  <text x="300" y="55" text-anchor="middle" fill="white" font-size="16">Validate Input</text>
+
+  <circle cx="200" cy="200" r="40" fill="#FF9800" stroke="#333" />
+  <text x="200" y="205" text-anchor="middle" fill="white" font-size="14">Decision</text>
+
+  <line x1="100" y1="90" x2="100" y2="160" stroke="#333" stroke-width="2" />
+  <line x1="300" y1="90" x2="300" y2="160" stroke="#333" stroke-width="2" />
+
+  <path d="M 100 160 Q 200 140 200 160" stroke="#333" stroke-width="2" fill="none" />
+  <path d="M 300 160 Q 200 140 200 160" stroke="#333" stroke-width="2" fill="none" />
+
+  <ellipse cx="200" cy="280" rx="60" ry="15" fill="#f44336" stroke="#333" />
+  <text x="200" y="285" text-anchor="middle" fill="white" font-size="12">End</text>
+</svg>

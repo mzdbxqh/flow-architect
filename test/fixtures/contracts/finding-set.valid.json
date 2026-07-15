@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "findings": [
+    {
+      "finding_id": "f-001",
+      "rule_id": "consistency-missing-step",
+      "category": "consistency",
+      "severity": "MAJOR",
+      "verdict": "FAIL",
+      "artifact_refs": ["arch-doc", "bpmn-diagram"],
+      "target_refs": ["node-1", "elem-1"],
+      "evidence": [
+        {
+          "artifact_id": "arch-doc",
+          "locator_type": "LINE",
+          "locator": "line-42",
+          "excerpt": "Step 3: Validate payment",
+          "observation": "No corresponding task found in diagram"
+        }
+      ],
+      "expected": "Architecture step 'Validate payment' should have a diagram element",
+      "actual": "No matching diagram element found",
+      "recommendation": "Add a 'Validate Payment' task to the diagram lane for order processing",
+      "confidence": 0.85,
+      "business_confirmation_required": true,
+      "source_rule_refs": ["consistency-rule-v1"],
+      "fingerprint": "abc123def456"
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0.0",
+  "nodes": [
+    {
+      "node_id": "l4-order",
+      "type": "L4",
+      "name": "Order Processing",
+      "parent_id": null,
+      "roles": ["order_manager"],
+      "inputs": [{"name": "customer_order", "type": "document"}],
+      "outputs": [{"name": "fulfilled_order", "type": "document"}],
+      "rasci": "R",
+      "source_refs": ["doc-1"],
+      "rules_refs": []
+    },
+    {
+      "node_id": "l5-validate",
+      "type": "L5",
+      "name": "Validate Order",
+      "parent_id": "l4-order",
+      "roles": ["validator"],
+      "inputs": [{"name": "customer_order", "type": "document"}],
+      "outputs": [{"name": "validated_order", "type": "document"}],
+      "rasci": "R",
+      "source_refs": ["doc-1"],
+      "rules_refs": ["rule-validation"]
+    },
+    {
+      "node_id": "l6-check-stock",
+      "type": "L6",
+      "name": "Check Stock Availability",
+      "parent_id": "l5-validate",
+      "roles": ["stock_clerk"],
+      "inputs": [{"name": "validated_order", "type": "document"}],
+      "outputs": [{"name": "stock_report", "type": "report"}],
+      "rasci": "R",
+      "source_refs": ["doc-1"],
+      "rules_refs": []
+    }
+  ],
+  "relationships": [
+    {
+      "from_node_id": "l4-order",
+      "to_node_id": "l5-validate",
+      "type": "contains"
+    },
+    {
+      "from_node_id": "l5-validate",
+      "to_node_id": "l6-check-stock",
+      "type": "contains"
+    }
+  ],
+  "metadata": {
+    "source": "test-fixture"
+  }
+}

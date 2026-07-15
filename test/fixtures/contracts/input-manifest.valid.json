@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "550e8400-e29b-41d4-a716-446655440000",
+  "artifacts": [
+    {
+      "file_path": "/run/input/architecture.md",
+      "sha256": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+      "size_bytes": 4096,
+      "kind": "ARCHITECTURE",
+      "format": "markdown",
+      "parse_mode": "STRUCTURED",
+      "confidence": 0.95,
+      "capabilities": ["heading-extraction", "table-parsing"],
+      "degradation_reason": null
+    }
+  ],
+  "warnings": []
+}

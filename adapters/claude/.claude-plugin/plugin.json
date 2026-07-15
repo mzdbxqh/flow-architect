@@ -1,0 +1,17 @@
+{
+  "name": "flow-architect",
+  "version": "0.1.0",
+  "description": "Read-only process architecture and diagram review skill family",
+  "author": {
+    "name": "flow-architect contributors"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "architecture",
+    "review",
+    "bpmn",
+    "process",
+    "diagram"
+  ],
+  "skills": "./skills/"
+}

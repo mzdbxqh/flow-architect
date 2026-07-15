@@ -1,0 +1,4 @@
+node_id,type,name,parent_id,roles,rasci
+l4-order,L4,Order Processing,,order_manager,R
+l5-validate,L5,Validate Order,l4-order,validator,R
+l6-check-stock,L6,Check Stock Availability,l5-validate,stock_clerk,R

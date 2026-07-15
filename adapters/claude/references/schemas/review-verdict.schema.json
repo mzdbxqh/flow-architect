@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow-architect/schemas/review-verdict.schema.json",
+  "title": "Review Verdict",
+  "description": "Overall review verdict aggregated from all stage findings.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "route",
+    "review_verdict",
+    "scope_limitations",
+    "total_findings",
+    "blocker_count",
+    "critical_count",
+    "major_count",
+    "minor_count",
+    "info_count",
+    "business_confirmation_required_count",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "run_id": { "type": "string" },
+    "route": {
+      "type": "string",
+      "enum": ["INTEGRATED", "ARCHITECTURE_ONLY", "DIAGRAM_ONLY"]
+    },
+    "review_verdict": {
+      "type": "string",
+      "enum": ["PASS", "CONDITIONAL_PASS", "FAIL", "INSUFFICIENT_EVIDENCE"]
+    },
+    "scope_limitations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "total_findings": { "type": "number", "minimum": 0 },
+    "blocker_count": { "type": "number", "minimum": 0 },
+    "critical_count": { "type": "number", "minimum": 0 },
+    "major_count": { "type": "number", "minimum": 0 },
+    "minor_count": { "type": "number", "minimum": 0 },
+    "info_count": { "type": "number", "minimum": 0 },
+    "business_confirmation_required_count": { "type": "number", "minimum": 0 },
+    "summary": { "type": "string" }
+  }
+}
