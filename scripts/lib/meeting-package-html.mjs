@@ -22,8 +22,10 @@ export function buildMeetingPackageHtml({ bpmnXml, questions, metadata }) {
   const js = fs.readFileSync(path.join(RUNTIME, 'editor.bundle.js'), 'utf8');
   const css = fs.readFileSync(path.join(RUNTIME, 'editor.bundle.css'), 'utf8');
   const scriptHash = createHash('sha256').update(js).digest('base64');
+  const inlineHash = createHash('sha256').update(js).digest('base64');
   return shell
     .replace('__FA_SCRIPT_HASH__', `sha256-${scriptHash}`)
+    .replace('__FA_INLINE_HASH__', `sha256-${inlineHash}`)
     .replace('__FA_STYLE__', css)
     .replace('__FA_PAYLOAD__', encodeMeetingPayload(payload))
     .replace('__FA_SCRIPT__', js);
@@ -34,4 +36,24 @@ export function extractMeetingPackageHtml(html) {
   const match = html.match(DATA_RE);
   if (!match) throw new Error('Meeting package data container not found');
   return decodeMeetingPayload(match[1]);
+}
+
+export function compareMeetingPackages(base, current) {
+  if (current.metadata.based_on_revision !== base.metadata.revision) {
+    throw new Error(`Revision lineage mismatch: ${current.metadata.based_on_revision}`);
+  }
+  const before = new Map(base.questions.map(q => [q.id, q]));
+  const after = new Map(current.questions.map(q => [q.id, q]));
+  const ids = [...new Set([...before.keys(), ...after.keys()])].sort();
+  return {
+    from_revision: base.metadata.revision,
+    to_revision: current.metadata.revision,
+    bpmn_changed: base.bpmn_xml !== current.bpmn_xml,
+    question_changes: ids.flatMap(id => {
+      const left = before.get(id);
+      const right = after.get(id);
+      if (JSON.stringify(left) === JSON.stringify(right)) return [];
+      return [{ id, before: left ?? null, after: right ?? null }];
+    }),
+  };
 }

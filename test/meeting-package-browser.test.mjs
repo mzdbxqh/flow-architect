@@ -122,3 +122,19 @@ test('native drag and reconnect persist BPMN DI and flow refs', async t => {
   assert.match(xml, /<di:waypoint/);
   assert.match(xml, /sequenceFlow[^>]+id="Flow_Review_Approve"[^>]+targetRef="Task_Rework"/);
 });
+
+test('browser exports a reopenable r02 HTML', async t => {
+  const { browser, page } = await openFixture(t);
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出新版本' }).click();
+  const item = await download;
+  assert.match(item.suggestedFilename(), /-r02\.html$/);
+  const tempPath = await item.path();
+  const saved = tempPath + '.html';
+  fs.copyFileSync(tempPath, saved);
+  const context = await browser.newContext();
+  const reopened = await context.newPage();
+  await reopened.goto(pathToFileURL(saved).href);
+  await assert.doesNotReject(() => reopened.locator('#fa-canvas svg[data-element-id]').waitFor());
+  await context.close();
+});

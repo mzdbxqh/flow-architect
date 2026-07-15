@@ -5,6 +5,7 @@ import { fixture } from './helpers/fixture.mjs';
 import {
   buildMeetingPackageHtml,
   extractMeetingPackageHtml,
+  compareMeetingPackages,
 } from '../scripts/lib/meeting-package-html.mjs';
 
 const bpmnXml = fs.readFileSync(fixture('meeting-package/single-process.bpmn'), 'utf8');
@@ -33,4 +34,17 @@ test('invalid BPMN and dangling question references are rejected', () => {
   assert.throws(() => buildMeetingPackageHtml({
     bpmnXml, questions: [{ ...questions[0], element_ids: ['Missing_1'] }], metadata,
   }), /Missing_1/);
+});
+
+test('revision comparison reports BPMN and question changes', () => {
+  const baseHtml = buildMeetingPackageHtml({ bpmnXml, questions, metadata });
+  const base = extractMeetingPackageHtml(baseHtml);
+  const current = structuredClone(base);
+  current.metadata.revision = 'r02';
+  current.metadata.based_on_revision = 'r01';
+  current.questions[0].status = 'CONFIRMED';
+  const diff = compareMeetingPackages(base, current);
+  assert.equal(diff.from_revision, 'r01');
+  assert.equal(diff.to_revision, 'r02');
+  assert.deepEqual(diff.question_changes.map(x => x.id), ['Q-001']);
 });

@@ -4,6 +4,7 @@ import './styles.css';
 import { decodePayload } from './payload-codec.js';
 import { QuestionController } from './question-controller.js';
 import { DiagramController } from './diagram-controller.js';
+import { ExportController } from './export-controller.js';
 
 (async function() {
   const encoded = document.querySelector('#fa-package-data')?.textContent?.trim();
@@ -24,6 +25,7 @@ import { DiagramController } from './diagram-controller.js';
   questionController.render();
 
   const diagramController = new DiagramController(modeler, payload.questions);
+  const exportController = new ExportController({ modeler, payload });
 
   document.querySelector('#fa-rename').addEventListener('click', () => {
     if (!diagramController.selected) return;
@@ -93,5 +95,21 @@ import { DiagramController } from './diagram-controller.js';
     diagramController.redo();
   });
 
-  window.__FLOW_ARCHITECT__ = { modeler, payload, questionController, diagramController };
+  document.querySelector('#fa-export-html').addEventListener('click', () => {
+    exportController.downloadNewHtml();
+  });
+
+  document.querySelector('#fa-export-bpmn').addEventListener('click', () => {
+    exportController.downloadBpmn();
+  });
+
+  document.querySelector('#fa-export-svg').addEventListener('click', () => {
+    exportController.downloadSvg();
+  });
+
+  document.querySelector('#fa-export-questions').addEventListener('click', () => {
+    exportController.downloadQuestions();
+  });
+
+  window.__FLOW_ARCHITECT__ = { modeler, payload, questionController, diagramController, exportController };
 })();
