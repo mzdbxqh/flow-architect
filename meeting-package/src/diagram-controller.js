@@ -26,14 +26,28 @@ export class DiagramController {
     const factory = this.modeler.get('elementFactory');
     const autoPlace = this.modeler.get('autoPlace');
     const modeling = this.modeler.get('modeling');
-    const gateway = autoPlace.append(this.selected,
-      factory.createShape({ type: 'bpmn:ExclusiveGateway' }));
-    modeling.updateLabel(gateway, question.trim());
-    const yes = autoPlace.append(gateway, factory.createShape({ type: 'bpmn:Task' }));
-    modeling.updateLabel(yes, yesLabel.trim());
-    const no = autoPlace.append(gateway, factory.createShape({ type: 'bpmn:Task' }));
-    modeling.updateLabel(no, noLabel.trim());
-    return { gateway, yes, no };
+    const created = [];
+    try {
+      const gateway = autoPlace.append(this.selected,
+        factory.createShape({ type: 'bpmn:ExclusiveGateway' }));
+      modeling.updateLabel(gateway, question.trim());
+      created.push(gateway);
+
+      const yes = autoPlace.append(gateway, factory.createShape({ type: 'bpmn:Task' }));
+      modeling.updateLabel(yes, yesLabel.trim());
+      created.push(yes);
+
+      const no = autoPlace.append(gateway, factory.createShape({ type: 'bpmn:Task' }));
+      modeling.updateLabel(no, noLabel.trim());
+      created.push(no);
+
+      return { gateway, yes, no };
+    } catch (error) {
+      for (const el of created.reverse()) {
+        try { modeling.removeElements([el]); } catch (_) { /* best-effort rollback */ }
+      }
+      throw error;
+    }
   }
 
   deleteSelected() {

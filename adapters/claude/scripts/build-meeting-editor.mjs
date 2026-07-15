@@ -32,26 +32,28 @@ export async function buildMeetingEditor({ write = true, check = false } = {}) {
 
   const output = { js: Buffer.from(js), css: Buffer.from(css), shell: Buffer.from(shell) };
 
+  if (check) {
+    const problems = [];
+    try {
+      const existingJs = fs.readFileSync(path.join(RUNTIME, 'editor.bundle.js'));
+      if (!output.js.equals(existingJs)) problems.push('editor.bundle.js');
+    } catch { problems.push('editor.bundle.js'); }
+    try {
+      const existingCss = fs.readFileSync(path.join(RUNTIME, 'editor.bundle.css'));
+      if (!output.css.equals(existingCss)) problems.push('editor.bundle.css');
+    } catch { problems.push('editor.bundle.css'); }
+    try {
+      const existingShell = fs.readFileSync(path.join(RUNTIME, 'shell.html'));
+      if (!output.shell.equals(existingShell)) problems.push('shell.html');
+    } catch { problems.push('shell.html'); }
+    return { ...output, problems };
+  }
+
   if (write) {
     fs.mkdirSync(RUNTIME, { recursive: true });
-    const problems = [];
-
-    if (check) {
-      const existingJs = fs.readFileSync(path.join(RUNTIME, 'editor.bundle.js'));
-      const existingCss = fs.readFileSync(path.join(RUNTIME, 'editor.bundle.css'));
-      const existingShell = fs.readFileSync(path.join(RUNTIME, 'shell.html'));
-      if (!output.js.equals(existingJs)) problems.push('editor.bundle.js');
-      if (!output.css.equals(existingCss)) problems.push('editor.bundle.css');
-      if (!output.shell.equals(existingShell)) problems.push('shell.html');
-    }
-
-    if (!check || problems.length > 0) {
-      fs.writeFileSync(path.join(RUNTIME, 'editor.bundle.js'), output.js);
-      fs.writeFileSync(path.join(RUNTIME, 'editor.bundle.css'), output.css);
-      fs.writeFileSync(path.join(RUNTIME, 'shell.html'), output.shell);
-    }
-
-    return { ...output, problems };
+    fs.writeFileSync(path.join(RUNTIME, 'editor.bundle.js'), output.js);
+    fs.writeFileSync(path.join(RUNTIME, 'editor.bundle.css'), output.css);
+    fs.writeFileSync(path.join(RUNTIME, 'shell.html'), output.shell);
   }
 
   return { ...output, problems: [] };
@@ -60,7 +62,7 @@ export async function buildMeetingEditor({ write = true, check = false } = {}) {
 const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (isMainModule) {
   const check = process.argv.includes('--check');
-  const result = await buildMeetingEditor({ write: true, check });
+  const result = await buildMeetingEditor({ write: !check, check });
   console.log(JSON.stringify({
     status: check && result.problems.length > 0 ? 'DRIFT_DETECTED' : 'SUCCEEDED',
     problems: result.problems,

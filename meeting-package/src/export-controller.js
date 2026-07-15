@@ -6,6 +6,19 @@ export function nextRevision(revision) {
   return `r${String(Number(match[1]) + 1).padStart(match[1].length, '0')}`;
 }
 
+function validateQuestionsBeforeExport(questions) {
+  const ids = new Set();
+  for (const q of questions) {
+    if (!q.id || typeof q.id !== 'string') throw new Error('问题 ID 不能为空');
+    if (ids.has(q.id)) throw new Error(`问题 ID 重复：${q.id}`);
+    ids.add(q.id);
+    if (!q.text || !q.text.trim()) throw new Error(`问题 ${q.id} 的描述不能为空`);
+    if (!Array.isArray(q.element_ids) || q.element_ids.length === 0) {
+      throw new Error(`问题 ${q.id} 必须关联至少一个图元素`);
+    }
+  }
+}
+
 export class ExportController {
   constructor({ modeler, payload }) {
     this.modeler = modeler;
@@ -13,6 +26,7 @@ export class ExportController {
   }
 
   async currentPayload() {
+    validateQuestionsBeforeExport(this.payload.questions);
     const { xml } = await this.modeler.saveXML({ format: true });
     const next = {
       metadata: {
@@ -41,21 +55,25 @@ export class ExportController {
 
   async downloadNewHtml() {
     const payload = await this.currentPayload();
+    const emptyShell = document.querySelector('[data-fa-shell]')?.dataset.faShell;
+    if (!emptyShell) throw new Error('导出失败：缺少壳模板');
     const clone = document.documentElement.cloneNode(true);
     const app = clone.querySelector('#fa-app');
     if (app) {
-      const canvas = document.createElement('div');
-      canvas.id = 'fa-canvas';
-      const questions = document.createElement('aside');
-      questions.id = 'fa-questions';
-      app.replaceChildren(
-        clone.querySelector('#fa-toolbar'),
-        document.createElement('main').appendChild(canvas).appendChild(questions).parentNode,
-      );
+      app.querySelectorAll('.djs-parent, .djs-overlay-container, .bjs-container, [class*="bpmn-js"]').forEach(el => el.remove());
+      const canvas = clone.querySelector('#fa-canvas');
+      if (canvas) canvas.replaceChildren();
+      const questions = clone.querySelector('#fa-questions');
+      if (questions) questions.replaceChildren();
+      app.querySelectorAll('.fa-question-highlight').forEach(el => el.classList.remove('fa-question-highlight'));
+      app.querySelectorAll('[aria-current]').forEach(el => el.removeAttribute('aria-current'));
     }
     clone.querySelector('#fa-package-data').textContent = encodePayload(payload);
-    const scriptEl = clone.querySelector('script:not([type])');
-    if (scriptEl) scriptEl.textContent = document.querySelector('script:not([type])').textContent;
+    const scriptEl = clone.querySelector('#fa-app ~ script:not([type])');
+    if (scriptEl) {
+      const currentScript = document.querySelector('#fa-app ~ script:not([type])');
+      if (currentScript) scriptEl.textContent = currentScript.textContent;
+    }
     const html = `<!doctype html>\n${clone.outerHTML}`;
     this.download(this.fileName(payload.metadata.revision, '.html'), html, 'text/html;charset=utf-8');
   }

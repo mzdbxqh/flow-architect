@@ -36,6 +36,30 @@ async function openFixture(t) {
   return { browser, page };
 }
 
+test('original package has dual-column layout with fa-main, fa-canvas, fa-questions', async t => {
+  const { page } = await openFixture(t);
+  assert.equal(await page.locator('#fa-main').count(), 1);
+  assert.equal(await page.locator('#fa-canvas').count(), 1);
+  assert.equal(await page.locator('#fa-questions').count(), 1);
+  const mainBox = await page.locator('#fa-main').boundingBox();
+  const canvasBox = await page.locator('#fa-canvas').boundingBox();
+  const questionsBox = await page.locator('#fa-questions').boundingBox();
+  assert.ok(mainBox.width > 600);
+  assert.ok(mainBox.height > 400);
+  assert.ok(canvasBox.x < questionsBox.x);
+  assert.ok(questionsBox.x >= canvasBox.x + canvasBox.width - 2);
+});
+
+test('bpmn-js palette and context pad are hidden', async t => {
+  const { page } = await openFixture(t);
+  assert.equal(await page.locator('.djs-palette').evaluateAll(els =>
+    els.every(e => getComputedStyle(e).display === 'none')), true);
+  assert.equal(await page.locator('.djs-context-pad').evaluateAll(els =>
+    els.every(e => getComputedStyle(e).display === 'none')), true);
+  assert.equal(await page.locator('.djs-palette').evaluateAll(els =>
+    els.every(e => !e.offsetHeight)), true);
+});
+
 test('question list and BPMN overlays locate each other', async t => {
   const browser = await chromium.launch({ headless: true, executablePath: CHROME_PATH });
   t.after(() => browser.close());
@@ -57,6 +81,18 @@ test('question answer and status update the in-memory payload', async t => {
   assert.equal(question.answer, '由采购经理复核');
   assert.equal(question.status, 'CONFIRMED');
   assert.equal(await page.locator('[data-overlay-question-id="Q-001"]').count(), 0);
+});
+
+test('question switch clears old highlight and shows new one', async t => {
+  const { page } = await openFixture(t);
+  await page.locator('[data-question-id="Q-001"] button').click();
+  await assert.doesNotReject(() => page.locator('g.fa-question-highlight').waitFor());
+  await page.locator('[data-question-id="Q-002"] button').click();
+  await page.waitForTimeout(200);
+  const highlightedQ1 = await page.locator('[data-element-id="Task_Review"].fa-question-highlight').count();
+  const highlightedQ2 = await page.locator('[data-element-id="Task_Approve"].fa-question-highlight').count();
+  assert.equal(highlightedQ1, 0);
+  assert.equal(highlightedQ2, 1);
 });
 
 test('business edit controls rename, insert, branch, delete, undo and redo', async t => {
@@ -123,7 +159,7 @@ test('native drag and reconnect persist BPMN DI and flow refs', async t => {
   assert.match(xml, /sequenceFlow[^>]+id="Flow_Review_Approve"[^>]+targetRef="Task_Rework"/);
 });
 
-test('browser exports a reopenable r02 HTML', async t => {
+test('browser exports a reopenable r02 HTML with correct structure', async t => {
   const { browser, page } = await openFixture(t);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出新版本' }).click();
@@ -135,6 +171,63 @@ test('browser exports a reopenable r02 HTML', async t => {
   const context = await browser.newContext();
   const reopened = await context.newPage();
   await reopened.goto(pathToFileURL(saved).href);
-  await assert.doesNotReject(() => reopened.locator('#fa-canvas svg[data-element-id]').waitFor());
+  await reopened.locator('#fa-canvas svg[data-element-id]').waitFor();
+  assert.equal(await reopened.locator('#fa-main').count(), 1);
+  assert.equal(await reopened.locator('#fa-canvas').count(), 1);
+  assert.equal(await reopened.locator('#fa-questions').count(), 1);
+  const mainBox = await reopened.locator('#fa-main').boundingBox();
+  const canvasBox = await reopened.locator('#fa-canvas').boundingBox();
+  const questionsBox = await reopened.locator('#fa-questions').boundingBox();
+  assert.ok(mainBox.width > 600);
+  assert.ok(mainBox.height > 400);
+  assert.ok(canvasBox.x < questionsBox.x);
+  assert.ok(questionsBox.x >= canvasBox.x + canvasBox.width - 2);
+  assert.equal(await reopened.locator('.djs-palette').evaluateAll(els =>
+    els.every(e => getComputedStyle(e).display === 'none')), true);
   await context.close();
+});
+
+test('r02 can modify activity name, question answer/status, and re-export to r03', async t => {
+  const { browser, page } = await openFixture(t);
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出新版本' }).click();
+  const item = await download;
+  const tempPath = await item.path();
+  const saved = tempPath + '.html';
+  fs.copyFileSync(tempPath, saved);
+
+  const context = await browser.newContext();
+  const r02Page = await context.newPage();
+  await r02Page.goto(pathToFileURL(saved).href);
+  await r02Page.locator('#fa-canvas svg[data-element-id]').waitFor();
+
+  await r02Page.locator('[data-element-id="Task_Review"]').click();
+  await r02Page.getByRole('button', { name: '修改名称' }).click();
+  await r02Page.locator('#fa-rename-input').fill('修改后名称');
+  await r02Page.getByRole('button', { name: '确认修改' }).click();
+  assert.equal(await r02Page.locator('[data-element-id="Task_Review"] text').textContent(), '修改后名称');
+
+  await r02Page.getByLabel('Q-001 回答').fill('测试回答');
+  await r02Page.getByLabel('Q-001 状态').selectOption('CONFIRMED');
+  const q = await r02Page.evaluate(() =>
+    window.__FLOW_ARCHITECT__.payload.questions.find(q => q.id === 'Q-001'));
+  assert.equal(q.answer, '测试回答');
+  assert.equal(q.status, 'CONFIRMED');
+
+  const r03Download = r02Page.waitForEvent('download');
+  await r02Page.getByRole('button', { name: '导出新版本' }).click();
+  const r03 = await r03Download;
+  assert.match(r03.suggestedFilename(), /-r03\.html$/);
+  await context.close();
+});
+
+test('offline package emits no network request', async t => {
+  const { page } = await openFixture(t);
+  const requests = [];
+  page.on('request', request => {
+    if (!request.url().startsWith('file:') && !request.url().startsWith('blob:')) requests.push(request.url());
+  });
+  await page.reload();
+  await page.locator('#fa-canvas svg[data-element-id]').waitFor();
+  assert.deepEqual(requests, []);
 });

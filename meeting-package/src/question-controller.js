@@ -1,3 +1,9 @@
+const STATUS_LABELS = {
+  OPEN: '待确认',
+  CONFIRMED: '已确认',
+  NOT_APPLICABLE: '不适用',
+};
+
 export class QuestionController {
   constructor({ modeler, questions, root, onChange }) {
     this.modeler = modeler;
@@ -5,6 +11,7 @@ export class QuestionController {
     this.root = root;
     this.onChange = onChange;
     this.overlayIds = [];
+    this.highlightedElements = [];
     document.addEventListener('click', event => {
       const id = event.target.closest('[data-overlay-question-id]')?.dataset.overlayQuestionId;
       if (id) this.selectQuestion(id);
@@ -28,14 +35,27 @@ export class QuestionController {
     }
   }
 
+  clearHighlights() {
+    const canvas = this.modeler.get('canvas');
+    for (const elementId of this.highlightedElements) {
+      canvas.removeMarker(elementId, 'fa-question-highlight');
+    }
+    this.highlightedElements = [];
+  }
+
   selectQuestion(id) {
     const q = this.questions.find(item => item.id === id);
+    if (!q) return;
     const canvas = this.modeler.get('canvas');
     const registry = this.modeler.get('elementRegistry');
+    this.clearHighlights();
     document.querySelectorAll('[aria-current]').forEach(n => n.removeAttribute('aria-current'));
     document.querySelector(`[data-question-id="${CSS.escape(id)}"]`)?.setAttribute('aria-current', 'true');
-    q.element_ids.filter(elementId => registry.get(elementId))
-      .forEach(elementId => canvas.addMarker(elementId, 'fa-question-highlight'));
+    const newHighlighted = q.element_ids.filter(elementId => registry.get(elementId));
+    for (const elementId of newHighlighted) {
+      canvas.addMarker(elementId, 'fa-question-highlight');
+    }
+    this.highlightedElements = newHighlighted;
   }
 
   setStatus(id, status) {
@@ -77,7 +97,7 @@ export class QuestionController {
     for (const value of ['OPEN', 'CONFIRMED', 'NOT_APPLICABLE']) {
       const option = document.createElement('option');
       option.value = value;
-      option.textContent = value;
+      option.textContent = STATUS_LABELS[value] || value;
       option.selected = value === q.status;
       status.append(option);
     }

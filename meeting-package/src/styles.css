@@ -111,3 +111,13 @@ body {
 [aria-current="true"] {
   background: #e3f2fd;
 }
+
+/* Hide bpmn-js professional UI chrome: palette, context pad, search, popup */
+.djs-palette,
+.djs-context-pad,
+.djs-popup,
+.djs-search,
+.bpmn-icon-group,
+.djs-overlay-context-pad {
+  display: none !important;
+}

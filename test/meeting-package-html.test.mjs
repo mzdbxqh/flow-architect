@@ -32,6 +32,18 @@ test('HTML contains no external dependency', () => {
   assert.match(html, /Content-Security-Policy/);
 });
 
+test('CSP uses real script hash, not unsafe-inline or unsafe-eval', () => {
+  const html = buildMeetingPackageHtml({ bpmnXml, questions, metadata });
+  const cspMatch = html.match(/Content-Security-Policy"[^"]*content="([^"]+)"/);
+  assert.ok(cspMatch, 'CSP header must exist');
+  const csp = cspMatch[1];
+  assert.match(csp, /script-src\s+'sha256-[A-Za-z0-9+/=]+'/);
+  const scriptSrc = csp.split(';').find(s => s.trim().startsWith('script-src'));
+  assert.ok(scriptSrc, 'script-src must exist');
+  assert.doesNotMatch(scriptSrc, /unsafe-inline/);
+  assert.doesNotMatch(scriptSrc, /unsafe-eval/);
+});
+
 test('invalid BPMN and dangling question references are rejected', () => {
   assert.throws(() => buildMeetingPackageHtml({ bpmnXml: '<x/>', questions, metadata }), /BPMN/);
   assert.throws(() => buildMeetingPackageHtml({
@@ -53,11 +65,8 @@ test('revision comparison reports BPMN and question changes', () => {
 });
 
 test('malicious question text remains inert text', () => {
-  const maliciousQuestions = [{
-    id: 'Q-XSS',
-    text: '</script><img src=x onerror="globalThis.pwned=1">',
-    element_ids: ['Task_Review'], status: 'OPEN', answer: '',
-  }];
+  const maliciousQuestions = JSON.parse(
+    fs.readFileSync(fixture('meeting-package/malicious-questions.json'), 'utf8'));
   const html = buildMeetingPackageHtml({ bpmnXml, questions: maliciousQuestions, metadata });
   assert.doesNotMatch(html, /<img src=x/);
   assert.deepEqual(extractMeetingPackageHtml(html).questions, maliciousQuestions);
@@ -84,6 +93,35 @@ test('extractor enforces size and schema limits without executing HTML', () => {
   assert.equal(globalThis.__meetingPackageExecuted, false);
 });
 
+test('extractor validates questions schema and content hash', () => {
+  const html = buildMeetingPackageHtml({ bpmnXml, questions, metadata });
+  const badQuestions = rewritePayload(html, payload => {
+    payload.questions[0].status = 'INVALID_STATUS';
+  });
+  assert.throws(() => extractMeetingPackageHtml(badQuestions), /问题|schema/i);
+
+  const badHash = rewritePayload(html, payload => {
+    payload.metadata.content_hash = 'sha256:' + '0'.repeat(64);
+  });
+  assert.throws(() => extractMeetingPackageHtml(badHash), /content_hash|hash|不一致|mismatch/i);
+});
+
+test('extractor rejects payload with tampered content hash', () => {
+  const html = buildMeetingPackageHtml({ bpmnXml, questions, metadata });
+  const badRef = rewritePayload(html, payload => {
+    payload.questions[0].element_ids = ['NonExistent_Element'];
+  });
+  assert.throws(() => extractMeetingPackageHtml(badRef), /content_hash|hash|不一致|element|reference/i);
+});
+
+test('extractor rejects duplicate and empty question IDs', () => {
+  const html = buildMeetingPackageHtml({ bpmnXml, questions, metadata });
+  const dupIds = rewritePayload(html, payload => {
+    payload.questions[1].id = 'Q-001';
+  });
+  assert.throws(() => extractMeetingPackageHtml(dupIds), /重复|duplicate|unique/i);
+});
+
 test('builder rejects XML declarations and unsafe output paths', () => {
   assert.throws(() => buildMeetingPackageHtml({
     bpmnXml: '<!DOCTYPE x><definitions/>', questions, metadata,
@@ -98,4 +136,70 @@ test('builder rejects XML declarations and unsafe output paths', () => {
     '--output', '../escape.html',
   ], { encoding: 'utf8' });
   assert.equal(result.status, 2);
+});
+
+test('path containment rejects same-prefix directory escape', () => {
+  const runDir = makeRunDir('prefix-escape');
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
+    '--bpmn', fixture('meeting-package/single-process.bpmn'),
+    '--questions', fixture('meeting-package/questions.valid.json'),
+    '--title', '采购审批流程', '--revision', 'r01',
+    '--package-id', 'procurement-approval', '--run-dir', runDir,
+    '--output', '../' + path.basename(runDir) + '-escape/out.html',
+  ], { encoding: 'utf8' });
+  assert.equal(result.status, 2);
+});
+
+test('path containment rejects absolute output path outside runDir', () => {
+  const runDir = makeRunDir('absolute-escape');
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
+    '--bpmn', fixture('meeting-package/single-process.bpmn'),
+    '--questions', fixture('meeting-package/questions.valid.json'),
+    '--title', '采购审批流程', '--revision', 'r01',
+    '--package-id', 'procurement-approval', '--run-dir', runDir,
+    '--output', '/tmp/escape-outside.html',
+  ], { encoding: 'utf8' });
+  assert.equal(result.status, 2);
+});
+
+test('CLI rejects missing --process-id when BPMN has multiple processes', () => {
+  const runDir = makeRunDir('multi-process');
+  const tmpQuestions = path.join(runDir, 'q.json');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(tmpQuestions, JSON.stringify([{
+    id: 'Q-001', text: '测试问题', element_ids: ['Task_A1'], status: 'OPEN', answer: '',
+  }]));
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
+    '--bpmn', fixture('meeting-package/multi-process.bpmn'),
+    '--questions', tmpQuestions,
+    '--title', '多流程测试', '--revision', 'r01',
+    '--package-id', 'multi-process-test', '--run-dir', runDir,
+    '--output', 'multi.html',
+  ], { encoding: 'utf8' });
+  assert.equal(result.status, 2);
+  const err = JSON.parse(result.stderr);
+  assert.match(err.error, /process/i);
+});
+
+test('CLI accepts explicit --process-id for multi-process BPMN', () => {
+  const runDir = makeRunDir('multi-process-explicit');
+  fs.mkdirSync(runDir, { recursive: true });
+  const tmpQuestions = path.join(runDir, 'q.json');
+  fs.writeFileSync(tmpQuestions, JSON.stringify([{
+    id: 'Q-001', text: '测试问题', element_ids: ['Task_A1'], status: 'OPEN', answer: '',
+  }]));
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
+    '--bpmn', fixture('meeting-package/multi-process.bpmn'),
+    '--questions', tmpQuestions,
+    '--title', '多流程测试', '--revision', 'r01',
+    '--package-id', 'multi-process-test', '--process-id', 'Process_A',
+    '--run-dir', runDir, '--output', 'multi-explicit.html',
+  ], { encoding: 'utf8' });
+  assert.equal(result.status, 0);
+  const out = JSON.parse(result.stdout);
+  assert.equal(out.status, 'SUCCEEDED');
 });
