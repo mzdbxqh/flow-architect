@@ -2,7 +2,9 @@
   "name": "@flow-architect/plugin",
   "version": "0.1.2",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "node scripts/build-adapters.mjs",
     "build:check": "node scripts/build-adapters.mjs --check",
@@ -17,6 +19,9 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "bpmn-js": "18.21.0",
+    "esbuild": "0.28.1",
     "exceljs": "4.4.0",
     "mammoth": "1.12.0",
     "pdfjs-dist": "4.10.38"
