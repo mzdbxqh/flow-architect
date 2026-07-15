@@ -34,6 +34,7 @@ Claude Code Marketplace（推荐）：
 | `flow-architect-flow-review-architecture` | 仅评审 L4/L5/L6/SOP 分层架构 |
 | `flow-architect-flow-review-diagram` | 仅评审 BPMN、Mermaid、SVG、PNG 或 PDF 流程图 |
 | `flow-architect-build-meeting-package` | 从 BPMN + 问题 JSON 构建离线 HTML 讨论包 |
+| `flow-architect-draft-process` | 从多种来源材料生成 L5 BPMN 流程初稿（确定性抽取与生成，零 LLM） |
 | `flow-architect-help` | 查看能力、格式、状态、示例和诊断 |
 | `flow-architect-setup` | 初始化 core 和用户选择的可选运行时组件 |
 
@@ -47,7 +48,45 @@ Claude Code Marketplace（推荐）：
 
 ## V1 范围
 
-V1 为**只读**。它评审现有制品并输出结构化 Finding，但不修改、创建或修复任何用户文件。
+V1 评审技能为**只读**：检查现有制品并输出结构化 Finding，不修改、创建或修复任何用户文件。
+
+第二阶段新增 `flow-architect-draft-process`，是一个**创建**技能，从来源材料生成流程初稿。初稿生成全程确定性（零 LLM）：抽取、分批、BPMN 生成、HTML 打包均为纯代码；LLM 仅在逐批语义解释时调用。两条路径互补：初稿产出可评审的制品，评审技能评估这些制品。
+
+## 流程初稿 — 格式支持
+
+| 格式 | 状态 | 说明 |
+|------|------|------|
+| Markdown (.md) | ✅ 完整支持 | 按标题分块，保留行号 |
+| PDF (.pdf) | ✅ 完整支持 | 按页提取，低文本页标记为视觉 |
+| DOCX (.docx) | ✅ 完整支持 | 提取文字内容 |
+| XLSX (.xlsx) | ✅ 完整支持 | 按 sheet 提取表格 |
+| PPTX (.pptx) | ⚠️ 需要组件 | 通过 `/flow-architect:setup` 或 `$flow-architect-setup` 安装 |
+| PNG/JPEG (.png/.jpg) | ⚠️ 视觉资产 | 标记为视觉，不 OCR |
+| BPMN (.bpmn) | ✅ 完整支持 | 提取元素和流转 |
+| Mermaid / SVG | ✅ 完整支持 | 提取结构 |
+
+## 流程初稿 — 会前/线下/会后流程
+
+**会前生成：** 从来源材料生成初稿，产出 BPMN、问题 JSON 和离线 HTML 讨论包。
+
+**线下讨论：** 在浏览器中打开 HTML（无需联网）。编辑流程元素、回答问题、标记置信度。随时导出新版本。
+
+**会后回收：** 将导出的 HTML 版本回收到运行目录。系统合并已回答问题和 BPMN 变更，生成更新后的制品。
+
+## 流程初稿 — 缓存与恢复
+
+准备阶段的结果按运行目录缓存。相同输入重新运行时，缓存批次直接复用（队列状态 `CACHED`），仅新增或变更的输入进入 `PENDING`。若缓存批次损坏（哈希不匹配、证据漂移），对应项回退为 `PENDING`，其他合法缓存项仍保持 `CACHED`。
+
+## 流程初稿 — 确定性零 LLM 阶段
+
+以下阶段纯确定性运行，零 LLM 调用：
+
+- **抽取：** 从源文件提取文本、表格和结构化图表。
+- **分批：** 证据拆分为 ≤12,000 字符、≤12 blocks、≤1 visual 的批次。
+- **BPMN 生成：** 从合并的语义片段生成 L5 BPMN 2.0 XML + DI。
+- **HTML 打包：** 组装包含流程图、问题和元数据的离线会议包。
+
+仅逐批语义解释（fragment 生产）可能调用 LLM worker。
 
 ## 离线会议包构建
 

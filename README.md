@@ -13,6 +13,7 @@ For installation and usage instructions, see [INSTALL.md](INSTALL.md) or the [Ch
 | `flow-architect-flow-review-architecture` | Review L4/L5/L6/SOP layered architecture only |
 | `flow-architect-flow-review-diagram` | Review BPMN, Mermaid, SVG, PNG, or PDF diagrams only |
 | `flow-architect-build-meeting-package` | Build offline HTML discussion package from BPMN + questions JSON |
+| `flow-architect-draft-process` | Generate L5 BPMN process drafts from multiple source materials (deterministic, zero-LLM extraction and generation) |
 | `flow-architect-help` | Show capabilities, runtime status, examples, and diagnostics |
 | `flow-architect-setup` | Initialize core and user-selected optional runtime components |
 
@@ -26,7 +27,45 @@ The default entry skill (`flow-architect`) inspects your input files, determines
 
 ## V1 Scope
 
-V1 is **read-only**. It reviews existing artifacts and produces structured findings, but does not modify, create, or fix any user files.
+V1 review skills are **read-only**: they inspect existing artifacts and produce structured findings without modifying, creating, or fixing any user files.
+
+Phase 2 adds `flow-architect-draft-process`, a **creation** skill that generates process drafts from source materials. Draft generation is deterministic (zero LLM for extraction, batching, BPMN generation, and HTML packaging); LLM is only invoked during per-batch semantic interpretation. The two paths are complementary: drafts produce reviewable artifacts, and review skills evaluate them.
+
+## Process Draft — Format Support
+
+| Format | Status | Notes |
+|--------|--------|-------|
+| Markdown (.md) | ✅ Full | Chunked by heading, line numbers preserved |
+| PDF (.pdf) | ✅ Full | Per-page extraction; low-text pages marked visual |
+| DOCX (.docx) | ✅ Full | Text extraction |
+| XLSX (.xlsx) | ✅ Full | Per-sheet table extraction |
+| PPTX (.pptx) | ⚠️ Requires component | Install via `/flow-architect:setup` or `$flow-architect-setup` |
+| PNG/JPEG | ⚠️ Visual asset | Marked visual, no OCR |
+| BPMN (.bpmn) | ✅ Full | Element and flow extraction |
+| Mermaid / SVG | ✅ Full | Structure extraction |
+
+## Process Draft — Meeting Workflow
+
+**Before the meeting:** Generate the draft from source materials, producing BPMN, questions JSON, and an offline HTML discussion package.
+
+**During the meeting:** Open the HTML in a browser (no network required). Edit process elements, answer questions, and mark confidence. Export a new revision at any time.
+
+**After the meeting:** Import the exported HTML revision back into the run directory. The system merges answered questions and BPMN changes, then generates updated artifacts.
+
+## Process Draft — Cache and Recovery
+
+Preparation results are cached per run directory. On re-run with identical inputs, cached batches are reused (queue status `CACHED`) and only new or changed inputs enter `PENDING`. If a cached batch is corrupted (hash mismatch, evidence drift), that single item falls back to `PENDING` while other valid cached items remain `CACHED`.
+
+## Process Draft — Deterministic Zero-LLM Stages
+
+The following stages run with zero LLM calls — pure deterministic code:
+
+- **Extraction:** Text, tables, and structured diagrams extracted from source files.
+- **Batching:** Evidence split into ≤12,000-char batches with ≤12 blocks and ≤1 visual.
+- **BPMN generation:** L5 BPMN 2.0 XML + DI generated from merged semantic fragments.
+- **HTML packaging:** Offline meeting package assembled with process diagram, questions, and metadata.
+
+Only per-batch semantic interpretation (fragment production) may invoke an LLM worker.
 
 ## Offline Meeting Package
 

@@ -75,6 +75,7 @@ test('published dependency declaration keeps exact core and test-only optional p
   const pkg = JSON.parse(read('package.json'));
   assert.deepEqual(pkg.dependencies, {
     ajv: '8.20.0',
+    'ajv-formats': '3.0.1',
     'fast-xml-parser': '4.5.7',
     yaml: '2.9.0',
   });

@@ -44,8 +44,8 @@ export function cacheRoot({ env = {}, platform = process.platform, homedir } = {
 
 // ─── readManifest ──────────────────────────────────────────────────────
 
-const VALID_COMPONENTS = ['core', 'pdf', 'docx', 'xlsx'];
-const COMPONENT_ORDER = { core: 0, pdf: 1, docx: 2, xlsx: 3 };
+const VALID_COMPONENTS = ['core', 'pdf', 'docx', 'xlsx', 'pptx'];
+const COMPONENT_ORDER = { core: 0, pdf: 1, docx: 2, xlsx: 3, pptx: 4 };
 
 export function readManifest(pluginRoot) {
   const manifestPath = path.join(pluginRoot, 'runtime', 'manifest.json');

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "semantic-fragment",
+  "title": "Semantic Fragment",
+  "description": "语义片段，包含从证据批次中提取的业务事实和不确定性",
+  "type": "object",
+  "required": ["schema_version", "batch_id", "batch_sha256", "facts", "uncertainties"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema 版本号"
+    },
+    "batch_id": {
+      "type": "string",
+      "pattern": "^EB-[a-zA-Z0-9_-]+$",
+      "description": "关联的证据批次 ID"
+    },
+    "batch_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "关联批次的 SHA-256 哈希"
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fact_id", "kind", "process_key", "subject_key", "label", "attributes", "certainty", "evidence_refs"],
+        "additionalProperties": false,
+        "properties": {
+          "fact_id": {
+            "type": "string",
+            "pattern": "^F-[a-zA-Z0-9_-]+$",
+            "description": "事实唯一标识符"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["ORG_UNIT", "ROLE", "ACTIVITY", "EVENT", "DECISION", "FLOW", "INPUT", "OUTPUT", "RULE", "EXCEPTION", "BOUNDARY"],
+            "description": "事实类型"
+          },
+          "process_key": {
+            "type": "string",
+            "minLength": 1,
+            "description": "所属流程标识"
+          },
+          "subject_key": {
+            "type": "string",
+            "minLength": 1,
+            "description": "主题标识"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "description": "事实标签"
+          },
+          "attributes": {
+            "type": "object",
+            "description": "附加属性"
+          },
+          "certainty": {
+            "type": "string",
+            "enum": ["EXPLICIT", "INFERRED", "CONFLICT", "MISSING", "NOT_APPLICABLE"],
+            "description": "确定性状态"
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" },
+            "minItems": 1,
+            "description": "关联的证据块 ID"
+          }
+        }
+      },
+      "description": "业务事实数组"
+    },
+    "uncertainties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "text", "related_fact_ids", "evidence_refs"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["MISSING", "CONFLICT", "AMBIGUOUS", "NEEDS_CONTEXT"],
+            "description": "不确定性类型"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "不确定性描述"
+          },
+          "related_fact_ids": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^F-[a-zA-Z0-9_-]+$" },
+            "description": "关联的事实 ID"
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" },
+            "description": "关联的证据块 ID"
+          }
+        }
+      },
+      "description": "不确定性数组"
+    }
+  }
+}

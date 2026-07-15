@@ -32,6 +32,13 @@
       "packages": {
         "exceljs": "4.4.0"
       }
+    },
+    {
+      "name": "pptx",
+      "required": false,
+      "packages": {
+        "jszip": "3.10.1"
+      }
     }
   ]
 }

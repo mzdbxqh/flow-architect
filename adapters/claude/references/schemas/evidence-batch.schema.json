@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evidence-batch",
+  "title": "Evidence Batch",
+  "description": "证据批次，包含一组语义相关的证据块",
+  "type": "object",
+  "required": ["batch_id", "batch_sha256", "blocks", "total_chars", "modality_mix"],
+  "additionalProperties": false,
+  "properties": {
+    "batch_id": {
+      "type": "string",
+      "pattern": "^EB-[a-zA-Z0-9_-]+$",
+      "description": "批次唯一标识符"
+    },
+    "batch_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "批次内容的 SHA-256 哈希"
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["block_id", "artifact_sha256", "source_format", "modality", "locator", "heading_path", "content", "asset_ref", "content_sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "block_id": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" },
+          "artifact_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "source_format": { "type": "string", "enum": ["pdf", "docx", "xlsx", "pptx", "md", "png", "jpg", "jpeg", "bpmn", "mermaid", "svg"] },
+          "modality": { "type": "string", "enum": ["TEXT", "TABLE", "STRUCTURED_DIAGRAM", "VISUAL_ASSET"] },
+          "locator": {
+            "type": "object",
+            "required": ["page", "slide", "sheet", "range", "line_start", "line_end"],
+            "additionalProperties": false,
+            "properties": {
+              "page": { "type": ["integer", "null"], "minimum": 1 },
+              "slide": { "type": ["integer", "null"], "minimum": 1 },
+              "sheet": { "type": ["string", "null"] },
+              "range": { "type": ["string", "null"] },
+              "line_start": { "type": ["integer", "null"], "minimum": 1 },
+              "line_end": { "type": ["integer", "null"], "minimum": 1 }
+            }
+          },
+          "heading_path": { "type": "array", "items": { "type": "string" } },
+          "content": { "type": "string" },
+          "asset_ref": { "type": ["string", "null"] },
+          "content_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 12,
+      "description": "证据块数组，最多 12 个"
+    },
+    "total_chars": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 12000,
+      "description": "批次总字符数，不超过 12000"
+    },
+    "modality_mix": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["TEXT", "TABLE", "STRUCTURED_DIAGRAM", "VISUAL_ASSET"]
+      },
+      "uniqueItems": true,
+      "description": "批次中包含的模态类型"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "ACCEPTED", "CACHED"],
+      "description": "批次处理状态"
+    }
+  }
+}

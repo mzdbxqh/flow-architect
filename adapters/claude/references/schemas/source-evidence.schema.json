@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "source-evidence",
+  "title": "Source Evidence Block",
+  "description": "单个证据块，从原始材料中抽取的可定位内容片段",
+  "type": "object",
+  "required": ["block_id", "artifact_sha256", "source_format", "modality", "locator", "heading_path", "content", "asset_ref", "content_sha256"],
+  "additionalProperties": false,
+  "properties": {
+    "block_id": {
+      "type": "string",
+      "pattern": "^B-[a-zA-Z0-9_-]+$",
+      "description": "证据块唯一标识符"
+    },
+    "artifact_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "源文件的 SHA-256 哈希"
+    },
+    "source_format": {
+      "type": "string",
+      "enum": ["pdf", "docx", "xlsx", "pptx", "md", "png", "jpg", "jpeg", "bpmn", "mermaid", "svg"],
+      "description": "源文件格式"
+    },
+    "modality": {
+      "type": "string",
+      "enum": ["TEXT", "TABLE", "STRUCTURED_DIAGRAM", "VISUAL_ASSET"],
+      "description": "内容模态类型"
+    },
+    "locator": {
+      "type": "object",
+      "required": ["page", "slide", "sheet", "range", "line_start", "line_end"],
+      "additionalProperties": false,
+      "properties": {
+        "page": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "PDF 页码，从 1 开始"
+        },
+        "slide": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "PPTX 幻灯片编号"
+        },
+        "sheet": {
+          "type": ["string", "null"],
+          "description": "XLSX 工作表名称"
+        },
+        "range": {
+          "type": ["string", "null"],
+          "description": "XLSX 单元格范围"
+        },
+        "line_start": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "起始行号"
+        },
+        "line_end": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "结束行号"
+        }
+      }
+    },
+    "heading_path": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "标题层级路径"
+    },
+    "content": {
+      "type": "string",
+      "description": "抽取的文本内容"
+    },
+    "asset_ref": {
+      "type": ["string", "null"],
+      "description": "视觉资产的文件引用路径"
+    },
+    "content_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "内容的 SHA-256 哈希"
+    }
+  }
+}

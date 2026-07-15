@@ -21,6 +21,7 @@ const WORKERS = [
   'flow-architect-review-bpmn-worker',
   'flow-architect-review-visual-worker',
   'flow-architect-review-consistency-worker',
+  'flow-architect-extract-process-fragment-worker',
 ];
 
 // Map each worker to its expected skill
@@ -35,6 +36,7 @@ const WORKER_SKILL_MAP = {
   'flow-architect-review-bpmn-worker': 'flow-architect-review-bpmn',
   'flow-architect-review-visual-worker': 'flow-architect-review-visual',
   'flow-architect-review-consistency-worker': 'flow-architect-review-consistency',
+  'flow-architect-extract-process-fragment-worker': 'flow-architect-draft-process',
 };
 
 // --- Tests ---
@@ -104,7 +106,7 @@ test('all skills use trigger-focused descriptions and state the untrusted-input 
 test('all worker agents reject embedded instructions and restrict outputs to contained runDir paths', () => {
   const agentsDir = path.join(ROOT, 'agents');
   const files = fs.readdirSync(agentsDir).filter(name => name.endsWith('.md'));
-  assert.equal(files.length, 12);
+  assert.equal(files.length, 13);
   for (const file of files) {
     const content = fs.readFileSync(path.join(agentsDir, file), 'utf8');
     const { body } = parseFrontmatter(content);

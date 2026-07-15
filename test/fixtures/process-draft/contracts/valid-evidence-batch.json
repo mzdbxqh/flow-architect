@@ -1,0 +1,26 @@
+{
+  "batch_id": "EB-001",
+  "batch_sha256": "d4e5f6789012345678901234567890abcdef1234567890abcdef1234567ab1c2",
+  "blocks": [
+    {
+      "block_id": "B-001",
+      "artifact_sha256": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+      "source_format": "pdf",
+      "modality": "TEXT",
+      "locator": {
+        "page": 3,
+        "slide": null,
+        "sheet": null,
+        "range": null,
+        "line_start": null,
+        "line_end": null
+      },
+      "heading_path": ["采购管理", "审批"],
+      "content": "采购申请需经部门经理审批",
+      "asset_ref": null,
+      "content_sha256": "b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234567a"
+    }
+  ],
+  "total_chars": 100,
+  "modality_mix": ["TEXT"]
+}
