@@ -1,7 +1,7 @@
 {
   "name": "flow-architect",
   "version": "0.2.0",
-  "description": "Read-only process architecture and diagram review skill family",
+  "description": "Process architecture review, draft, and meeting package skill family",
   "author": {
     "name": "flow-architect contributors"
   },
@@ -9,6 +9,8 @@
   "keywords": [
     "architecture",
     "review",
+    "draft",
+    "meeting",
     "bpmn",
     "process",
     "diagram"

@@ -117,7 +117,7 @@ export async function finalizeProcessDraft({ runDir, revision = 'r01', onPublish
       title: draft.title,
       revision,
       based_on_revision: null,
-      runtime_version: '0.1.2',
+      runtime_version: '1.0.0',
     };
     const html = buildMeetingPackageHtml({ bpmnXml: bpmn, questions, metadata });
     const safeTitle = draft.title.replace(/[^a-zA-Z0-9一-龥_-]/g, '_');

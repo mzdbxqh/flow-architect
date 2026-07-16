@@ -24,7 +24,8 @@ test('Claude help command is discoverable and read-only', () => {
   assert.doesNotMatch(body, /runtime-manager\.mjs" install/);
   assert.match(body, /flow-architect`=只读盘点输入并自动路由/);
   assert.match(body, /组件 ID 是 `pdf`、包名是 `pdfjs-dist`/);
-  assert.match(body, /不得把任何入口描述成建模、生成、渲染或自动修复/);
+  assert.match(body, /不得把只读评审入口描述成建模、生成、渲染或自动修复/);
+  assert.match(body, /不得把创建入口描述为修改原始输入或自动修复/);
   assert.match(body, /不得显示解析后的插件绝对路径/);
   assert.match(body, /不得建议向插件目录安装依赖/);
   assert.match(body, /不得改写成 `OK`/);

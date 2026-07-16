@@ -24,6 +24,6 @@ allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/runtime-manager.mjs" che
 
 3. 若命令失败，原样保留结构化错误码并给出故障诊断入口，不要自行修复；不得虚构入口别名、包名、安装路径或环境变量配置。
 
-输出禁令：不得把任何入口描述成建模、生成、渲染或自动修复；不得显示解析后的插件绝对路径；不得建议向插件目录安装依赖。运行时只允许位于 doctor 报告的用户缓存，安装只通过 `/flow-architect:setup`。状态词必须原样使用 `READY`、`DEGRADED`、`BLOCKED`、`MISSING`、`CORRUPT`，不得改写成 `OK` 等其他词。
+输出禁令：不得把只读评审入口描述成建模、生成、渲染或自动修复；不得把创建入口描述为修改原始输入或自动修复；不得显示解析后的插件绝对路径；不得建议向插件目录安装依赖。运行时只允许位于 doctor 报告的用户缓存，安装只通过 `/flow-architect:setup`。状态词必须原样使用 `READY`、`DEGRADED`、`BLOCKED`、`MISSING`、`CORRUPT`，不得改写成 `OK` 等其他词。
 
 约束：零写入、零联网、不得调用 setup/install，不得修改任何输入或插件文件。

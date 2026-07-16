@@ -1,7 +1,7 @@
 {
   "name": "flow-architect",
   "version": "0.2.0",
-  "description": "Read-only process architecture and diagram review skill family",
+  "description": "Process architecture review, draft, and meeting package skill family",
   "author": {
     "name": "flow-architect contributors"
   },
@@ -9,6 +9,8 @@
   "keywords": [
     "architecture",
     "review",
+    "draft",
+    "meeting",
     "bpmn",
     "process",
     "diagram"
@@ -17,11 +19,12 @@
   "interface": {
     "displayName": "Flow Architect",
     "shortDescription": "Process architecture review",
-    "longDescription": "Read-only skill family for reviewing process architectures, BPMN diagrams, and consistency across artifacts",
+    "longDescription": "Skill family for reviewing process architectures, drafting process models, and building meeting packages from BPMN diagrams",
     "developerName": "flow-architect contributors",
     "category": "Productivity",
     "capabilities": [
-      "Read"
+      "Read",
+      "Write"
     ],
     "defaultPrompt": "Review my process architecture for defects"
   }

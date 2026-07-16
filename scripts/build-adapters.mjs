@@ -56,10 +56,10 @@ export function buildAdapterOutputs(pluginRoot) {
       const claudePluginJson = JSON.stringify({
         name: 'flow-architect',
         version: PLUGIN_VERSION,
-        description: 'Read-only process architecture and diagram review skill family',
+        description: 'Process architecture review, draft, and meeting package skill family',
         author: { name: 'flow-architect contributors' },
         license: 'Apache-2.0',
-        keywords: ['architecture', 'review', 'bpmn', 'process', 'diagram'],
+        keywords: ['architecture', 'review', 'draft', 'meeting', 'bpmn', 'process', 'diagram'],
         skills: './skills/',
         commands: [
           './commands/help.md',
@@ -77,18 +77,18 @@ export function buildAdapterOutputs(pluginRoot) {
       const codexPluginJson = JSON.stringify({
         name: 'flow-architect',
         version: PLUGIN_VERSION,
-        description: 'Read-only process architecture and diagram review skill family',
+        description: 'Process architecture review, draft, and meeting package skill family',
         author: { name: 'flow-architect contributors' },
         license: 'Apache-2.0',
-        keywords: ['architecture', 'review', 'bpmn', 'process', 'diagram'],
+        keywords: ['architecture', 'review', 'draft', 'meeting', 'bpmn', 'process', 'diagram'],
         skills: './skills/',
         interface: {
           displayName: 'Flow Architect',
           shortDescription: 'Process architecture review',
-          longDescription: 'Read-only skill family for reviewing process architectures, BPMN diagrams, and consistency across artifacts',
+          longDescription: 'Skill family for reviewing process architectures, drafting process models, and building meeting packages from BPMN diagrams',
           developerName: 'flow-architect contributors',
           category: 'Productivity',
-          capabilities: ['Read'],
+          capabilities: ['Read', 'Write'],
           defaultPrompt: 'Review my process architecture for defects'
         }
       }, null, 2) + '\n';
@@ -103,18 +103,18 @@ export function buildAdapterOutputs(pluginRoot) {
   const rootCodexPluginJson = JSON.stringify({
     name: 'flow-architect',
     version: PLUGIN_VERSION,
-    description: 'Read-only process architecture and diagram review skill family',
+    description: 'Process architecture review, draft, and meeting package skill family',
     author: { name: 'flow-architect contributors' },
     license: 'Apache-2.0',
-    keywords: ['architecture', 'review', 'bpmn', 'process', 'diagram'],
+    keywords: ['architecture', 'review', 'draft', 'meeting', 'bpmn', 'process', 'diagram'],
     skills: './skills/',
     interface: {
       displayName: 'Flow Architect',
       shortDescription: 'Process architecture review',
-      longDescription: 'Read-only skill family for reviewing process architectures, BPMN diagrams, and consistency across artifacts',
+      longDescription: 'Skill family for reviewing process architectures, drafting process models, and building meeting packages from BPMN diagrams',
       developerName: 'flow-architect contributors',
       category: 'Productivity',
-      capabilities: ['Read'],
+      capabilities: ['Read', 'Write'],
       defaultPrompt: 'Review my process architecture for defects'
     }
   }, null, 2) + '\n';
@@ -150,21 +150,21 @@ export function buildAdapterOutputs(pluginRoot) {
 
   const claudeMarketplaceJson = JSON.stringify({
     name: 'flow-architect',
-    description: 'Read-only process architecture and diagram review skills for Claude Code',
+    description: 'Process architecture review, draft, and meeting package skills for Claude Code',
     owner: {
       name: 'flow-architect contributors'
     },
     plugins: [{
       name: 'flow-architect',
       source: './adapters/claude',
-      description: 'Read-only process architecture and diagram review skill family',
+      description: 'Process architecture review, draft, and meeting package skill family',
       version: PLUGIN_VERSION,
       author: {
         name: 'flow-architect contributors'
       },
       repository: 'https://github.com/mzdbxqh/flow-architect',
       license: 'Apache-2.0',
-      keywords: ['architecture', 'review', 'bpmn', 'process', 'diagram'],
+      keywords: ['architecture', 'review', 'draft', 'meeting', 'bpmn', 'process', 'diagram'],
       category: 'productivity'
     }]
   }, null, 2) + '\n';

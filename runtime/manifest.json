@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "runtime_version": "1.0.0",
-  "plugin_compatibility": ">=0.1.2 <0.2.0",
+  "plugin_compatibility": ">=0.1.2 <0.3.0",
   "components": [
     {
       "name": "core",
