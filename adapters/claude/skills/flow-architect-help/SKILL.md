@@ -20,10 +20,10 @@ node "$PLUGIN_ROOT/scripts/runtime-manager.mjs" doctor --json
 
 ## 输出内容
 
-- 版本：`v0.1.2`。
-- 边界：V1 只读评审，不建模、不修改或修复原始业务制品。
-- Codex 入口：`$flow-architect`、`$flow-architect-flow-review-integrated`、`$flow-architect-flow-review-architecture`、`$flow-architect-flow-review-diagram`。
-- Claude Code 入口：`/flow-architect:flow-architect` 及对应三个命名空间入口。
+- 版本：`v0.2.0`。
+- 边界：V1 只读评审，不建模、不修改或修复原始业务制品。创建入口（流程初稿、离线会议包）在用户指定的独立运行目录创建新制品，不修改原始输入。
+- Codex 入口：`$flow-architect`、`$flow-architect-flow-review-integrated`、`$flow-architect-flow-review-architecture`、`$flow-architect-flow-review-diagram`、`$flow-architect-draft-process`、`$flow-architect-build-meeting-package`。
+- Claude Code 入口：`/flow-architect:flow-architect` 及对应三个命名空间入口；创建入口：`/flow-architect:draft-process`、`/flow-architect:build-meeting-package`。
 - core 格式：BPMN、SVG、JSON、YAML、Markdown。
 - optional 格式：PDF=`pdf`、DOCX=`docx`、XLSX=`xlsx`。
 - 上下文预算：输入归一化 → 12,000 字符批次 → 三态预算门禁（BUDGET_OK / BUDGET_ATTENTION / BUDGET_SPLIT_REQUIRED）。

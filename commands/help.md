@@ -15,8 +15,8 @@ allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/runtime-manager.mjs" che
    ```
 
 2. 用中文展示：
-   - 插件版本 `v0.1.2` 与 V1 只读评审边界；
-   - 精确入口及固定含义：`/flow-architect:flow-architect`=只读盘点输入并自动路由，`/flow-architect:flow-architect-flow-review-integrated`=只读联合评审，`/flow-architect:flow-architect-flow-review-architecture`=只读架构评审，`/flow-architect:flow-architect-flow-review-diagram`=只读流程图评审；
+   - 插件版本 `v0.2.0` 与 V1 只读评审边界；创建入口（流程初稿、离线会议包）在用户指定的独立运行目录创建新制品，不修改原始输入；
+   - 精确入口及固定含义：`/flow-architect:flow-architect`=只读盘点输入并自动路由，`/flow-architect:flow-architect-flow-review-integrated`=只读联合评审，`/flow-architect:flow-architect-flow-review-architecture`=只读架构评审，`/flow-architect:flow-architect-flow-review-diagram`=只读流程图评审；创建入口：`/flow-architect:draft-process`=在独立运行目录创建流程初稿，`/flow-architect:build-meeting-package`=在独立运行目录创建离线会议包；
    - core=`ajv,fast-xml-parser,yaml`，支持 BPMN、SVG、JSON、YAML、Markdown；
    - optional 精确映射：PDF 的组件 ID 是 `pdf`、包名是 `pdfjs-dist`；DOCX 的组件 ID 是 `docx`、包名是 `mammoth`；XLSX 的组件 ID 是 `xlsx`、包名是 `exceljs`；
    - 一个最小联合评审示例；

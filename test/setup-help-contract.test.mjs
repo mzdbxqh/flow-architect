@@ -30,6 +30,10 @@ test('Claude help command is discoverable and read-only', () => {
   assert.match(body, /不得改写成 `OK`/);
   assert.match(body, /零写入/);
   assert.match(body, /零联网/);
+  assert.match(body, /draft-process/);
+  assert.match(body, /build-meeting-package/);
+  assert.match(body, /独立运行目录创建新制品/);
+  assert.match(body, /不修改原始输入/);
 });
 
 test('Claude setup command is manual and enforces plan-confirm-install-doctor', () => {
@@ -89,7 +93,7 @@ test('published dependency declaration keeps exact core and test-only optional p
   });
 });
 
-test('Chinese guide documents the supported Marketplace setup path for v0.1.2', () => {
+test('Chinese guide documents the supported Marketplace setup path for v0.2.0', () => {
   const guide = read('docs/zh-CN/user-guide.md');
   assert.match(guide, /\/plugin marketplace add mzdbxqh\/flow-architect/);
   assert.match(guide, /\/plugin install flow-architect@flow-architect/);
@@ -99,6 +103,7 @@ test('Chinese guide documents the supported Marketplace setup path for v0.1.2', 
   assert.match(guide, /默认安装.*core|core.*默认安装/s);
   assert.match(guide, /可选.*PDF.*DOCX.*XLSX/s);
   assert.doesNotMatch(guide, /v0\.1\.1/);
+  assert.doesNotMatch(guide, /v0\.1\.2/);
   assert.doesNotMatch(guide, /Claude Code 当前推荐使用源码目录加载/);
   assert.doesNotMatch(guide, /claude --plugin-dir [“”]/);
 });

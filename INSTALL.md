@@ -13,10 +13,12 @@ The plugin has no Python runtime dependency and no project-developed npm package
 Install the stable GitHub release:
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.2
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.2.0
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```
+
+> **升级提示：** 从 v0.1.x 升级时，请先移除旧版本再安装新版本。
 
 For a local source checkout:
 

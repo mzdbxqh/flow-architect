@@ -1,6 +1,6 @@
 # Flow Architect 中文用户手册
 
-Flow Architect 是面向 Codex 与 Claude Code 的只读流程架构和流程图评审技能族。当前 V1 只分析现有制品、给出证据和 Finding，不创建、修改或修复业务文件。
+Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审技能族，同时提供流程初稿和离线会议包创建能力。当前 V1 评审入口只分析现有制品、给出证据和 Finding，不修改原始输入；创建入口在用户指定的独立运行目录创建新制品。
 
 ## 1. 能评审什么
 
@@ -40,7 +40,7 @@ Flow Architect 是面向 Codex 与 Claude Code 的只读流程架构和流程图
 ### 3.1 从 GitHub 安装稳定版
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.2
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.2.0
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```
@@ -274,11 +274,11 @@ setup 默认安装 core，并允许选择 PDF、DOCX、XLSX。若仍失败，保
 
 ### 会修改我的流程文件吗
 
-不会。v0.1.x 是只读评审版本，只写独立运行目录。建模和自动修复分别属于后续版本范围。
+不会。v0.2.0 的评审入口是只读的，只写独立运行目录。创建入口在用户指定的独立运行目录创建新制品，不修改原始输入。
 
 ## 10. 当前限制
 
-- v0.1.2 的 setup 仅管理第三方 Node.js 运行时组件，不安装 Python 环境；
+- v0.2.0 的 setup 仅管理第三方 Node.js 运行时组件，不安装 Python 环境；
 - setup 需要 Node.js 22+、npm 和可访问的 npm Registry；离线环境只能复用已验证缓存；
 - V1 不创建模型、不自动修复原始制品；
 - 视觉输入不能替代 BPMN XML 等结构化源文件；

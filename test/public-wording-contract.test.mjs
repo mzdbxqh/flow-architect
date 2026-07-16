@@ -128,3 +128,53 @@ test('draft-process SKILL.md batch-too-large error must suggest splitting source
     'SKILL.md should suggest splitting source materials or shrinking blocks when batch exceeds limit',
   );
 });
+
+// ============================================================
+// 3. v0.2.0 产品描述 — 不得错误描述为"只读、不建模"
+// ============================================================
+
+test('EN README must not describe the entire v0.2.0 product as read-only or no-modeling', () => {
+  // v0.2.0 includes creation skills (draft-process, build-meeting-package)
+  // so the entire product cannot be described as read-only
+  const forbidden = [
+    /Flow Architect is a read-only/i,
+    /read-only process architecture and diagram review skill family/i,
+    /only review, no creation/i,
+    /no modeling/i,
+  ];
+  for (const re of forbidden) {
+    assert.ok(
+      !re.test(README_EN),
+      `EN README must not describe the entire v0.2.0 product as read-only (matched: ${re})`,
+    );
+  }
+});
+
+test('ZH README must not describe the entire v0.2.0 product as read-only or no-modeling', () => {
+  const forbidden = [
+    /只读.*评审.*技能族/,
+    /仅评审.*不创建/,
+    /不建模/,
+  ];
+  for (const re of forbidden) {
+    assert.ok(
+      !re.test(README_ZH),
+      `ZH README must not describe the entire v0.2.0 product as read-only (matched: ${re})`,
+    );
+  }
+});
+
+test('EN README must still prohibit modifying original inputs or auto-fixing', () => {
+  // Even though creation skills exist, they must not modify original inputs
+  assert.ok(
+    /not modify.*original/i.test(README_EN) || /without modifying/i.test(README_EN),
+    'EN README must still prohibit modifying original inputs',
+  );
+});
+
+test('ZH README must still prohibit modifying original inputs or auto-fixing', () => {
+  assert.ok(
+    /不修改原始输入/.test(README_ZH) || /不修改原始/.test(README_ZH),
+    'ZH README must still prohibit modifying original inputs',
+  );
+});

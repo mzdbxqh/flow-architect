@@ -1,6 +1,6 @@
 # Flow Architect
 
-Flow Architect is a read-only process architecture and diagram review skill family for Codex and Claude Code.
+Flow Architect is a process architecture and diagram review skill family for Codex and Claude Code, with creation capabilities for process drafts and offline meeting packages.
 
 For installation and usage instructions, see [INSTALL.md](INSTALL.md) or the [Chinese user guide](docs/zh-CN/user-guide.md).
 

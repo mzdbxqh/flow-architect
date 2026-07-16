@@ -9,7 +9,7 @@
       "name": "flow-architect",
       "source": "./adapters/claude",
       "description": "Read-only process architecture and diagram review skill family",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "author": {
         "name": "flow-architect contributors"
       },

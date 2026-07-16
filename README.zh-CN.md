@@ -1,13 +1,13 @@
 # Flow Architect
 
-Flow Architect 是面向 Codex 与 Claude Code 的只读流程架构与流程图评审技能族。
+Flow Architect 是面向 Codex 与 Claude Code 的流程架构与流程图评审技能族，同时提供流程初稿和离线会议包创建能力。
 
 ## 快速安装
 
 Codex 稳定版：
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.1.2
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.2.0
 codex plugin add flow-architect@flow-architect
 ```
 
@@ -48,9 +48,9 @@ Claude Code Marketplace（推荐）：
 
 ## V1 范围
 
-V1 评审技能为**只读**：检查现有制品并输出结构化 Finding，不修改、创建或修复任何用户文件。
+V1 评审技能为**只读**：检查现有制品并输出结构化 Finding，不修改原始输入。
 
-第二阶段新增 `flow-architect-draft-process`，是一个**创建**技能，从来源材料生成流程初稿。初稿生成全程确定性（零 LLM）：抽取、分批、BPMN 生成、HTML 打包均为纯代码；LLM 仅在逐批语义解释时调用。两条路径互补：初稿产出可评审的制品，评审技能评估这些制品。
+第二阶段新增 `flow-architect-draft-process` 和 `flow-architect-build-meeting-package`，是**创建**技能，在用户指定的独立运行目录创建新制品，不修改原始输入。初稿生成全程确定性（零 LLM）：抽取、分批、BPMN 生成、HTML 打包均为纯代码；LLM 仅在逐批语义解释时调用。两条路径互补：初稿产出可评审的制品，评审技能评估这些制品。
 
 ## 流程初稿 — 格式支持
 
