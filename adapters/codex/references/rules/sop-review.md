@@ -1,172 +1,202 @@
-# SOP Review Rules
+# SOP 审查规则
 
-Rules for reviewing Standard Operating Procedure architecture.
-
----
-
-## FA-SOP-001: Scenario Context Required
-
-**Severity**: CRITICAL
-**Deterministic**: Yes
-
-### Description
-
-Every SOP must declare the business scenario or context in which it applies. An SOP without context is ambiguous about when it should be followed.
-
-### Check Procedure
-
-1. For each SOP, check for a scenario or context field.
-2. Verify that the context is non-empty and specific (not generic like "all scenarios").
-3. Flag SOPs without a declared scenario context.
-
-### Evidence Required
-
-- SOP identifier
-- Scenario/context field value (or absence)
+标准操作规程架构审查规则。
 
 ---
 
-## FA-SOP-002: Five Signals Check
+## FA-SOP-001：场景上下文必须声明
 
-**Severity**: MAJOR
-**Deterministic**: No
+**严重程度**：CRITICAL
+**确定性**：是
 
-### Description
+### 描述
 
-SOP must identify trigger signals for each procedure entry:
-1. **Who** initiates the procedure
-2. **What** condition triggers the procedure
-3. **When** the procedure should be executed
-4. **Where** the procedure applies
-5. **Why** the procedure is needed (business justification)
+每份 SOP 必须声明其适用的业务场景或上下文。SOP 不是流程架构中的"第 7 层"，它是 L5-L6 链路的文档化表达——覆盖一个 L5 及其下属的 L6 任务，按场景组织为操作指导书、模板、检查表的集合。缺少场景上下文的 SOP 无法明确其适用时机。
 
-### Check Procedure
+核心关系：
+- 一个 L5 可以按场景对应多个 SOP
+- 同一 L6 可被多个 SOP 交叉引用（SOP 引用 L6，不是拥有 L6）
+- 差异通过 SOP 层的特化字段（执行角色、使用系统、特殊配置）来表达
 
-1. For each SOP entry, check for the five signal dimensions.
-2. Flag entries missing one or more signals.
-3. Verify that signals are specific, not vague.
+### 检查步骤
 
-### Evidence Required
+1. 逐份检查 SOP 是否声明了场景或上下文字段。
+2. 验证上下文非空且具体（不得为"所有场景"等泛化描述）。
+3. 未声明场景上下文的 SOP 标记为不通过。
 
-- SOP entry identifier
-- Presence/absence of each of the five signals
-- Signal specificity assessment
+### 所需证据
 
----
-
-## FA-SOP-003: Specialization Fields
-
-**Severity**: MAJOR
-**Deterministic**: No
-
-### Description
-
-SOP must specify specialization fields such as applicable product lines, regions, or departments. An SOP that applies to everything effectively applies to nothing with precision.
-
-### Check Procedure
-
-1. For each SOP, check for specialization fields (product line, region, department, etc.).
-2. Verify that at least one specialization dimension is specified.
-3. Flag SOPs that declare universal applicability without justification.
-
-### Evidence Required
-
-- SOP identifier
-- Specialization fields (or absence)
+- SOP 标识
+- 场景/上下文字段值（或缺失情况）
 
 ---
 
-## FA-SOP-004: Non-Empty L6 Reference
+## FA-SOP-002：六信号检查
 
-**Severity**: CRITICAL
-**Deterministic**: Yes
+**严重程度**：MAJOR
+**确定性**：否
 
-### Description
+### 描述
 
-Every SOP entry must reference at least one L6 step or explain why no L6 decomposition exists. An SOP entry without an L6 reference is either incomplete or belongs to a different abstraction level.
+SOP 必须识别每个流程入口的场景分叉信号。场景分叉检测使用以下六个信号：
 
-### Check Procedure
+| 信号 | 说明 | 典型表现 |
+|------|------|---------|
+| 换人 | 执行者发生变化，工作上下文随之转移 | 销售做完前三步，转给财务做后两步 |
+| 等待超半个工作日 | 中断后恢复需要重新熟悉上下文 | 审批环节等总监签字，可能等两三天 |
+| 切地点 | 工作地点变化带来工作上下文切换 | 前三步在办公室，后两步到仓库 |
+| 切系统 | 登录不同系统意味着不同的操作环境 | 前三步在 CRM，后两步切到 ERP |
+| 切业务模式 | 同一系统内业务模式切换 | 从标准订单切换到退货流程 |
+| 跳过/新增步骤 | 同一 L5 下不同变体执行不同的 L6 子集 | 退货订单跳过信用检查；紧急订单跳过前三步直接审批 |
 
-1. For each SOP entry, check for L6 step references.
-2. If no L6 reference exists, check for an explicit justification.
-3. Flag entries with neither L6 reference nor justification.
+**关键前提**：六信号首先用于判断是否需要拆分为多个 L5（回到四问判定），确认属于同一 L5 内的执行差异后，才用于划分 SOP 场景。
 
-### Evidence Required
+### 检查步骤
 
-- SOP entry identifier
-- L6 references (or absence)
-- Justification for absence (if any)
+1. 对每个 SOP 条目，检查六个信号维度是否存在。
+2. 标记缺失一个或多个信号的条目。
+3. 验证信号是否具体，而非笼统含糊。
 
----
+### 所需证据
 
-## FA-SOP-005: SOP Attribution
-
-**Severity**: MAJOR
-**Deterministic**: Yes
-
-### Description
-
-SOP entries must attribute ownership to a specific role or organizational unit. Unowned SOPs cannot be maintained or enforced.
-
-### Check Procedure
-
-1. For each SOP entry, check for an owner (role or organizational unit).
-2. Verify that the owner is a valid entity in the architecture model.
-3. Flag entries without ownership attribution.
-
-### Evidence Required
-
-- SOP entry identifier
-- Owner role/unit (or absence)
-- Owner validity in the architecture model
+- SOP 条目标识
+- 六个信号的存在/缺失情况
+- 信号具体性评估
 
 ---
 
-## FA-SOP-006: Reference Validity
+## FA-SOP-003：特化字段
 
-**Severity**: BLOCKER
-**Deterministic**: Yes
+**严重程度**：MAJOR
+**确定性**：否
 
-### Description
+### 描述
 
-All references from SOP to L4/L5/L6 nodes must resolve to existing nodes in the architecture model. Broken references indicate structural inconsistency.
+SOP 必须指定特化字段，如适用的产品线、区域、部门、执行角色、使用系统、特殊配置等。适用于一切场景的 SOP 等于在任何场景下都不具备精确性。
 
-### Check Procedure
+SOP 与 L6 的关系是"引用"而非"拥有"。差异通过 SOP 层的特化字段来表达。当同一 L6 在不同 SOP 中的执行描述出现差异时，需判断其归属：
 
-1. Collect all cross-references from SOP entries to L4, L5, and L6 nodes.
-2. For each reference, verify that the target node exists in the architecture model.
-3. Flag all broken (unresolvable) references.
+- **合并方向（特化字段表达）**：核心动作相同、仅执行方式不同时，视为同一 L6 的特化字段差异。判断标准：L6 的核心动作（做什么）不变，差异仅在执行角色、使用系统、业务规则配置等执行层面。
+- **新增方向（新建 L6）**：核心动作不同（做什么发生了变化）时，应新增 L6 而非通过特化字段表达。典型触发条件：操作对象不同、操作目的不同、产出不同。
 
-### Evidence Required
+### 检查步骤
 
-- SOP entry identifier
-- The reference target
-- Whether the target exists in the architecture model
+1. 逐份检查 SOP 是否填写了特化字段（执行角色、使用系统、特殊配置等）。
+2. 验证至少指定了一个特化维度。
+3. 声明普遍适用而无正当理由的 SOP 标记为不通过。
+
+### 所需证据
+
+- SOP 标识
+- 特化字段（或缺失情况）
 
 ---
 
-## FA-SOP-007: Applicability Scope
+## FA-SOP-004：L6 引用非空
 
-**Severity**: MAJOR
-**Deterministic**: No
+**严重程度**：CRITICAL
+**确定性**：是
 
-### Description
+### 描述
 
-SOP must declare its applicability scope as one of:
-1. **Universal**: Applies to all instances of the process
-2. **Conditional**: Applies only when specific conditions are met
-3. **Exception-Only**: Applies only as an exception to the default process
+每个 SOP 条目必须引用至少一个 L6 步骤，或说明为何不存在 L6 分解。没有 L6 引用的 SOP 条目要么不完整，要么不属于当前抽象层级。
 
-### Check Procedure
+SOP 可以只引用 L5 下的部分 L6，不必全部引用。同一 L6 可被多个 SOP 交叉引用，差异在 SOP 层表达。
 
-1. For each SOP, check for an applicability scope declaration.
-2. If conditional, verify that conditions are specific and verifiable.
-3. If exception-only, verify that the default process is referenced.
-4. Flag SOPs without a scope declaration.
+### 检查步骤
 
-### Evidence Required
+1. 对每个 SOP 条目，检查是否存在 L6 步骤引用。
+2. 若无 L6 引用，检查是否有明确说明。
+3. 既无 L6 引用又无说明的条目标记为不通过。
 
-- SOP identifier
-- Applicability scope declaration
-- If conditional: the specific conditions
-- If exception-only: the default process reference
+### 所需证据
+
+- SOP 条目标识
+- L6 引用（或缺失情况）
+- 缺失时的说明（如有）
+
+---
+
+## FA-SOP-005：SOP 归属
+
+**严重程度**：MAJOR
+**确定性**：是
+
+### 描述
+
+SOP 条目必须标注归属，指向具体的角色或组织单元。没有归属的 SOP 无法被维护和执行。
+
+### 检查步骤
+
+1. 对每个 SOP 条目，检查是否存在归属标注（角色或组织单元）。
+2. 验证归属方在架构模型中是合法实体。
+3. 缺少归属标注的条目标记为不通过。
+
+### 所需证据
+
+- SOP 条目标识
+- 归属角色/单元（或缺失情况）
+- 归属方在架构模型中的合法性
+
+---
+
+## FA-SOP-006：引用有效性
+
+**严重程度**：BLOCKER
+**确定性**：是
+
+### 描述
+
+SOP 到 L4/L5/L6 节点的所有引用必须能解析到架构模型中的已有节点。断裂的引用意味着结构不一致。
+
+### 检查步骤
+
+1. 收集 SOP 条目到 L4、L5、L6 节点的全部交叉引用。
+2. 逐条验证引用目标在架构模型中是否存在。
+3. 所有断裂（无法解析）的引用标记为不通过。
+
+### 所需证据
+
+- SOP 条目标识
+- 引用目标
+- 目标在架构模型中是否存在
+
+---
+
+## FA-SOP-007：适用范围
+
+**严重程度**：MAJOR
+**确定性**：否
+
+### 描述
+
+SOP 必须声明其适用范围，分为以下三类：
+1. **通用**：适用于该流程的所有实例。
+2. **条件适用**：仅在特定条件满足时适用。
+3. **仅限例外**：仅作为默认流程的例外情况适用。
+
+三检法用于确认 SOP 场景划分是否合理：
+
+| 检查项 | 对应信号 | 判断标准 |
+|--------|---------|---------|
+| 一检角色：谁来做？ | 换人 | 执行者是否发生变化 |
+| 二检上下文：连续性/时空/业务模式/步骤完整性是否一致？ | 等待/切地点/切业务模式/跳过新增步骤 | 工作是否被中断、地点是否切换、业务模式是否改变、不同变体是否执行不同 L6 子集 |
+| 三检工具：用什么工具？ | 切系统 | 是否需要切换到不同的系统/工具 |
+
+任一检查项答案为"否"，就应考虑拆分为多个 SOP 场景。
+
+### 检查步骤
+
+1. 逐份检查 SOP 是否声明了适用范围。
+2. 若为条件适用，验证条件是否具体且可验证。
+3. 若为仅限例外，验证是否引用了默认流程。
+4. 未声明适用范围的 SOP 标记为不通过。
+5. 对每个 SOP 场景执行三检法校验，任一检查不通过则标记该 SOP 适用范围可能需要调整。
+
+### 所需证据
+
+- SOP 标识
+- 适用范围声明
+- 条件适用时：具体条件
+- 仅限例外时：默认流程引用
+- 三检法校验结果

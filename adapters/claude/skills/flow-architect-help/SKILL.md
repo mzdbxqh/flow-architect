@@ -1,6 +1,6 @@
 ---
 name: flow-architect-help
-description: Use when discovering Flow Architect capabilities, supported formats, read-only boundaries, runtime status, examples, or diagnostics
+description: 当需要了解 Flow Architect 能力、支持格式、只读边界、运行时状态、示例或诊断信息时使用
 ---
 
 # Flow Architect Help
@@ -26,6 +26,7 @@ node "$PLUGIN_ROOT/scripts/runtime-manager.mjs" doctor --json
 - Claude Code 入口：`/flow-architect:flow-architect` 及对应三个命名空间入口。
 - core 格式：BPMN、SVG、JSON、YAML、Markdown。
 - optional 格式：PDF=`pdf`、DOCX=`docx`、XLSX=`xlsx`。
+- 上下文预算：输入归一化 → 12,000 字符批次 → 三态预算门禁（BUDGET_OK / BUDGET_ATTENTION / BUDGET_SPLIT_REQUIRED）。
 - 当前 READY/DEGRADED/BLOCKED 状态、缺失组件、两个最小示例和下一步诊断建议。
 - 初始化入口：Claude Code `/flow-architect:setup`；Codex `$flow-architect-setup`。
 

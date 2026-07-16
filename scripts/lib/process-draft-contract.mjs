@@ -24,11 +24,13 @@ async function loadValidators() {
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   addFormats(ajv);
 
-  const [sourceEvidence, evidenceBatch, semanticFragment, processDraft] = await Promise.all([
+  const [sourceEvidence, evidenceBatch, semanticFragment, processDraft, contextBudget, normalizedDocument] = await Promise.all([
     readFile(join(schemasDir, 'source-evidence.schema.json'), 'utf8').then(JSON.parse),
     readFile(join(schemasDir, 'evidence-batch.schema.json'), 'utf8').then(JSON.parse),
     readFile(join(schemasDir, 'semantic-fragment.schema.json'), 'utf8').then(JSON.parse),
     readFile(join(schemasDir, 'process-draft.schema.json'), 'utf8').then(JSON.parse),
+    readFile(join(schemasDir, 'context-budget.schema.json'), 'utf8').then(JSON.parse),
+    readFile(join(schemasDir, 'normalized-document.schema.json'), 'utf8').then(JSON.parse),
   ]);
 
   _validators = {
@@ -36,6 +38,8 @@ async function loadValidators() {
     evidenceBatch: ajv.compile(evidenceBatch),
     semanticFragment: ajv.compile(semanticFragment),
     processDraft: ajv.compile(processDraft),
+    contextBudget: ajv.compile(contextBudget),
+    normalizedDocument: ajv.compile(normalizedDocument),
   };
 
   return _validators;
@@ -116,6 +120,32 @@ export async function validateSemanticFragment(fragment) {
   }
 
   return { valid: true };
+}
+
+/**
+ * 验证上下文预算报告
+ * @param {object} budget - ContextBudget 对象
+ * @returns {Promise<{ valid: boolean, errors?: string[] }>}
+ */
+export async function validateContextBudget(budget) {
+  const validators = await loadValidators();
+  const valid = validators.contextBudget(budget);
+  return valid
+    ? { valid: true }
+    : { valid: false, errors: validators.contextBudget.errors.map(e => `${e.instancePath} ${e.message}`) };
+}
+
+/**
+ * 验证归一化文档索引
+ * @param {object} doc - NormalizedDocument 对象
+ * @returns {Promise<{ valid: boolean, errors?: string[] }>}
+ */
+export async function validateNormalizedDocument(doc) {
+  const validators = await loadValidators();
+  const valid = validators.normalizedDocument(doc);
+  return valid
+    ? { valid: true }
+    : { valid: false, errors: validators.normalizedDocument.errors.map(e => `${e.instancePath} ${e.message}`) };
 }
 
 /**

@@ -1,197 +1,197 @@
-# Consistency Review Rules
+# 一致性审查规则
 
-Rules for checking consistency between an architecture model and a diagram model. These rules verify that the visual diagram accurately represents the documented architecture.
-
----
-
-## FA-CONS-001: L4 to Sub-Process Mapping
-
-**Severity**: BLOCKER
-**Deterministic**: Yes
-
-### Description
-
-Every L4 sub-process node in the architecture model must have a corresponding SUB_PROCESS or process-level element in the diagram model. An L4 node without a diagram counterpart means the architecture is not fully visualized.
-
-### Check Procedure
-
-1. Extract all L4 nodes from the architecture model.
-2. For each L4 node, search the diagram model for a SUB_PROCESS or POOL element with a matching or similar name.
-3. Use fuzzy name matching (normalized lowercase, strip common prefixes/suffixes).
-4. Flag L4 nodes with no matching diagram element as MISSING_IN_DIAGRAM.
-5. Flag diagram SUB_PROCESS elements with no matching L4 node as MISSING_IN_ARCHITECTURE.
-
-### Evidence Required
-
-- Architecture node identifier and name
-- Diagram element identifier and name (if matched)
-- Match type and confidence score
+检查架构模型与图表模型之间一致性的规则。这些规则验证视觉图表是否准确地反映了文档化架构。
 
 ---
 
-## FA-CONS-002: L5 to Task Mapping
+## FA-CONS-001: L4 到子流程映射
 
-**Severity**: CRITICAL
-**Deterministic**: Yes
+**严重级别**: BLOCKER
+**确定性**: 是
 
-### Description
+### 描述
 
-Every L5 process node in the architecture model must have a corresponding TASK element in the diagram model. L5 tasks represent the operational steps that should be visible in the process flow.
+架构模型中的每个 L4 子流程节点必须在图表模型中有对应的 SUB_PROCESS 或流程级元素。缺少图表对应项的 L4 节点意味着架构未被完全可视化。
 
-### Check Procedure
+### 检查步骤
 
-1. Extract all L5 nodes from the architecture model.
-2. For each L5 node, search the diagram model for a TASK element with a matching or similar name.
-3. Use fuzzy name matching (normalized lowercase, verb-object pattern comparison).
-4. Flag L5 nodes with no matching TASK element as MISSING_IN_DIAGRAM.
-5. Flag diagram TASK elements with no matching L5 node as MISSING_IN_ARCHITECTURE.
+1. 从架构模型中提取所有 L4 节点。
+2. 对每个 L4 节点，在图表模型中搜索名称匹配或相似的 SUB_PROCESS 或 POOL 元素。
+3. 使用模糊名称匹配（标准化为小写，去除常见前缀/后缀）。
+4. 标记没有匹配图表元素的 L4 节点为 MISSING_IN_DIAGRAM。
+5. 标记没有匹配 L4 节点的图表 SUB_PROCESS 元素为 MISSING_IN_ARCHITECTURE。
 
-### Evidence Required
+### 所需证据
 
-- Architecture node identifier, name, and type
-- Diagram element identifier, name, and type
-- Match type and confidence score
-
----
-
-## FA-CONS-003: Role to Lane Mapping
-
-**Severity**: CRITICAL
-**Deterministic**: No
-
-### Description
-
-Roles assigned to architecture nodes should correspond to lanes in the diagram model. Each lane should represent a distinct role or organizational unit, and tasks assigned to a role should appear in the corresponding lane.
-
-### Check Procedure
-
-1. Extract roles from architecture nodes (L4 and L5).
-2. Extract lanes from the diagram model.
-3. Match roles to lanes by name similarity.
-4. For each matched role-lane pair, verify that tasks assigned to the role appear in the corresponding lane.
-5. Flag mismatches where a task's architecture role does not match its diagram lane.
-
-### Evidence Required
-
-- Role name from architecture
-- Lane name from diagram
-- Task identifiers and their role/lane assignments
+- 架构节点标识符与名称
+- 图表元素标识符与名称（若匹配）
+- 匹配类型与置信度分数
 
 ---
 
-## FA-CONS-004: Deliverable to Data Object Mapping
+## FA-CONS-002: L5 到任务映射
 
-**Severity**: MAJOR
-**Deterministic**: Yes
+**严重级别**: CRITICAL
+**确定性**: 是
 
-### Description
+### 描述
 
-Input and output deliverables defined in architecture nodes should have corresponding DATA_OBJECT elements in the diagram. Data objects represent the artifacts that flow between tasks.
+架构模型中的每个 L5 流程节点必须在图表模型中有对应的 TASK 元素。L5 任务代表操作步骤，应在流程图中可见。
 
-### Check Procedure
+### 检查步骤
 
-1. Extract all inputs and outputs from architecture nodes (L4 and L5).
-2. Extract all DATA_OBJECT elements from the diagram model.
-3. Match deliverables to data objects by name similarity.
-4. Flag deliverables with no matching data object as MISSING_IN_DIAGRAM.
-5. Flag data objects with no matching deliverable as MISSING_IN_ARCHITECTURE.
+1. 从架构模型中提取所有 L5 节点。
+2. 对每个 L5 节点，在图表模型中搜索名称匹配或相似的 TASK 元素。
+3. 使用模糊名称匹配（标准化为小写，动宾模式比较）。
+4. 标记没有匹配 TASK 元素的 L5 节点为 MISSING_IN_DIAGRAM。
+5. 标记没有匹配 L5 节点的图表 TASK 元素为 MISSING_IN_ARCHITECTURE。
 
-### Evidence Required
+### 所需证据
 
-- Deliverable name and parent node
-- Data object identifier and name
-- Match type and confidence score
-
----
-
-## FA-CONS-005: Cross-Org Message Flow Mapping
-
-**Severity**: MAJOR
-**Deterministic**: Yes
-
-### Description
-
-Cross-organizational interactions in the architecture model (handoffs between different organizational units) should be represented as MESSAGE_FLOW elements in the diagram. Message flows indicate communication across pool boundaries.
-
-### Check Procedure
-
-1. Identify cross-organizational relationships in the architecture model (nodes with different organizational unit contexts connected by sequence).
-2. Check the diagram model for MESSAGE_FLOW elements connecting the corresponding pools.
-3. Flag architecture cross-org relationships without corresponding message flows.
-4. Flag diagram message flows without corresponding architecture cross-org relationships.
-
-### Evidence Required
-
-- Architecture relationship identifiers
-- Message flow identifiers
-- Source and target organizational contexts
+- 架构节点标识符、名称与类型
+- 图表元素标识符、名称与类型
+- 匹配类型与置信度分数
 
 ---
 
-## FA-CONS-006: Exception Path Mapping
+## FA-CONS-003: 角色到泳道映射
 
-**Severity**: MAJOR
-**Deterministic**: No
+**严重级别**: CRITICAL
+**确定性**: 否
 
-### Description
+### 描述
 
-Exception handling paths defined in the architecture model (error handlers, escalation paths, alternative flows) should be represented in the diagram model via boundary events, error intermediate events, or explicit alternative sequence flows.
+分配给架构节点的角色应与图表模型中的泳道对应。每个泳道应代表一个独立的角色或组织单元，分配给某角色的任务应出现在对应的泳道中。
 
-### Check Procedure
+### 检查步骤
 
-1. Identify exception-related nodes or relationships in the architecture model.
-2. Check the diagram model for exception-related elements (boundary events, error events, alternative flows from gateways).
-3. Flag architecture exception paths without diagram representation.
-4. Flag diagram exception elements without architecture counterpart.
+1. 从架构节点（L4 和 L5）中提取角色。
+2. 从图表模型中提取泳道。
+3. 按名称相似度将角色与泳道匹配。
+4. 对每对匹配的角色-泳道，验证分配给该角色的任务是否出现在对应泳道中。
+5. 标记任务的架构角色与其图表泳道不匹配的情况。
 
-### Evidence Required
+### 所需证据
 
-- Architecture exception node/relationship identifiers
-- Diagram exception element identifiers
-- Mapping confidence
-
----
-
-## FA-CONS-007: Architecture Completeness Coverage
-
-**Severity**: CRITICAL
-**Deterministic**: Yes
-
-### Description
-
-All architecture nodes at L4 and L5 levels must be represented in the diagram model. The diagram must cover 100% of the defined architecture scope.
-
-### Check Procedure
-
-1. Count all L4 and L5 nodes in the architecture model.
-2. Count how many have matching diagram elements (from FA-CONS-001 and FA-CONS-002).
-3. Calculate coverage percentage.
-4. Flag if coverage is below 100% for L4 nodes or below 80% for L5 nodes.
-
-### Evidence Required
-
-- Total L4 node count and matched count
-- Total L5 node count and matched count
-- Coverage percentages
+- 来自架构的角色名称
+- 来自图表的泳道名称
+- 任务标识符及其角色/泳道分配
 
 ---
 
-## FA-CONS-008: Diagram Extra Elements
+## FA-CONS-004: 交付物到数据对象映射
 
-**Severity**: MINOR
-**Deterministic**: Yes
+**严重级别**: MAJOR
+**确定性**: 是
 
-### Description
+### 描述
 
-Diagram elements that do not map to any architecture node may indicate undocumented processes or diagram artifacts that should be cleaned up.
+架构节点中定义的输入和输出交付物应在图表中有对应的 DATA_OBJECT 元素。数据对象代表在任务之间流动的工件。
 
-### Check Procedure
+### 检查步骤
 
-1. For each TASK and SUB_PROCESS in the diagram model, check if a matching architecture node exists.
-2. Flag unmatched diagram elements as MISSING_IN_ARCHITECTURE.
-3. Informational: these may be legitimate visual elements (annotations, labels) that do not require architecture representation.
+1. 从架构节点（L4 和 L5）中提取所有输入和输出。
+2. 从图表模型中提取所有 DATA_OBJECT 元素。
+3. 按名称相似度将交付物与数据对象匹配。
+4. 标记没有匹配数据对象的交付物为 MISSING_IN_DIAGRAM。
+5. 标记没有匹配交付物的数据对象为 MISSING_IN_ARCHITECTURE。
 
-### Evidence Required
+### 所需证据
 
-- Diagram element identifier, name, and type
-- Whether a matching architecture node exists
+- 交付物名称及所属节点
+- 数据对象标识符与名称
+- 匹配类型与置信度分数
+
+---
+
+## FA-CONS-005: 跨组织消息流映射
+
+**严重级别**: MAJOR
+**确定性**: 是
+
+### 描述
+
+架构模型中的跨组织交互（不同组织单元之间的交接）应在图表中以 MESSAGE_FLOW 元素表示。消息流表示跨越泳池边界的通信。
+
+### 检查步骤
+
+1. 识别架构模型中的跨组织关系（通过顺序连接的具有不同组织单元上下文的节点）。
+2. 检查图表模型中是否有连接对应泳池的 MESSAGE_FLOW 元素。
+3. 标记架构中没有对应消息流的跨组织关系。
+4. 标记图表中没有对应架构跨组织关系的消息流。
+
+### 所需证据
+
+- 架构关系标识符
+- 消息流标识符
+- 源和目标组织上下文
+
+---
+
+## FA-CONS-006: 异常路径映射
+
+**严重级别**: MAJOR
+**确定性**: 否
+
+### 描述
+
+架构模型中定义的异常处理路径（错误处理器、升级路径、替代流程）应在图表模型中通过边界事件、错误中间事件或显式的替代序列流来表示。
+
+### 检查步骤
+
+1. 识别架构模型中的异常相关节点或关系。
+2. 检查图表模型中的异常相关元素（边界事件、错误事件、网关的替代流程）。
+3. 标记架构中没有图表表示的异常路径。
+4. 标记图表中没有架构对应项的异常元素。
+
+### 所需证据
+
+- 架构异常节点/关系标识符
+- 图表异常元素标识符
+- 映射置信度
+
+---
+
+## FA-CONS-007: 架构完整性覆盖
+
+**严重级别**: CRITICAL
+**确定性**: 是
+
+### 描述
+
+L4 和 L5 层级的所有架构节点必须在图表模型中有表示。图表必须覆盖 100% 的已定义架构范围。
+
+### 检查步骤
+
+1. 统计架构模型中的所有 L4 和 L5 节点。
+2. 统计有多少节点具有匹配的图表元素（来自 FA-CONS-001 和 FA-CONS-002）。
+3. 计算覆盖率百分比。
+4. 若 L4 节点覆盖低于 100% 或 L5 节点覆盖低于 80%，则标记。
+
+### 所需证据
+
+- L4 节点总数及匹配数
+- L5 节点总数及匹配数
+- 覆盖率百分比
+
+---
+
+## FA-CONS-008: 图表多余元素
+
+**严重级别**: MINOR
+**确定性**: 是
+
+### 描述
+
+图表中不映射到任何架构节点的元素可能表示未文档化的流程或应清理的图表工件。
+
+### 检查步骤
+
+1. 对图表模型中的每个 TASK 和 SUB_PROCESS，检查是否存在匹配的架构节点。
+2. 标记未匹配的图表元素为 MISSING_IN_ARCHITECTURE。
+3. 提示：这些可能是合法的视觉元素（注释、标签），不需要架构表示。
+
+### 所需证据
+
+- 图表元素标识符、名称与类型
+- 是否存在匹配的架构节点

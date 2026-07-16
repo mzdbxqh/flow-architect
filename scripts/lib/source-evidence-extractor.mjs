@@ -407,6 +407,19 @@ async function extractDocx(filePath, fileContent, artifactSha256) {
         content_sha256: contentHash(text.trim()),
       });
     }
+
+    // 添加视觉资产占位符（DOCX 可能包含嵌入的图表、图片等）
+    blocks.push({
+      block_id: generateBlockId(artifactSha256, 'docx:visual'),
+      artifact_sha256: artifactSha256,
+      source_format: 'docx',
+      modality: 'VISUAL_ASSET',
+      locator: { page: null, slide: null, sheet: null, range: null, line_start: null, line_end: null },
+      heading_path: [],
+      content: '[DOCX embedded visual content]',
+      asset_ref: filePath,
+      content_sha256: contentHash('[docx:visual]'),
+    });
   } catch (err) {
     blocks.push({
       block_id: generateBlockId(artifactSha256, 'docx:unavailable'),

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "normalized-document",
+  "title": "NormalizedDocument",
+  "description": "归一化后的文档索引，包含分片元数据和定位信息",
+  "type": "object",
+  "required": [
+    "artifact_id",
+    "artifact_sha256",
+    "source_format",
+    "converter_version",
+    "chunks"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^A-[a-f0-9]{12}$"
+    },
+    "artifact_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source_format": {
+      "type": "string",
+      "enum": ["md", "pdf", "docx", "xlsx", "pptx", "bpmn", "mermaid", "svg", "png", "jpeg"]
+    },
+    "converter_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/chunkEntry"
+      },
+      "maxItems": 10000
+    }
+  },
+  "$defs": {
+    "chunkEntry": {
+      "type": "object",
+      "required": [
+        "chunk_id",
+        "path",
+        "content_sha256",
+        "locator",
+        "modality",
+        "budget_status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "chunk_id": {
+          "type": "string",
+          "pattern": "^C-[a-f0-9]{12}$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^chunks/[0-9]{4}\\.md$",
+          "maxLength": 30
+        },
+        "content_sha256": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "locator": {
+          "type": "object",
+          "maxProperties": 20
+        },
+        "modality": {
+          "type": "string",
+          "enum": ["TEXT", "STRUCTURED_DIAGRAM", "VISUAL"]
+        },
+        "budget_status": {
+          "type": "string",
+          "enum": ["BUDGET_OK", "BUDGET_ATTENTION", "BUDGET_SPLIT_REQUIRED"]
+        }
+      }
+    }
+  }
+}

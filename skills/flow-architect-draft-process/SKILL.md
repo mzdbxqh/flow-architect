@@ -1,6 +1,6 @@
 ---
 name: flow-architect-draft-process
-description: Use when generating process drafts from multiple source materials (PDF, DOCX, XLSX, PPTX, Markdown, images, diagrams)
+description: 当需要从多种来源材料（PDF、DOCX、XLSX、PPTX、Markdown、图片、流程图）生成流程初稿时使用
 ---
 
 # 流程初稿生成
@@ -12,6 +12,7 @@ description: Use when generating process drafts from multiple source materials (
 ## 能力
 
 - 支持多种文件格式：PDF、DOCX、XLSX、PPTX、Markdown、PNG/JPEG、BPMN、Mermaid、SVG
+- 输入归一化：将异构格式确定性转换为可定位 Markdown 分片
 - 确定性抽取：文本、表格、结构化流程图
 - 受限语义提取：每个批次独立处理，不读取全部证据
 - 确定性生成：BPMN 2.0 + DI、澄清议题、HTML 会议包

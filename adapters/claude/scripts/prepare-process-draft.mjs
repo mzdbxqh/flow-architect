@@ -24,12 +24,15 @@ import { extractArtifactEvidence } from './lib/source-evidence-extractor.mjs';
 import { buildEvidenceBatches } from './lib/evidence-batching.mjs';
 import { validateEvidenceIndex, validateEvidenceBatch } from './lib/process-draft-contract.mjs';
 import { writeJsonAtomic } from './lib/atomic-json.mjs';
+import { normalizeEvidenceToMarkdown } from './lib/markdown-normalizer.mjs';
 
 /**
  * 抽取器版本 — 缓存键的一部分
  */
 const EXTRACTOR_VERSION = '1.0.0';
 const BATCH_PROTOCOL_VERSION = '1.0.0';
+const NORMALIZER_VERSION = '1.0.0';
+const FORMULA_VERSION = '1.0.0';
 
 /**
  * 计算内容寻址缓存键
@@ -38,6 +41,8 @@ function computeCacheKey(inputHashes, batchParams) {
   const keyData = {
     extractor_version: EXTRACTOR_VERSION,
     protocol_version: BATCH_PROTOCOL_VERSION,
+    normalizer_version: NORMALIZER_VERSION,
+    formula_version: FORMULA_VERSION,
     input_hashes: inputHashes.sort(),
     batch_params: batchParams,
   };
@@ -376,6 +381,8 @@ async function main() {
     cache_key: cacheKey,
     extractor_version: EXTRACTOR_VERSION,
     protocol_version: BATCH_PROTOCOL_VERSION,
+    normalizer_version: NORMALIZER_VERSION,
+    formula_version: FORMULA_VERSION,
     batch_params: batchParams,
     input_hashes: inputHashes.map(i => i.sha256).sort(),
   });
@@ -398,9 +405,10 @@ async function main() {
   await writeJsonAtomic(join(runDir, 'input/input-manifest.json'), manifest);
   console.log('  ✓ input-manifest.json');
 
-  // 8. 抽取证据
-  console.log('\n抽取证据...');
+  // 8. 抽取证据并归一化为 Markdown
+  console.log('\n抽取证据并归一化为 Markdown...');
   const allBlocks = [];
+  const normalizedDocs = [];
 
   for (const input of inputHashes) {
     console.log(`  处理: ${basename(input.path)}`);
@@ -416,6 +424,18 @@ async function main() {
       }
 
       console.log(`    -> ${result.blocks.length} 个证据块`);
+
+      // 归一化为 Markdown
+      console.log(`    归一化为 Markdown...`);
+      const normalizedDoc = await normalizeEvidenceToMarkdown({
+        artifact: { path: input.path, format: input.format },
+        artifactSha256: input.sha256,
+        blocks: result.blocks,
+        runDir,
+        converterVersion: NORMALIZER_VERSION,
+      });
+      normalizedDocs.push(normalizedDoc);
+      console.log(`    -> 归一化完成: ${normalizedDoc.chunks.length} 个 chunks`);
     } catch (err) {
       warnings.push(`抽取失败 ${basename(input.path)}: ${err.message}`);
       console.error(`    -> 错误: ${err.message}`);
@@ -450,16 +470,45 @@ async function main() {
   await writeJsonAtomic(join(runDir, 'evidence', 'evidence-index.json'), evidenceIndex);
   console.log('  ✓ evidence-index.json');
 
-  // 10. 构建批次
+  // 10. 构建批次并填充 markdown_refs
   console.log('\n构建批次...');
   const batches = buildEvidenceBatches({ blocks: allBlocks });
   console.log(`  生成 ${batches.length} 个批次`);
 
-  // 写入批次文件
+  // 构建原始 content_sha256 到 normalized chunk 路径的映射
+  // 使用 source_content_sha256 来映射，因为视觉块在归一化后内容哈希会变化
+  const contentToChunkMap = new Map();
+  for (const normalizedDoc of normalizedDocs) {
+    for (const chunk of normalizedDoc.chunks) {
+      const fullPath = `${normalizedDoc.artifact_id}/${chunk.path}`;
+      // 使用 source_content_sha256（原始块的哈希）作为映射键
+      const mappingKey = chunk.source_content_sha256 || chunk.content_sha256;
+      contentToChunkMap.set(mappingKey, fullPath);
+    }
+  }
+
+  // 为每个批次填充 markdown_refs
+  for (const batch of batches) {
+    const markdownRefs = new Set();
+    for (const block of batch.blocks) {
+      const chunkPath = contentToChunkMap.get(block.content_sha256);
+      if (chunkPath) {
+        markdownRefs.add(`normalized/${chunkPath}`);
+      }
+    }
+    batch.markdown_refs = Array.from(markdownRefs);
+  }
+
+  // 写入批次文件和预算文件
+  const contextBudgetsDir = join(runDir, 'evidence', 'context-budgets');
+  await mkdir(contextBudgetsDir, { recursive: true });
+
   for (const batch of batches) {
     await writeJsonAtomic(join(runDir, 'evidence', 'batches', `${batch.batch_id}.json`), batch);
+    await writeJsonAtomic(join(contextBudgetsDir, `${batch.batch_id}.json`), batch.context_budget);
   }
   console.log('  ✓ batches/*.json');
+  console.log('  ✓ context-budgets/*.json');
 
   // 11. 生成队列
   console.log('\n生成语义处理队列...');
@@ -471,7 +520,13 @@ async function main() {
       total_chars: b.total_chars,
       modality_mix: b.modality_mix,
       block_count: b.blocks.length,
-      status: 'PENDING',
+      status: b.context_budget?.split_required ? 'SPLIT_REQUIRED' : 'PENDING',
+      allowed_read_paths: [
+        `evidence/batches/${b.batch_id}.json`,
+        ...b.markdown_refs,
+      ],
+      markdown_refs: b.markdown_refs || [],
+      split_required: b.context_budget?.split_required || false,
     })),
     total_batches: batches.length,
     total_blocks: allBlocks.length,
@@ -554,6 +609,8 @@ async function restoreRunDirFromCache({
     cache_key: cacheKey,
     extractor_version: EXTRACTOR_VERSION,
     protocol_version: BATCH_PROTOCOL_VERSION,
+    normalizer_version: NORMALIZER_VERSION,
+    formula_version: FORMULA_VERSION,
     batch_params: batchParams,
     input_hashes: inputHashes.map(i => i.sha256).sort(),
   });

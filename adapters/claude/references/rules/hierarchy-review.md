@@ -1,240 +1,240 @@
-# Hierarchy Review Rules
+# 层级审查规则
 
-Rules for reviewing the architecture hierarchy structure and consistency.
-
----
-
-## FA-HIER-001: Orphan Node Detection
-
-**Severity**: BLOCKER
-**Deterministic**: Yes
-
-### Description
-
-Every node in the architecture model (except the root) must have a valid parent reference. Orphan nodes without a parent create disconnected fragments in the architecture.
-
-### Check Procedure
-
-1. Iterate all nodes in the architecture model.
-2. For each non-root node, verify that `parent_id` is non-null.
-3. Verify that `parent_id` references an existing node.
-4. Flag nodes with null `parent_id` (except root) or referencing non-existent parents.
-
-### Evidence Required
-
-- Node identifier and name
-- The `parent_id` value
-- Whether the parent node exists
+审查架构层级结构与一致性的规则。
 
 ---
 
-## FA-HIER-002: Dangling Reference Detection
+## FA-HIER-001: 孤立节点检测
 
-**Severity**: BLOCKER
-**Deterministic**: Yes
+**严重级别**: BLOCKER
+**确定性**: 是
 
-### Description
+### 描述
 
-All `parent_id` and relationship references must point to existing nodes. A dangling reference occurs when a node references another node that does not exist in the model.
+架构模型中的每个节点（根节点除外）必须拥有有效的父引用。没有父节点的孤立节点会在架构中产生断开的碎片。
 
-### Check Procedure
+### 检查步骤
 
-1. Collect all node identifiers into a set.
-2. For each node, check that `parent_id` (if non-null) is in the set.
-3. For each relationship, check that `from_node_id` and `to_node_id` are in the set.
-4. Flag all dangling references.
+1. 遍历架构模型中的所有节点。
+2. 对每个非根节点，验证 `parent_id` 非空。
+3. 验证 `parent_id` 引用的节点确实存在。
+4. 标记 `parent_id` 为空（根节点除外）或引用了不存在父节点的节点。
 
-### Evidence Required
+### 所需证据
 
-- The reference type (parent_id or relationship)
-- The source node identifier
-- The missing target identifier
-
----
-
-## FA-HIER-003: Cycle Detection
-
-**Severity**: BLOCKER
-**Deterministic**: Yes
-
-### Description
-
-The hierarchy must be a directed acyclic graph (DAG). Cycles create infinite loops and are structurally invalid.
-
-### Check Procedure
-
-1. Build an adjacency list from all parent-child and relationship edges.
-2. Run a topological sort or DFS-based cycle detection algorithm.
-3. If a cycle is detected, report all nodes involved in the cycle.
-
-### Evidence Required
-
-- The list of nodes forming the cycle
-- The edges that create the cycle
+- 节点标识符与名称
+- `parent_id` 值
+- 父节点是否存在
 
 ---
 
-## FA-HIER-004: Fan-Out Limit
+## FA-HIER-002: 悬空引用检测
 
-**Severity**: MAJOR
-**Deterministic**: Yes
+**严重级别**: BLOCKER
+**确定性**: 是
 
-### Description
+### 描述
 
-A single node should not have an excessive number of children:
-- Above 10 children: warn (MINOR severity)
-- Above 20 children: flag as BLOCKER
+所有 `parent_id` 和关系引用必须指向已存在的节点。当节点引用了模型中不存在的另一个节点时，即为悬空引用。
 
-High fan-out suggests the parent node may need further decomposition or that children are not properly grouped.
+### 检查步骤
 
-### Check Procedure
+1. 将所有节点标识符收集到一个集合中。
+2. 对每个节点，检查其 `parent_id`（若非空）是否在集合中。
+3. 对每个关系，检查其 `from_node_id` 和 `to_node_id` 是否在集合中。
+4. 标记所有悬空引用。
 
-1. For each node, count the number of children (nodes with `parent_id` pointing to it).
-2. If count > 20, flag as BLOCKER.
-3. If count > 10, flag as MAJOR.
-4. Document the fan-out count.
+### 所需证据
 
-### Evidence Required
-
-- Node identifier and name
-- Number of children
-- Threshold exceeded (if any)
+- 引用类型（parent_id 或关系）
+- 源节点标识符
+- 缺失的目标标识符
 
 ---
 
-## FA-HIER-005: Attribution Conflict
+## FA-HIER-003: 环检测
 
-**Severity**: CRITICAL
-**Deterministic**: No
+**严重级别**: BLOCKER
+**确定性**: 是
 
-### Description
+### 描述
 
-Child node attribution must not contradict parent node attribution in the same dimension. For example, if the parent node is attributed to "Finance Department", a child node attributed to "Engineering Department" is a conflict unless explicitly justified.
+层级结构必须是有向无环图（DAG）。环路会导致无限循环，在结构上无效。
 
-### Check Procedure
+### 检查步骤
 
-1. For each parent-child pair, compare attribution dimensions.
-2. Flag direct contradictions (e.g. different departments for the same organizational dimension).
-3. Allow justified overrides when an explicit reason is documented.
+1. 根据所有父子关系和关系边构建邻接表。
+2. 运行拓扑排序或基于 DFS 的环检测算法。
+3. 若检测到环，报告环中涉及的所有节点。
 
-### Evidence Required
+### 所需证据
 
-- Parent node identifier and its attribution
-- Child node identifier and its attribution
-- The conflicting dimension
-
----
-
-## FA-HIER-006: Coverage Completeness
-
-**Severity**: MAJOR
-**Deterministic**: Yes
-
-### Description
-
-All leaf nodes at the lowest declared level must be reachable from the root through the hierarchy. Unreachable leaf nodes indicate gaps in the architecture.
-
-### Check Procedure
-
-1. Identify all leaf nodes (nodes with no children).
-2. For each leaf node, trace the path back to the root.
-3. If no path exists to the root, flag the leaf as unreachable.
-4. Identify the lowest declared level in the hierarchy.
-5. Verify that all leaf nodes at that level are reachable.
-
-### Evidence Required
-
-- Leaf node identifier
-- Path from leaf to root (or absence thereof)
+- 构成环路的节点列表
+- 形成环路的边
 
 ---
 
-## FA-HIER-007: Output Chain Continuity
+## FA-HIER-004: 扇出限制
 
-**Severity**: MAJOR
-**Deterministic**: Yes
+**严重级别**: MAJOR
+**确定性**: 是
 
-### Description
+### 描述
 
-Outputs from child nodes must chain into the parent node's output or a sibling node's input. Disconnected outputs create dead ends in the process flow.
+单个节点不应拥有过多的子节点：
+- 超过 10 个子节点：警告（MINOR 严重级别）
+- 超过 20 个子节点：标记为 BLOCKER
 
-### Check Procedure
+扇出过大表明父节点可能需要进一步分解，或者子节点未被正确分组。
 
-1. For each parent node, collect its outputs.
-2. For each child node, collect its outputs.
-3. Verify that child outputs contribute to (chain into) the parent output or a sibling's input.
-4. Flag child outputs that connect to nothing.
+### 检查步骤
 
-### Evidence Required
+1. 对每个节点，统计其子节点数量（`parent_id` 指向该节点的节点数）。
+2. 若数量 > 20，标记为 BLOCKER。
+3. 若数量 > 10，标记为 MAJOR。
+4. 记录扇出数量。
 
-- Parent node identifier and outputs
-- Child node identifier and outputs
-- Whether the child output chains to parent or sibling
+### 所需证据
 
----
-
-## FA-HIER-008: Layer Skip Detection
-
-**Severity**: CRITICAL
-**Deterministic**: Yes
-
-### Description
-
-A node must not skip a layer in the hierarchy. For example, an L3 node must not directly contain an L6 node without intermediate L4 and L5 layers.
-
-### Check Procedure
-
-1. For each parent-child pair, compare their type (L3, L4, L5, L6, SOP).
-2. Verify that the child is exactly one level below the parent.
-3. Flag any parent-child pair where the child skips one or more levels.
-
-### Evidence Required
-
-- Parent node identifier and type
-- Child node identifier and type
-- The skipped levels (if any)
+- 节点标识符与名称
+- 子节点数量
+- 超出的阈值（如有）
 
 ---
 
-## FA-HIER-009: Naming Consistency
+## FA-HIER-005: 归属冲突
 
-**Severity**: MINOR
-**Deterministic**: No
+**严重级别**: CRITICAL
+**确定性**: 否
 
-### Description
+### 描述
 
-Child node names should be consistent in style with their parent node names. If the parent uses verb-object naming, children should follow the same convention.
+子节点在同一维度上的归属不应与父节点相矛盾。例如，若父节点归属为"财务部"，则子节点归属为"工程部"即为冲突，除非有明确的正当理由。
 
-### Check Procedure
+### 检查步骤
 
-1. For each parent node, determine the naming style (verb-object, noun-phrase, etc.).
-2. For each child node, check consistency with the parent's naming style.
-3. Flag inconsistencies (e.g. parent uses verb-object, child uses noun-phrase).
+1. 对每一对父子节点，比较归属维度。
+2. 标记直接矛盾（例如同一组织维度下的不同部门）。
+3. 若有明确记录的正当理由，允许覆盖。
 
-### Evidence Required
+### 所需证据
 
-- Parent node identifier, name, and detected naming style
-- Child node identifier, name, and detected naming style
-- The inconsistency (if any)
+- 父节点标识符及其归属
+- 子节点标识符及其归属
+- 冲突的维度
 
 ---
 
-## FA-HIER-010: Version Consistency
+## FA-HIER-006: 覆盖完整性
 
-**Severity**: MAJOR
-**Deterministic**: Yes
+**严重级别**: MAJOR
+**确定性**: 是
 
-### Description
+### 描述
 
-All nodes in a single architecture model must belong to the same version. Mixing versions within a model creates inconsistency.
+最低声明层级中的所有叶子节点必须可以从根节点通过层级结构到达。不可达的叶子节点表明架构中存在缺口。
 
-### Check Procedure
+### 检查步骤
 
-1. Collect version metadata from all nodes (or from the model-level metadata).
-2. Verify that all nodes share the same version.
-3. Flag any node with a version different from the majority.
+1. 识别所有叶子节点（没有子节点的节点）。
+2. 对每个叶子节点，向上追溯到根节点的路径。
+3. 若不存在到根节点的路径，则标记该叶子为不可达。
+4. 识别层级中最低的声明层级。
+5. 验证该层级的所有叶子节点均可到达。
 
-### Evidence Required
+### 所需证据
 
-- Model-level version
-- Node identifier and its version (if different)
+- 叶子节点标识符
+- 从叶子到根的路径（或路径不存在）
+
+---
+
+## FA-HIER-007: 输出链连续性
+
+**严重级别**: MAJOR
+**确定性**: 是
+
+### 描述
+
+子节点的输出必须链接到父节点的输出或兄弟节点的输入。断开的输出会在流程中产生死端。
+
+### 检查步骤
+
+1. 对每个父节点，收集其输出。
+2. 对每个子节点，收集其输出。
+3. 验证子节点的输出是否链接到父节点的输出或兄弟节点的输入。
+4. 标记未连接到任何目标的子节点输出。
+
+### 所需证据
+
+- 父节点标识符及输出
+- 子节点标识符及输出
+- 子节点输出是否链接到父节点或兄弟节点
+
+---
+
+## FA-HIER-008: 层级跳跃检测
+
+**严重级别**: CRITICAL
+**确定性**: 是
+
+### 描述
+
+节点不得在层级结构中跳过层级。例如，L3 节点不得在没有 L4 和 L5 中间层的情况下直接包含 L6 节点。
+
+### 检查步骤
+
+1. 对每一对父子节点，比较其类型（L3、L4、L5、L6、SOP）。
+2. 验证子节点恰好比父节点低一个层级。
+3. 标记子节点跳过一个或多个层级的父子对。
+
+### 所需证据
+
+- 父节点标识符及类型
+- 子节点标识符及类型
+- 跳过的层级（如有）
+
+---
+
+## FA-HIER-009: 命名一致性
+
+**严重级别**: MINOR
+**确定性**: 否
+
+### 描述
+
+子节点的名称风格应与父节点保持一致。若父节点使用动宾命名法，子节点应遵循相同的约定。
+
+### 检查步骤
+
+1. 对每个父节点，确定其命名风格（动宾式、名词短语等）。
+2. 对每个子节点，检查其与父节点命名风格的一致性。
+3. 标记不一致的情况（例如父节点使用动宾式，子节点使用名词短语）。
+
+### 所需证据
+
+- 父节点标识符、名称及检测到的命名风格
+- 子节点标识符、名称及检测到的命名风格
+- 不一致之处（如有）
+
+---
+
+## FA-HIER-010: 版本一致性
+
+**严重级别**: MAJOR
+**确定性**: 是
+
+### 描述
+
+单一架构模型中的所有节点必须属于同一版本。模型内混合版本会产生不一致。
+
+### 检查步骤
+
+1. 收集所有节点的版本元数据（或从模型级元数据获取）。
+2. 验证所有节点共享同一版本。
+3. 标记与多数版本不同的节点。
+
+### 所需证据
+
+- 模型级版本
+- 节点标识符及其版本（若不同）

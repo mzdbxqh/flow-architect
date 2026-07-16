@@ -589,6 +589,24 @@ test('finalizeReview verdict conforms to review-verdict schema structure', () =>
 
 // --- Report structure tests ---
 
+test('flow-architect 入口包含归一化和批次处理步骤', () => {
+  const content = fs.readFileSync(
+    path.join(__dirname, '..', 'skills/flow-architect/SKILL.md'), 'utf8'
+  );
+  assert.match(content, /归一化|normaliz/i, '主入口应提到归一化');
+  assert.match(content, /批次|batch/i, '主入口应提到批次');
+  assert.doesNotMatch(content, /读取全部原始文件|read all raw/i, '入口不应包含直读全文指令');
+});
+
+test('flow-architect-draft-process 入口包含归一化和批次处理步骤', () => {
+  const content = fs.readFileSync(
+    path.join(__dirname, '..', 'skills/flow-architect-draft-process/SKILL.md'), 'utf8'
+  );
+  assert.match(content, /归一化|normaliz/i, '初稿入口应提到归一化');
+  assert.match(content, /批次|batch/i, '初稿入口应提到批次');
+  assert.doesNotMatch(content, /读取全部原始文件|read all raw/i, '入口不应包含直读全文指令');
+});
+
 test('report includes all required sections', () => {
   const stageResults = [
     {

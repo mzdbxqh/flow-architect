@@ -1,145 +1,173 @@
-# L6 Review Rules
+# L6 审查规则
 
-Rules for reviewing L6 sub-process architecture.
-
----
-
-## FA-L6-001: One-Breath Granularity
-
-**Severity**: MAJOR
-**Deterministic**: No
-
-### Description
-
-Each L6 step must be describable in one breath (approximately 15 seconds of speaking). If a step requires multiple sentences to describe, it is too coarse and should be decomposed further.
-
-### Check Procedure
-
-1. For each L6 step, estimate the speaking time for its description.
-2. If the description exceeds one sentence or 15 seconds, flag for review.
-3. Check whether the step contains compound actions (e.g. "validate AND approve").
-
-### Evidence Required
-
-- L6 step identifier and description
-- Description length (word count or sentence count)
-- Whether compound actions are detected
+L6 子流程架构的审查规则，从 L6 任务定义方法论中提取。
 
 ---
 
-## FA-L6-002: Verb-Object Naming at L6
+## FA-L6-001: 一口气颗粒度
 
-**Severity**: MAJOR
-**Deterministic**: Yes
+**严重程度**: MAJOR
+**可自动判定**: 否
 
-### Description
+### 描述
 
-L6 step names must follow verb-object pattern, consistent with parent L5 naming conventions. The L6 name should be a refinement of its parent L5 name, not a completely different domain.
+每个 L6 步骤必须符合"一个人一口气能做完"原则。如果一个步骤中间需要等待外部反馈、切换角色或跨系统会话中断，就应该拆成多个 L6。
 
-### Check Procedure
+### 检查程序
 
-1. For each L6 step, check that the name follows verb-object pattern.
-2. Verify that the L6 name's verb-object domain is consistent with its parent L5 name.
-3. Flag names that do not follow the pattern or that drift from the parent domain.
+1. 估算每个 L6 步骤的描述长度（口述时间约 15 秒为界）。
+2. 检查步骤内部是否隐含角色切换点或等待点，如存在则标记需拆分。
+3. 检查是否包含复合动作（如"核对并审批"），复合动作应拆分为独立 L6。
+4. 检查是否过细：描述包含 UI 交互细节（点击、输入、选择）或数据格式细节（字段校验规则、编码格式），过细步骤应合并或下沉到 SOP。
 
-### Evidence Required
+### 所需证据
 
-- L6 step identifier and name
-- Parent L5 step identifier and name
-- Whether the naming pattern is consistent
-
----
-
-## FA-L6-003: Business Semantics Only
-
-**Severity**: CRITICAL
-**Deterministic**: No
-
-### Description
-
-L6 steps must describe business actions, not technical system operations. "Submit the purchase requisition for approval" is business semantics. "POST /api/v1/requisitions" is technical leakage.
-
-### Check Procedure
-
-1. For each L6 step description, scan for technical language (API paths, SQL, UI controls, code references).
-2. Flag steps that use technical language instead of business language.
-3. Suggest business-language alternatives for flagged steps.
-
-### Evidence Required
-
-- L6 step identifier and description
-- Technical language detected (if any)
-- Suggested business-language alternative
+- L6 步骤标识及描述
+- 描述长度（字数或句数）
+- 是否检测到复合动作
+- 是否存在角色切换或等待点
 
 ---
 
-## FA-L6-004: Tool Leakage Detection
+## FA-L6-002: 动宾命名规范
 
-**Severity**: MAJOR
-**Deterministic**: Yes
+**严重程度**: MAJOR
+**可自动判定**: 是
 
-### Description
+### 描述
 
-L6 steps must not contain references to specific tool names, API endpoints, or database tables. Tool references belong in implementation documentation, not in business process architecture.
+L6 步骤名称必须遵循"动词 + 名词"格式，与父级 L5 命名约定保持一致。L6 名称应是对父级 L5 名称的细化，而非完全不同的领域。
 
-### Check Procedure
+### 检查程序
 
-1. Maintain a pattern list of known tool names, API patterns, and database naming conventions.
-2. For each L6 step, scan the name and description against the pattern list.
-3. Flag steps containing tool-specific references.
+1. 检查每个 L6 步骤名称是否符合"动词 + 名词"格式。
+2. 禁止模式检测：
+   - "在 XX 系统中..."（工具耦合）
+   - "点击 XX 按钮"（过细，属于 SOP）
+   - "完成 XX" 或 "处理 XX"（空洞动词，无操作语义）
+   - "通过...""使用..."（工具介词）
+   - 含编号前缀（"1.""第一步"等——序号应在表格中，不在名称里）
+3. 验证 L6 名称的动宾领域是否与父级 L5 名称一致。
+4. 标记不符合模式或偏离父级领域的名称。
 
-### Evidence Required
+### 所需证据
 
-- L6 step identifier and name/description
-- The specific tool reference detected
-- The pattern that matched
-
----
-
-## FA-L6-005: Role Leakage Detection
-
-**Severity**: MAJOR
-**Deterministic**: No
-
-### Description
-
-L6 steps must not embed role assignments that belong to the L4 or L5 layer. Role assignment is a property of the parent process layer, not the step-level detail layer.
-
-### Check Procedure
-
-1. For each L6 step, check if role assignments or RASCI attributions are embedded in the step description.
-2. Flag steps that contain explicit role references beyond the executing role.
-3. Role references should be at the L4 or L5 level, not repeated at L6.
-
-### Evidence Required
-
-- L6 step identifier and description
-- Embedded role references (if any)
-- The parent L4/L5 role attribution for comparison
+- L6 步骤标识及名称
+- 父级 L5 步骤标识及名称
+- 命名模式是否一致
 
 ---
 
-## FA-L6-006: L6 Step Completeness
+## FA-L6-003: 纯业务语义
 
-**Severity**: CRITICAL
-**Deterministic**: Yes
+**严重程度**: CRITICAL
+**可自动判定**: 否
 
-### Description
+### 描述
 
-Each L6 step must have all required fields:
-- **Name**: A descriptive step name following verb-object pattern
-- **Input Reference**: At least one input artifact or trigger
-- **Output Reference**: At least one output artifact or result
-- **Parent L5 Link**: A valid reference to the parent L5 process
+L6 步骤必须描述业务动作，不得出现技术系统操作。"提交采购申请供审批"是业务语义；"POST /api/v1/requisitions"是技术泄漏。
 
-### Check Procedure
+层级边界参考：
+| 层级 | 回答什么 | 工具提及 | 示例 |
+|------|---------|---------|------|
+| L5 活动 | 做什么 | 完全不提 | "审核订单" |
+| L6 任务 | 怎么做 | 不提具体产品/版本 | "核对客户信用额度" |
+| SOP | 用什么做 | 可含具体工具 | "用 SAP VA03 查询信用额度" |
 
-1. For each L6 step, verify presence of: name, input reference, output reference, parent L5 link.
-2. Verify that the parent L5 link resolves to an existing L5 node.
-3. Flag any step missing required fields or with a broken parent link.
+### 检查程序
 
-### Evidence Required
+1. 扫描每个 L6 步骤的名称和描述，检测技术语言：
+   - API 路径（REST API、MQ 消息等技术协议名）
+   - SQL 或数据查询语句
+   - UI 控件引用（按钮、复选框、下拉菜单）
+   - 代码引用或字段编码
+2. 标记使用技术语言而非业务语言的步骤。
+3. 为标记的步骤提供业务语言替代建议。
 
-- L6 step identifier
-- List of present vs. missing required fields
-- Parent L5 link validity
+### 所需证据
+
+- L6 步骤标识及描述
+- 检测到的技术语言（如有）
+- 建议的业务语言替代方案
+
+---
+
+## FA-L6-004: 工具泄漏检测
+
+**严重程度**: MAJOR
+**可自动判定**: 是
+
+### 描述
+
+L6 步骤不得包含具体工具名称、API 端点或数据库表的引用。工具引用属于实现文档，不属于业务流程架构。
+
+### 检查程序
+
+1. 维护已知工具名称、API 模式和数据库命名约定的模式列表，包括：
+   - 具体系统名（SAP、Oracle、Salesforce 等）
+   - 事务码/菜单路径（VA03、MM01 等）
+   - 具体按钮/字段名（"点击提交""勾选复选框"）
+   - 技术协议名（REST API、MQ 消息等）
+2. 对每个 L6 步骤的名称和描述进行模式匹配扫描。
+3. 标记包含工具特定引用的步骤，判定为应下沉到 SOP 层。
+
+### 所需证据
+
+- L6 步骤标识及名称/描述
+- 检测到的具体工具引用
+- 匹配到的模式
+
+---
+
+## FA-L6-005: 角色泄漏检测
+
+**严重程度**: MAJOR
+**可自动判定**: 否
+
+### 描述
+
+L6 步骤不得嵌入本应属于 L4 或 L5 层的角色分配。角色分配是父流程层的属性，不是步骤级细节层的属性。
+
+### 检查程序
+
+1. 检查每个 L6 步骤描述中是否嵌入了角色分配或 RASCI 归属信息。
+2. 标记包含超出执行角色之外的显式角色引用的步骤。
+3. 角色引用应在 L4 或 L5 层级，不应在 L6 重复出现。
+
+### 所需证据
+
+- L6 步骤标识及描述
+- 嵌入的角色引用（如有）
+- 父级 L4/L5 角色归属信息，用于比对
+
+---
+
+## FA-L6-006: L6 步骤结构完整性
+
+**严重程度**: CRITICAL
+**可自动判定**: 是
+
+### 描述
+
+每个 L6 步骤必须具备全部必需字段，且 L6 序列整体对父级 L5 形成完整覆盖。
+
+### 检查程序
+
+1. 逐项验证每个 L6 步骤是否具备以下必需字段：
+   - **名称**：遵循动宾格式的描述性步骤名称
+   - **输入引用**：至少一个输入产出物或触发条件
+   - **输出引用**：至少一个输出产出物或结果
+   - **父级 L5 链接**：指向父级 L5 流程的有效引用
+2. 验证父级 L5 链接是否指向一个已存在的 L5 节点。
+3. 验证 L6 序列是否覆盖父级 L5 的 IPO 全部处理步骤。
+4. 验证决策分支是否完整（L5 的良品条件是否都被某个 L6 覆盖）。
+5. 验证输入输出是否首尾衔接（前一个 L6 的输出是否能作为后一个 L6 的输入）。
+6. 标记缺失必需字段、链接无效或覆盖不完整的步骤。
+
+### 所需证据
+
+- L6 步骤标识
+- 必需字段存在情况清单
+- 父级 L5 链接有效性
+- IPO 覆盖情况
+- 输入输出衔接情况

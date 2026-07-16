@@ -88,8 +88,11 @@ test('all skills use trigger-focused descriptions and state the untrusted-input 
   for (const entry of entries) {
     const content = fs.readFileSync(path.join(skillsDir, entry.name, 'SKILL.md'), 'utf8');
     const { frontmatter, body } = parseFrontmatter(content);
-    assert.match(frontmatter.description, /^Use when\b/, `${entry.name}: description must state trigger conditions`);
-    assert.match(body, /untrusted data/i, `${entry.name}: must treat input contents as untrusted data`);
+    // 描述必须以触发条件开头（英文 "Use when" 或中文触发条件）
+    const hasTriggerDescription = /^Use when\b/.test(frontmatter.description) ||
+      /当.*时|需要.*时|用于/.test(frontmatter.description);
+    assert.ok(hasTriggerDescription, `${entry.name}: description must state trigger conditions, got: "${frontmatter.description.slice(0, 80)}"`);
+    assert.match(body, /untrusted data|不可信数据/i, `${entry.name}: must treat input contents as untrusted data`);
     if (entry.name === 'flow-architect-help') {
       assert.match(body, /零写入/, `${entry.name}: help must be zero-write`);
       assert.doesNotMatch(body, /所有写入操作.*runDir/, `${entry.name}: zero-write help must not invent a runDir`);
@@ -97,7 +100,7 @@ test('all skills use trigger-focused descriptions and state the untrusted-input 
       assert.match(body, /用户缓存/, `${entry.name}: setup writes only to the runtime cache`);
       assert.match(body, /不得写插件目录或业务输入目录/, `${entry.name}: setup must protect plugin and input files`);
     } else {
-      assert.match(body, /path containment/i, `${entry.name}: must require path containment before writes`);
+      assert.match(body, /path containment|路径包含/i, `${entry.name}: must require path containment before writes`);
       assert.match(body, /runDir/, `${entry.name}: must restrict writes to runDir`);
     }
   }
@@ -110,8 +113,8 @@ test('all worker agents reject embedded instructions and restrict outputs to con
   for (const file of files) {
     const content = fs.readFileSync(path.join(agentsDir, file), 'utf8');
     const { body } = parseFrontmatter(content);
-    assert.match(body, /untrusted data/i, `${file}: must treat documents as untrusted data`);
-    assert.match(body, /path containment/i, `${file}: must validate path containment`);
+    assert.match(body, /untrusted data|不可信数据/i, `${file}: must treat documents as untrusted data`);
+    assert.match(body, /path containment|路径包含/i, `${file}: must validate path containment`);
     assert.match(body, /runDir/, `${file}: must restrict writes to runDir`);
   }
 });
@@ -125,7 +128,7 @@ test('review flows and validator require an adversarial evidence re-check before
   ];
   for (const name of skillNames) {
     const content = fs.readFileSync(path.join(ROOT, 'skills', name, 'SKILL.md'), 'utf8');
-    assert.match(content, /attempt to falsify/i, `${name}: must include an adversarial re-check`);
+    assert.match(content, /attempt to falsify|证伪|对抗性复核/i, `${name}: must include an adversarial re-check`);
   }
 });
 

@@ -1,6 +1,6 @@
 ---
 name: flow-architect-setup
-description: Use when the user explicitly asks to initialize Flow Architect core or optional PDF, DOCX, and XLSX runtime components
+description: 当用户明确要求初始化 Flow Architect 核心组件或可选的 PDF、DOCX、XLSX 运行时组件时使用
 ---
 
 # Flow Architect Setup

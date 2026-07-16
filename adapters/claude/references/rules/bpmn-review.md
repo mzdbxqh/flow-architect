@@ -1,338 +1,338 @@
-# BPMN Review Rules
+# BPMN 审查规则
 
-Rules for reviewing BPMN diagram structural and semantic correctness against the BPMN 2.0 specification.
-
----
-
-## FA-BPMN-001: Start Event Presence
-
-**Severity**: BLOCKER
-**Deterministic**: Yes
-
-### Description
-
-Every BPMN process must have at least one start event. A process without a start event has no defined entry point, making execution initiation ambiguous.
-
-### Check Procedure
-
-1. For each process (pool), collect all EVENT elements with sub_type `startEvent`.
-2. If a process has zero start events, flag it.
-3. Exception: collapsed sub-processes may inherit the parent process start.
-
-### Evidence Required
-
-- Process (pool) identifier
-- Count of start events found
+针对 BPMN 2.0 规范审查 BPMN 图表结构与语义正确性的规则。
 
 ---
 
-## FA-BPMN-002: End Event Presence
+## FA-BPMN-001: 开始事件存在性
 
-**Severity**: BLOCKER
-**Deterministic**: Yes
+**严重级别**: BLOCKER
+**确定性**: 是
 
-### Description
+### 描述
 
-Every BPMN process must have at least one end event. A process without an end event has no defined termination point.
+每个 BPMN 流程必须至少有一个开始事件。没有开始事件的流程没有定义的入口点，使得执行启动变得模糊。
 
-### Check Procedure
+### 检查步骤
 
-1. For each process (pool), collect all EVENT elements with sub_type `endEvent`.
-2. If a process has zero end events, flag it.
+1. 对每个流程（泳池），收集所有 sub_type 为 `startEvent` 的 EVENT 元素。
+2. 若流程没有开始事件，则标记。
+3. 例外：折叠的子流程可以继承父流程的开始事件。
 
-### Evidence Required
+### 所需证据
 
-- Process (pool) identifier
-- Count of end events found
-
----
-
-## FA-BPMN-003: Event Type Declaration
-
-**Severity**: CRITICAL
-**Deterministic**: Yes
-
-### Description
-
-All events in a BPMN diagram must have a declared event definition type (message, timer, signal, error, escalation, compensation, conditional, terminate, etc.). Bare events without definitions are ambiguous.
-
-### Check Procedure
-
-1. For each EVENT element, check if the sub_type or sub_type metadata includes a specific event definition.
-2. Flag events that are bare (only startEvent/endEvent/intermediateEvent without further definition).
-3. Note: This rule applies where the source BPMN XML contains event definition sub-elements. If the extraction only provides sub_type as `startEvent`/`endEvent`/`intermediateEvent` without further detail, flag for manual review.
-
-### Evidence Required
-
-- Event element identifier and sub_type
-- Whether a specific event definition type is declared
+- 流程（泳池）标识符
+- 找到的开始事件数量
 
 ---
 
-## FA-BPMN-004: Gateway Pairing
+## FA-BPMN-002: 结束事件存在性
 
-**Severity**: CRITICAL
-**Deterministic**: Yes
+**严重级别**: BLOCKER
+**确定性**: 是
 
-### Description
+### 描述
 
-Split gateways (gateways with multiple outgoing sequence flows) must have a corresponding merge gateway (gateways with multiple incoming sequence flows) of the same type. Unpaired splits create potential concurrency or logic issues.
+每个 BPMN 流程必须至少有一个结束事件。没有结束事件的流程没有定义的终止点。
 
-### Check Procedure
+### 检查步骤
 
-1. Identify all GATEWAY elements.
-2. For each gateway, count incoming and outgoing sequence flows.
-3. Gateways with >1 outgoing flow are "splits"; gateways with >1 incoming flow are "merges".
-4. Group gateways by sub_type (exclusiveGateway, parallelGateway, inclusiveGateway).
-5. For each sub_type group, flag if the count of splits does not equal the count of merges.
-6. Exception: event-based gateways do not require merging.
+1. 对每个流程（泳池），收集所有 sub_type 为 `endEvent` 的 EVENT 元素。
+2. 若流程没有结束事件，则标记。
 
-### Evidence Required
+### 所需证据
 
-- Gateway identifiers and sub_types
-- Incoming and outgoing flow counts
-- Split/merge balance per sub_type
+- 流程（泳池）标识符
+- 找到的结束事件数量
 
 ---
 
-## FA-BPMN-005: Default Flow on Exclusive Gateway
+## FA-BPMN-003: 事件类型声明
 
-**Severity**: MAJOR
-**Deterministic**: Yes
+**严重级别**: CRITICAL
+**确定性**: 是
 
-### Description
+### 描述
 
-Every exclusive gateway (XOR split) with multiple outgoing flows must designate exactly one flow as the default flow. The default flow is taken when no other condition evaluates to true.
+BPMN 图表中的所有事件必须有声明的事件定义类型（消息、定时器、信号、错误、升级、补偿、条件、终止等）。没有定义的裸事件是模糊的。
 
-### Check Procedure
+### 检查步骤
 
-1. For each GATEWAY with sub_type `exclusiveGateway` and >1 outgoing sequence flow.
-2. Check if exactly one outgoing flow has `is_default: true`.
-3. Flag if zero or more than one default flows exist.
+1. 对每个 EVENT 元素，检查 sub_type 或 sub_type 元数据是否包含特定的事件定义。
+2. 标记仅具有 startEvent/endEvent/intermediateEvent 而无进一步定义的裸事件。
+3. 注意：此规则适用于源 BPMN XML 包含事件定义子元素的情况。如果提取仅提供 sub_type 为 `startEvent`/`endEvent`/`intermediateEvent` 而无进一步细节，则标记为需人工审查。
 
-### Evidence Required
+### 所需证据
 
-- Gateway identifier
-- Number of outgoing flows
-- Number of flows marked as default
-
----
-
-## FA-BPMN-006: Dangling Sequence Flow
-
-**Severity**: BLOCKER
-**Deterministic**: Yes
-
-### Description
-
-Every sequence flow must have valid source and target references that point to existing elements in the diagram. Dangling flows (referencing non-existent elements) indicate structural errors.
-
-### Check Procedure
-
-1. Collect all element IDs into a set.
-2. For each SEQUENCE_FLOW, check that source_ref and target_ref exist in the element ID set.
-3. Flag any flow with a missing source or target reference.
-
-### Evidence Required
-
-- Flow identifier
-- The dangling reference (source_ref or target_ref)
-- Whether the referenced element ID exists
+- 事件元素标识符与 sub_type
+- 是否声明了特定的事件定义类型
 
 ---
 
-## FA-BPMN-007: Orphan Task Detection
+## FA-BPMN-004: 网关配对
 
-**Severity**: CRITICAL
-**Deterministic**: Yes
+**严重级别**: CRITICAL
+**确定性**: 是
 
-### Description
+### 描述
 
-Every task, sub-process, and event must be connected to at least one sequence flow (either as source or target). Unconnected elements are orphans and represent incomplete modeling.
+拆分网关（具有多条出向序列流的网关）必须有对应的同类型合并网关（具有多条入向序列流的网关）。未配对的拆分会产生潜在的并发或逻辑问题。
 
-### Check Procedure
+### 检查步骤
 
-1. Collect all TASK, SUB_PROCESS, and EVENT element IDs.
-2. Collect all elements referenced as source_ref or target_ref in SEQUENCE_FLOW entries.
-3. Any element not appearing in any flow reference is an orphan.
-4. Exception: DATA_OBJECT elements are exempt (they use associations, not sequence flows).
+1. 识别所有 GATEWAY 元素。
+2. 对每个网关，统计入向和出向序列流数量。
+3. 出向流 >1 的网关为"拆分"；入向流 >1 的网关为"合并"。
+4. 按 sub_type（exclusiveGateway、parallelGateway、inclusiveGateway）对网关分组。
+5. 对每个 sub_type 组，若拆分数量不等于合并数量则标记。
+6. 例外：事件网关不需要合并。
 
-### Evidence Required
+### 所需证据
 
-- Element identifier and type
-- Whether the element appears in any sequence flow
-
----
-
-## FA-BPMN-008: Pool and Lane Usage
-
-**Severity**: MAJOR
-**Deterministic**: Yes
-
-### Description
-
-When a BPMN diagram contains multiple pools, all tasks must be assigned to a lane within a pool. Unassigned tasks (no parent pool or lane) in multi-pool diagrams indicate missing organizational attribution.
-
-### Check Procedure
-
-1. Count POOL elements in the diagram.
-2. If count > 1, check that every TASK and SUB_PROCESS element has a non-null parent_id (pool reference).
-3. Flag any task without a pool assignment in multi-pool diagrams.
-
-### Evidence Required
-
-- Number of pools
-- Element identifiers missing pool assignment
+- 网关标识符与 sub_type
+- 入向和出向流数量
+- 每个 sub_type 的拆分/合并平衡情况
 
 ---
 
-## FA-BPMN-009: Sequence Flow vs Message Flow Distinction
+## FA-BPMN-005: 互斥网关默认流
 
-**Severity**: CRITICAL
-**Deterministic**: Yes
+**严重级别**: MAJOR
+**确定性**: 是
 
-### Description
+### 描述
 
-Sequence flows must connect elements within the same pool. Message flows must connect elements across different pools. Using sequence flow across pools or message flow within a pool is a structural error.
+每个多出向流的互斥网关（XOR 拆分）必须指定恰好一条流为默认流。当没有其他条件评估为真时，将走默认流。
 
-### Check Procedure
+### 检查步骤
 
-1. Build a map from element_id to parent_id (pool).
-2. For each SEQUENCE_FLOW, verify that source and target elements share the same parent_id.
-3. For each MESSAGE_FLOW, verify that source and target elements have different parent_ids.
-4. Flag violations.
+1. 对每个 sub_type 为 `exclusiveGateway` 且出向序列流 >1 的 GATEWAY。
+2. 检查是否恰好有一条出向流标记了 `is_default: true`。
+3. 若默认流数量为零或超过一条，则标记。
 
-### Evidence Required
+### 所需证据
 
-- Flow identifier and type
-- Source and target element identifiers
-- Source and target parent pool identifiers
-
----
-
-## FA-BPMN-010: Sub-Process Boundary Completeness
-
-**Severity**: MAJOR
-**Deterministic**: Yes
-
-### Description
-
-Sub-processes in BPMN should have clearly defined input and output connections. A sub-process with no incoming or no outgoing sequence flow is potentially incomplete.
-
-### Check Procedure
-
-1. For each SUB_PROCESS element, check if it appears as source or target in any SEQUENCE_FLOW.
-2. Flag sub-processes with no incoming flow or no outgoing flow.
-
-### Evidence Required
-
-- Sub-process identifier
-- Incoming flow count
-- Outgoing flow count
+- 网关标识符
+- 出向流数量
+- 标记为默认的流数量
 
 ---
 
-## FA-BPMN-011: Exception and Error Path
+## FA-BPMN-006: 悬空序列流
 
-**Severity**: MAJOR
-**Deterministic**: No
+**严重级别**: BLOCKER
+**确定性**: 是
 
-### Description
+### 描述
 
-Processes that involve external interactions, system calls, or approval steps should define exception or error handling paths. A process with only happy-path flows and no error/escalation handling is incomplete.
+每条序列流必须有指向图表中已存在元素的有效源引用和目标引用。悬空流（引用不存在的元素）表明结构错误。
 
-### Check Procedure
+### 检查步骤
 
-1. Identify tasks with sub-types that imply external interaction (serviceTask, sendTask, receiveTask).
-2. Check if any boundary events or error-catching intermediate events exist near these tasks.
-3. If no exception handling is found, flag for review.
+1. 将所有元素 ID 收集到一个集合中。
+2. 对每条 SEQUENCE_FLOW，检查 source_ref 和 target_ref 是否存在于元素 ID 集合中。
+3. 标记任何源或目标引用缺失的流。
 
-### Evidence Required
+### 所需证据
 
-- Task identifiers with external interaction sub-types
-- Presence or absence of boundary/error events
-
----
-
-## FA-BPMN-012: Rollback Path Presence
-
-**Severity**: MAJOR
-**Deterministic**: No
-
-### Description
-
-Processes that involve multi-step transactions (e.g., payment + confirmation) should define rollback or compensation paths. Without rollback paths, partial failures leave the system in an inconsistent state.
-
-### Check Procedure
-
-1. Identify sequences of tasks that form transactional groups.
-2. Check for compensation events or compensation sub-processes.
-3. If transactional groups exist without compensation paths, flag for review.
-
-### Evidence Required
-
-- Task groups identified as transactional
-- Presence or absence of compensation events
+- 流标识符
+- 悬空引用（source_ref 或 target_ref）
+- 引用的元素 ID 是否存在
 
 ---
 
-## FA-BPMN-013: Task Label Completeness
+## FA-BPMN-007: 孤立任务检测
 
-**Severity**: MAJOR
-**Deterministic**: Yes
+**严重级别**: CRITICAL
+**确定性**: 是
 
-### Description
+### 描述
 
-All tasks in a BPMN diagram must have non-empty names. Unnamed tasks make the diagram unreadable and prevent mapping to architecture nodes.
+每个任务、子流程和事件必须至少连接到一条序列流（作为源或目标）。未连接的元素是孤立的，表示建模不完整。
 
-### Check Procedure
+### 检查步骤
 
-1. For each TASK element, check that `name` is a non-empty string.
-2. Flag any task with an empty or missing name.
+1. 收集所有 TASK、SUB_PROCESS 和 EVENT 元素 ID。
+2. 收集所有在 SEQUENCE_FLOW 条目中作为 source_ref 或 target_ref 引用的元素。
+3. 未出现在任何流引用中的元素即为孤立元素。
+4. 例外：DATA_OBJECT 元素豁免（它们使用关联而非序列流）。
 
-### Evidence Required
+### 所需证据
 
-- Task identifier
-- Task name (or empty/missing indicator)
-
----
-
-## FA-BPMN-014: Intermediate Event Placement
-
-**Severity**: MINOR
-**Deterministic**: No
-
-### Description
-
-Intermediate events should be placed at meaningful positions in the process flow (between tasks, not at process boundaries). Misplaced intermediate events indicate modeling errors.
-
-### Check Procedure
-
-1. For each EVENT with sub_type `intermediateEvent`, check that it has both incoming and outgoing sequence flows.
-2. Flag intermediate events that lack either incoming or outgoing connections.
-
-### Evidence Required
-
-- Event identifier and sub_type
-- Incoming and outgoing flow counts
+- 元素标识符与类型
+- 该元素是否出现在任何序列流中
 
 ---
 
-## FA-BPMN-015: Data Object Association
+## FA-BPMN-008: 泳池与泳道使用
 
-**Severity**: MINOR
-**Deterministic**: Yes
+**严重级别**: MAJOR
+**确定性**: 是
 
-### Description
+### 描述
 
-Data objects referenced in a BPMN diagram should be associated with at least one task or sub-process via an association flow. Orphan data objects indicate incomplete modeling.
+当 BPMN 图表包含多个泳池时，所有任务必须分配到泳池内的某个泳道。多泳池图表中未分配的任务（无父泳池或泳道）表明缺少组织归属。
 
-### Check Procedure
+### 检查步骤
 
-1. For each DATA_OBJECT element, check if it appears as source or target in any ASSOCIATION flow.
-2. Flag data objects without any association.
+1. 统计图表中的 POOL 元素数量。
+2. 若数量 > 1，检查每个 TASK 和 SUB_PROCESS 元素是否有非空的 parent_id（泳池引用）。
+3. 标记多泳池图表中未分配泳池的任务。
 
-### Evidence Required
+### 所需证据
 
-- Data object identifier and name
-- Whether it appears in any association flow
+- 泳池数量
+- 缺少泳池分配的元素标识符
+
+---
+
+## FA-BPMN-009: 序列流与消息流区分
+
+**严重级别**: CRITICAL
+**确定性**: 是
+
+### 描述
+
+序列流必须连接同一泳池内的元素。消息流必须连接不同泳池间的元素。跨泳池使用序列流或泳池内使用消息流是结构错误。
+
+### 检查步骤
+
+1. 构建 element_id 到 parent_id（泳池）的映射。
+2. 对每条 SEQUENCE_FLOW，验证源和目标元素共享相同的 parent_id。
+3. 对每条 MESSAGE_FLOW，验证源和目标元素具有不同的 parent_id。
+4. 标记违规项。
+
+### 所需证据
+
+- 流标识符与类型
+- 源和目标元素标识符
+- 源和目标父泳池标识符
+
+---
+
+## FA-BPMN-010: 子流程边界完整性
+
+**严重级别**: MAJOR
+**确定性**: 是
+
+### 描述
+
+BPMN 中的子流程应有明确定义的输入和输出连接。没有入向或出向序列流的子流程可能是不完整的。
+
+### 检查步骤
+
+1. 对每个 SUB_PROCESS 元素，检查其是否作为 source 或 target 出现在任何 SEQUENCE_FLOW 中。
+2. 标记没有入向流或出向流的子流程。
+
+### 所需证据
+
+- 子流程标识符
+- 入向流数量
+- 出向流数量
+
+---
+
+## FA-BPMN-011: 异常与错误路径
+
+**严重级别**: MAJOR
+**确定性**: 否
+
+### 描述
+
+涉及外部交互、系统调用或审批步骤的流程应定义异常或错误处理路径。仅有正常路径流程而无错误/升级处理的流程是不完整的。
+
+### 检查步骤
+
+1. 识别具有暗示外部交互的子类型的任务（serviceTask、sendTask、receiveTask）。
+2. 检查这些任务附近是否存在边界事件或捕获错误的中间事件。
+3. 若未发现异常处理，则标记为需审查。
+
+### 所需证据
+
+- 具有外部交互子类型的任务标识符
+- 边界/错误事件的存在与否
+
+---
+
+## FA-BPMN-012: 回滚路径存在性
+
+**严重级别**: MAJOR
+**确定性**: 否
+
+### 描述
+
+涉及多步事务（例如支付 + 确认）的流程应定义回滚或补偿路径。没有回滚路径时，部分失败会使系统处于不一致状态。
+
+### 检查步骤
+
+1. 识别构成事务组的任务序列。
+2. 检查是否存在补偿事件或补偿子流程。
+3. 若存在没有补偿路径的事务组，则标记为需审查。
+
+### 所需证据
+
+- 识别为事务的任务组
+- 补偿事件的存在与否
+
+---
+
+## FA-BPMN-013: 任务标签完整性
+
+**严重级别**: MAJOR
+**确定性**: 是
+
+### 描述
+
+BPMN 图表中的所有任务必须有非空名称。未命名的任务使图表不可读，并阻碍与架构节点的映射。
+
+### 检查步骤
+
+1. 对每个 TASK 元素，检查 `name` 是否为非空字符串。
+2. 标记任何名称为空或缺失的任务。
+
+### 所需证据
+
+- 任务标识符
+- 任务名称（或空/缺失指示）
+
+---
+
+## FA-BPMN-014: 中间事件放置
+
+**严重级别**: MINOR
+**确定性**: 否
+
+### 描述
+
+中间事件应放置在流程流的有意义位置（任务之间，而非流程边界处）。放置不当的中间事件表明建模错误。
+
+### 检查步骤
+
+1. 对每个 sub_type 为 `intermediateEvent` 的 EVENT，检查其是否同时具有入向和出向序列流。
+2. 标记缺少入向或出向连接的中间事件。
+
+### 所需证据
+
+- 事件标识符与 sub_type
+- 入向和出向流数量
+
+---
+
+## FA-BPMN-015: 数据对象关联
+
+**严重级别**: MINOR
+**确定性**: 是
+
+### 描述
+
+BPMN 图表中引用的数据对象应通过关联流与至少一个任务或子流程关联。孤立的数据对象表明建模不完整。
+
+### 检查步骤
+
+1. 对每个 DATA_OBJECT 元素，检查其是否作为 source 或 target 出现在任何 ASSOCIATION 流中。
+2. 标记没有任何关联的数据对象。
+
+### 所需证据
+
+- 数据对象标识符与名称
+- 是否出现在任何关联流中

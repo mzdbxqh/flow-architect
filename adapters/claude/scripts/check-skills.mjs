@@ -7,6 +7,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// 动态导入 context-budget 模块（可能不存在）
+let _estimateTokens = null;
+try {
+  const mod = await import('./lib/context-budget.mjs');
+  _estimateTokens = mod.estimateTokens;
+} catch {
+  // 模块尚未创建时跳过 token 检查
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
@@ -204,6 +213,8 @@ export function checkSkills(pluginRoot) {
     'references/schemas/diagram-model.schema.json',
     'references/schemas/consistency-map.schema.json',
     'references/schemas/result.schema.json',
+    'references/schemas/context-budget.schema.json',
+    'references/schemas/normalized-document.schema.json',
   ];
   for (const ref of referencedFiles) {
     const abs = path.join(root, ref);
@@ -225,6 +236,24 @@ export function checkSkills(pluginRoot) {
         if (!rule.category) errors.push(`rule-catalog.json: rule ${rule.rule_id || '?'} missing category`);
         if (rule.deterministic_check === undefined) errors.push(`rule-catalog.json: rule ${rule.rule_id || '?'} missing deterministic_check`);
         if (!rule.public_reference) errors.push(`rule-catalog.json: rule ${rule.rule_id || '?'} missing public_reference`);
+      }
+    }
+  }
+
+  // 7. Check SKILL.md token budgets
+  const SKILL_TOKEN_BASELINE = 2000;
+  const SKILL_TOKEN_LIMIT = 2400;
+  const SKILL_TOKEN_TARGET = 1500;
+  if (_estimateTokens) {
+    for (const [skillName, { dirName }] of skillByName) {
+      const skillFile = path.join(skillsDir, dirName, 'SKILL.md');
+      const content = fs.readFileSync(skillFile, 'utf8');
+      const est = _estimateTokens(content);
+      if (est.estimated_tokens > SKILL_TOKEN_LIMIT) {
+        errors.push(`Skill ${skillName}: ${est.estimated_tokens} tokens exceeds hard limit ${SKILL_TOKEN_LIMIT}`);
+      } else if (est.estimated_tokens > SKILL_TOKEN_BASELINE) {
+        // Attention: log warning but not error
+        process.stderr.write(`WARN: Skill ${skillName}: ${est.estimated_tokens} tokens (target ≤${SKILL_TOKEN_TARGET}, baseline ${SKILL_TOKEN_BASELINE})\n`);
       }
     }
   }

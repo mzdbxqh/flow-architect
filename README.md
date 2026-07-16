@@ -61,7 +61,9 @@ Preparation results are cached per run directory. On re-run with identical input
 The following stages run with zero LLM calls — pure deterministic code:
 
 - **Extraction:** Text, tables, and structured diagrams extracted from source files.
-- **Batching:** Evidence split into ≤12,000-char batches with ≤12 blocks and ≤1 visual.
+- **Normalization:** Heterogeneous inputs (MD, PDF, DOCX, XLSX, PPTX, BPMN, Mermaid, SVG) converted to locatable Markdown shards.
+- **Batching:** Evidence split into ≤12,000-char batches with ≤12 blocks and ≤1 visual. Each batch includes a context budget report.
+- **Budget gates:** Three-state budget (BUDGET_OK / BUDGET_ATTENTION / BUDGET_SPLIT_REQUIRED). Batches exceeding 120% of the token limit are blocked from worker dispatch.
 - **BPMN generation:** L5 BPMN 2.0 XML + DI generated from merged semantic fragments.
 - **HTML packaging:** Offline meeting package assembled with process diagram, questions, and metadata.
 

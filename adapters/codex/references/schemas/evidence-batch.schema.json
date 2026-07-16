@@ -70,6 +70,24 @@
       "type": "string",
       "enum": ["PENDING", "ACCEPTED", "CACHED"],
       "description": "批次处理状态"
+    },
+    "context_budget": {
+      "type": "object",
+      "description": "批次上下文预算报告",
+      "properties": {
+        "formula_version": { "type": "string" },
+        "estimated_tokens": { "type": "integer", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 0 },
+        "ratio": { "type": "number", "minimum": 0 },
+        "status": { "type": "string", "enum": ["BUDGET_OK", "BUDGET_ATTENTION", "BUDGET_SPLIT_REQUIRED"] },
+        "split_required": { "type": "boolean" }
+      },
+      "required": ["formula_version", "estimated_tokens", "limit", "ratio", "status", "split_required"]
+    },
+    "markdown_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "归一化 Markdown 分片路径列表"
     }
   }
 }

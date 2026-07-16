@@ -63,7 +63,7 @@ test('Codex help/setup skills keep discovery and side-effect boundaries explicit
   assert.match(help.body, /SKILL\.md.*向上两级|向上两级.*SKILL\.md/s);
   assert.doesNotMatch(help.body, /所有写入操作.*runDir/);
   assert.equal(setup.frontmatter.name, 'flow-architect-setup');
-  assert.match(setup.frontmatter.description, /user explicitly asks/);
+  assert.match(setup.frontmatter.description, /user explicitly asks|用户明确要求|仅在用户/);
   assert.match(setup.body, /不得自动触发/);
   assert.match(setup.body, /默认.*core|core.*默认/s);
   assert.match(setup.body, /plan_sha256/);

@@ -1,243 +1,262 @@
-# L5 Review Rules
+# L5 审查规则
 
-Rules for reviewing L5 sub-process architecture.
-
----
-
-## FA-L5-001: Single Main Role
-
-**Severity**: CRITICAL
-**Deterministic**: Yes
-
-### Description
-
-Each L5 sub-process must have exactly one main Responsible (R) role. When multiple roles share responsibility, accountability is diluted and handoff points become ambiguous.
-
-### Check Procedure
-
-1. For each L5 process, extract the assigned roles with RASCI attribution.
-2. Count the number of roles with "R" (Responsible) attribution.
-3. Flag processes with zero R roles or more than one R role.
-4. Multiple "S" (Support), "C" (Consulted), or "I" (Informed) roles are acceptable.
-
-### Evidence Required
-
-- L5 process identifier and name
-- List of roles with their RASCI attribution
-- Count of R-attributed roles
+审查 L5 活动架构的规则集。L5 活动定义：以单一角色为主执行的、有有价值的业务产出的业务行为。
 
 ---
 
-## FA-L5-002: Business Output Four Questions
+## FA-L5-001: 单一主角色
 
-**Severity**: MAJOR
-**Deterministic**: No
+**严重度**: CRITICAL
+**可自动化**: 是
 
-### Description
+### 描述
 
-Each L5 output must answer four questions:
-1. **What** is delivered?
-2. **To whom** is it delivered?
-3. **In what format** is it delivered?
-4. **By when** is it delivered (timing/SLA)?
+每个 L5 活动必须有且仅有一个主要执行角色（R）。当多个角色共享主执行责任时，责任归属被稀释，交接点变得模糊。
 
-### Check Procedure
+允许内部协作，但主体动作由一个角色完成。
 
-1. For each L5 output artifact, check for answers to all four questions.
-2. Flag outputs missing one or more answers.
-3. Verify that "to whom" references a valid role or organizational unit.
-4. Verify that "by when" specifies a concrete time frame, not "ASAP" or "immediately".
+### 检查步骤
 
-### Evidence Required
+1. 对每个 L5 活动，提取 RASCI 归属的角色。
+2. 统计具有 "R"（主执行）归属的角色数量。
+3. 标记零个 R 角色或超过一个 R 角色的活动。
+4. 多个 "S"（支持）、"C"（咨询）或 "I"（知会）角色是允许的。
 
-- Output artifact identifier
-- Presence/absence of each of the four answers
+### 所需证据
 
----
-
-## FA-L5-003: Verb-Object Naming Convention
-
-**Severity**: MAJOR
-**Deterministic**: Yes
-
-### Description
-
-L5 process names must follow verb-object pattern. Acceptable: "Approve Request", "Validate Data", "Generate Report". Unacceptable: "Request Approval" (noun-verb), "Data Validation" (noun-noun), "Approval" (noun-only).
-
-### Check Procedure
-
-1. For each L5 process, parse the name into words.
-2. Check that the first word is a verb (action word).
-3. Check that subsequent words form a noun phrase (the object being acted upon).
-4. Flag names that do not follow verb-object pattern.
-
-### Evidence Required
-
-- L5 process identifier and name
-- Parsed verb and object components
-- Whether the pattern matches
+- L5 活动标识符和名称
+- 角色列表及其 RASCI 归属
+- R 归属角色数量
 
 ---
 
-## FA-L5-004: R0 Anti-Pattern: Missing Input
+## FA-L5-002: 四问判定（业务产出价值）
 
-**Severity**: BLOCKER
-**Deterministic**: Yes
+**严重度**: MAJOR
+**可自动化**: 否
 
-### Description
+### 描述
 
-L5 process must not start without a clearly defined trigger or input artifact. A process with no inputs is either unreachable or represents an incomplete specification.
+每个 L5 产出必须通过四问判定。**满足任一即通过**，四问全否则降级为 L6（L5 内部步骤）。
 
-### Check Procedure
+| # | 问题 | 产出类型 | 判定示例 |
+|---|------|---------|---------|
+| Q1 | 下游要用这个产出吗？ | 下游必需输入 | "生成采购申请单"——下游供应商选择需要它才能启动，通过 |
+| Q2 | 做决策需要这个产出吗？ | 决策依据 | "编写可行性报告"——投资审批委员会需要它才能判断，通过 |
+| Q3 | 对外交付需要这个产出吗？ | 契约义务交付物 | "出具验收报告"——客户合同约定必须交付，通过 |
+| Q4 | 这个产出有 KPI 吗？ | 绩效可度量 | "处理客户投诉"——有一次解决率、平均处理时长等考核，通过 |
 
-1. For each L5 process, check for at least one input artifact or trigger condition.
-2. Flag processes with zero inputs.
-3. Exception: top-level entry processes may have event-based triggers instead of artifact inputs.
+**反例**（四问全否，降级为 L6）：
+- "打开 ERP 系统"——下游不需要"打开"作为输入，无决策依据，非交付物，无 KPI
+- "点击提交按钮"——同上
+- "填写表单"——如果表单只是提交的中间步骤，四问全否
 
-### Evidence Required
+### 检查步骤
 
-- L5 process identifier and name
-- List of input artifacts (or absence thereof)
-- Whether an event trigger is defined
+1. 对每个 L5 产出，逐一回答四个问题。
+2. 标记缺少一个或多个回答的产出。
+3. 验证"下游使用者"引用了有效的角色或组织单元。
+4. 验证"何时交付"指定了具体时间范围，而非"尽快"或"立即"等模糊表述。
+5. 四问中某一问无法确定时，标记为争议项，附上建议倾向和需要确认的问题。
+6. **必须给出判断理由**：不能只写"是/否"，必须说明依据。依据不足时标记为争议项。
 
----
+### 所需证据
 
-## FA-L5-005: R1 Anti-Pattern: Orphan Output
-
-**Severity**: BLOCKER
-**Deterministic**: Yes
-
-### Description
-
-L5 output must connect to a downstream consumer or be a documented final deliverable. An output with no consumer creates a dead end in the process flow.
-
-### Check Procedure
-
-1. For each L5 output, trace to downstream consumers.
-2. If no consumer is found, check if the output is a documented final deliverable.
-3. Flag outputs that are neither consumed nor final deliverables.
-
-### Evidence Required
-
-- Output artifact identifier
-- Downstream consumer step (if any)
-- Whether it is marked as a final deliverable
+- 产出物标识符
+- 每个问题的存在/缺失状态
+- 每个问题的判断理由
 
 ---
 
-## FA-L5-006: R2 Anti-Pattern: Role Mismatch
+## FA-L5-003: 动词+名词命名规范
 
-**Severity**: CRITICAL
-**Deterministic**: No
+**严重度**: MAJOR
+**可自动化**: 是
 
-### Description
+### 描述
 
-The assigned role must be capable of performing the described action in the given system context. For example, assigning a "Finance Manager" to perform a "Code Review" is a role mismatch.
+L5 活动名称必须遵循"动词+名词"模式。
 
-### Check Procedure
+- 符合：审核订单、扣减库存、生成发票、编制采购申请
+- 不符合：请求审批（名词+动词）、数据验证（名词+名词）、审批（仅名词）
+- 不提具体工具："用 SAP 审核订单"应改为"审核订单"
 
-1. For each L5 step, examine the assigned role and the described action.
-2. Assess whether the role naturally encompasses the action's domain.
-3. Flag obvious mismatches (role domain vs. action domain).
-4. This rule requires business judgment and cannot be fully automated.
+### 检查步骤
 
-### Evidence Required
+1. 对每个 L5 活动，解析名称为词语。
+2. 检查第一个词是否为动词（动作词）。
+3. 检查后续词语是否构成名词短语（被作用的对象）。
+4. 检查名称中是否包含系统名、工具名等技术引用。
+5. 标记不符合"动词+名词"模式的名称。
 
-- L5 step identifier and name
-- Assigned role
-- Described action
-- The domain mismatch (if any)
+### 所需证据
 
----
-
-## FA-L5-007: R3 Anti-Pattern: System Mismatch
-
-**Severity**: CRITICAL
-**Deterministic**: No
-
-### Description
-
-The referenced system must support the described operation for the assigned role. For example, referencing "SAP MM" for a step that describes a document approval workflow is a system mismatch.
-
-### Check Procedure
-
-1. For each L5 step, examine the referenced system and the described operation.
-2. Assess whether the system supports the operation type.
-3. Flag mismatches where the system does not provide the needed capability.
-
-### Evidence Required
-
-- L5 step identifier and name
-- Referenced system
-- Described operation
-- The capability mismatch (if any)
+- L5 活动标识符和名称
+- 解析出的动词和名词成分
+- 是否符合模式
 
 ---
 
-## FA-L5-008: IPO Structure Check
+## FA-L5-004: R0 反模式：无产出动作
 
-**Severity**: MAJOR
-**Deterministic**: Yes
+**严重度**: BLOCKER
+**可自动化**: 是
 
-### Description
+### 描述
 
-Each L5 process must have identifiable Input, Process, and Output (IPO) structure. A process that lacks any of these three elements is incomplete.
+R0 是前置快筛，在四问判定之前执行。L5 活动不能是没有业务产出的动作。
 
-### Check Procedure
+**典型 R0 动作**：打开系统、输入事务码、登录平台、等待通知、点击按钮、发送/接收邮件（纯接收动作）。
 
-1. For each L5 process, verify presence of: at least one input, a defined process (name + steps), and at least one output.
-2. Flag processes missing any IPO element.
-3. Verify that inputs and outputs are not duplicated (same name listed as both input and output).
+**R0 与四问的关系**：四问的提问方式（"下游要用**这个产出**吗"）预设了"这个步骤有产出"，对无产出动作不自然。因此先用 R0 过滤掉明显无产出的步骤，剩余步骤再进入四问判定。
 
-### Evidence Required
+### 检查步骤
 
-- L5 process identifier
-- List of inputs
-- List of outputs
-- Whether a process definition exists
+1. 对每个候选步骤，直接问"这个步骤产出了什么具体结果？"
+2. 答不出 → 命中 R0，标记为"降级为前置/收尾操作"，不进入四问判定。
+3. 被标记为 R0 的要指明归入哪个 L5 的前置/收尾操作。
 
----
+### 所需证据
 
-## FA-L5-009: Good Product Conditions
-
-**Severity**: MAJOR
-**Deterministic**: No
-
-### Description
-
-L5 outputs must define what constitutes a good product: measurable quality criteria. An output without quality criteria is unverifiable.
-
-### Check Procedure
-
-1. For each L5 output, check for quality criteria or acceptance conditions.
-2. Flag outputs without any quality definition.
-3. Verify that quality criteria are measurable (not subjective like "good quality").
-
-### Evidence Required
-
-- Output artifact identifier
-- Quality criteria (or absence thereof)
-- Whether criteria are measurable
+- L5 活动标识符和名称
+- 产出描述（或缺失说明）
+- 归属的 L5 活动
 
 ---
 
-## FA-L5-010: Tool Decoupling
+## FA-L5-005: R1 反模式：频繁交接但无实质产出
 
-**Severity**: MINOR
-**Deterministic**: No
+**严重度**: BLOCKER
+**可自动化**: 是
 
-### Description
+### 描述
 
-L5 process description should describe business logic independent of specific tool implementations. A process that says "click Save button in SAP" is coupled to a tool; "persist the record" is decoupled.
+多个角色之间的传递序列（A->B->C->D 传递文件），中间无加工动作。这是"通过"的产出而非"完成"的产出。
 
-### Check Procedure
+### 检查步骤
 
-1. For each L5 step description, scan for specific tool names, UI elements, or technical references.
-2. Flag steps that embed tool-specific language in business process descriptions.
-3. Suggest business-language alternatives.
+1. 检查是否存在多个角色之间的传递序列且无加工动作。
+2. 标记命中 R1 的步骤，建议合并为一个 L5，内部用角色协作表达。
 
-### Evidence Required
+### 所需证据
 
-- L5 step identifier and description
-- Specific tool references found
-- Suggested business-language replacement
+- 传递序列中的步骤标识符
+- 涉及的角色
+- 是否存在加工动作
+- 合并目标 L5
+
+---
+
+## FA-L5-006: R2 反模式：仅传递信息而无加工
+
+**严重度**: CRITICAL
+**可自动化**: 否
+
+### 描述
+
+系统自动发通知、纯转发邮件等——仅传递信息而无加工。不单独设为 L5，应作为其他 L5 的附属动作。
+
+### 检查步骤
+
+1. 对每个 L5 步骤，检查是否为信息转发、通知发送等无加工操作。
+2. 标记命中 R2 的步骤，指明归属哪个 L5 的附属动作。
+
+### 所需证据
+
+- L5 步骤标识符和描述
+- 是否存在加工动作
+- 归属的 L5 活动
+
+---
+
+## FA-L5-007: R3 反模式：无下游接收者
+
+**严重度**: CRITICAL
+**可自动化**: 否
+
+### 描述
+
+产出不被任何下游使用，无决策基于它。需要审视是否必要——可能冗余需删除，或需补充调研下游。
+
+### 检查步骤
+
+1. 对每个 L5 产出，追踪下游消费者。
+2. 如果未找到消费者，检查该产出是否为已记录的最终交付物。
+3. 标记既非被消费也非最终交付物的产出。
+4. 需要结合上下文判断，不确定时跳过此检查并标记为争议项。
+
+### 所需证据
+
+- 产出物标识符
+- 下游消费者步骤（如有）
+- 是否标记为最终交付物
+
+---
+
+## FA-L5-008: IPO 结构检查
+
+**严重度**: MAJOR
+**可自动化**: 是
+
+### 描述
+
+每个 L5 活动必须具有可识别的输入（Input）、过程（Process）、输出（Output）结构。缺少任一要素的活动是不完整的。
+
+### 检查步骤
+
+1. 对每个 L5 活动，验证是否存在：至少一个输入、已定义的过程（名称+步骤）、至少一个输出。
+2. 标记缺少任何 IPO 要素的活动。
+3. 验证输入和输出未重复（同一名称同时列为输入和输出）。
+
+### 所需证据
+
+- L5 活动标识符
+- 输入列表
+- 输出列表
+- 过程定义是否存在
+
+---
+
+## FA-L5-009: 好产品条件
+
+**严重度**: MAJOR
+**可自动化**: 否
+
+### 描述
+
+L5 产出必须定义什么是好产品：可度量的质量标准。没有质量标准的产出是不可验证的。
+
+### 检查步骤
+
+1. 对每个 L5 产出，检查质量标准或验收条件。
+2. 标记没有任何质量定义的产出。
+3. 验证质量标准是可度量的（而非"质量好"等主观表述）。
+
+### 所需证据
+
+- 产出物标识符
+- 质量标准（或缺失说明）
+- 标准是否可度量
+
+---
+
+## FA-L5-010: 工具解耦
+
+**严重度**: MINOR
+**可自动化**: 否
+
+### 描述
+
+L5 活动描述应独立于具体工具实现。说"点击 SAP 中的保存按钮"是耦合工具的；"保存记录"是解耦的。
+
+### 检查步骤
+
+1. 对每个 L5 步骤描述，扫描具体工具名称、UI 元素或技术引用。
+2. 标记在业务流程描述中嵌入了工具特定语言的步骤。
+3. 建议使用业务语言替代。
+
+### 所需证据
+
+- L5 步骤标识符和描述
+- 发现的具体工具引用
+- 建议的业务语言替换

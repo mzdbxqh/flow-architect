@@ -1,263 +1,263 @@
-# Visual Review Rules
+# 视觉审查规则
 
-Rules for reviewing visual layout and readability of process diagrams. These rules apply to any visual diagram format (BPMN, Mermaid, SVG, PNG, JPEG, scanned PDF).
+审查流程图视觉布局与可读性的规则。这些规则适用于任何视觉图表格式（BPMN、Mermaid、SVG、PNG、JPEG、扫描 PDF）。
 
-## Fact Classification
+## 事实分类
 
-Every observation during visual review MUST be classified as one of:
+视觉审查中的每个观察结果必须归类为以下之一：
 
-- **VISIBLE_FACT**: An observation directly verifiable from the visual rendering (e.g., "line crosses another line", "text label is present"). Confidence can reach 1.0 for structured formats (BPMN XML, Mermaid).
-- **INFERRED_RELATION**: A relationship or semantic meaning inferred from visual layout but not directly stated in the data (e.g., "these two boxes appear to be in the same group"). Confidence must not exceed 0.6 for PNG/JPEG/scanned PDF sources.
-- **BUSINESS_CONFIRMATION**: An observation that requires business domain knowledge to validate (e.g., "this approval step appears redundant"). Always requires human confirmation.
+- **VISIBLE_FACT**：可直接从视觉渲染中验证的观察（例如"线条交叉"、"文本标签存在"）。结构化格式（BPMN XML、Mermaid）置信度可达 1.0。
+- **INFERRED_RELATION**：从视觉布局推断但未在数据中直接陈述的关系或语义含义（例如"这两个框看起来属于同一组"）。PNG/JPEG/扫描 PDF 来源的置信度不得超过 0.6。
+- **BUSINESS_CONFIRMATION**：需要业务领域知识才能验证的观察（例如"此审批步骤看起来是冗余的"）。始终需要人工确认。
 
-### Confidence Caps by Source Format
+### 按来源格式的置信度上限
 
-| Source Format | VISIBLE_FACT max | INFERRED_RELATION max |
+| 来源格式 | VISIBLE_FACT 上限 | INFERRED_RELATION 上限 |
 |---|---|---|
 | BPMN XML | 1.0 | 0.9 |
 | Mermaid | 1.0 | 0.8 |
 | SVG | 0.9 | 0.7 |
 | PNG/JPEG | 0.8 | 0.6 |
-| Scanned PDF | 0.8 | 0.6 |
+| 扫描 PDF | 0.8 | 0.6 |
 
 ---
 
-## FA-VIS-001: Line Crossing Detection
+## FA-VIS-001: 线条交叉检测
 
-**Severity**: MAJOR
-**Deterministic**: No
+**严重级别**: MAJOR
+**确定性**: 否
 
-### Description
+### 描述
 
-Flow lines (sequence flows, message flows) should not cross each other. Line crossings reduce readability and can mislead viewers about process flow direction.
+流线（序列流、消息流）不应相互交叉。线条交叉会降低可读性，并可能误导查看者对流程方向的判断。
 
-### Fact Type: VISIBLE_FACT (for structured), INFERRED_RELATION (for raster)
+### 事实类型: VISIBLE_FACT（结构化格式）、INFERRED_RELATION（栅格格式）
 
-### Check Procedure
+### 检查步骤
 
-1. For each pair of flows, check if their visual paths intersect.
-2. For structured formats (BPMN XML with DI, SVG with path data), compute geometric intersection.
-3. For raster formats, detect crossings from visual layout.
-4. Flag crossings with the crossing location.
+1. 对每对流，检查其视觉路径是否相交。
+2. 对结构化格式（带 DI 的 BPMN XML、带路径数据的 SVG），计算几何交叉。
+3. 对栅格格式，从视觉布局中检测交叉。
+4. 标记交叉位置。
 
-### Evidence Required
+### 所需证据
 
-- The two crossing flow identifiers
-- Approximate crossing location
-
----
-
-## FA-VIS-002: Flow Direction Consistency
-
-**Severity**: MAJOR
-**Deterministic**: No
-
-### Description
-
-All sequence flows in a diagram should follow a consistent primary direction (left-to-right or top-to-bottom). Mixed directions reduce readability.
-
-### Fact Type: VISIBLE_FACT (for structured), INFERRED_RELATION (for raster)
-
-### Check Procedure
-
-1. Determine the primary flow direction from the majority of flows.
-2. Identify any flows that go against the primary direction.
-3. Flag reverse-direction flows.
-
-### Evidence Required
-
-- Primary direction detected
-- Flow identifiers going against the primary direction
+- 两条交叉流的标识符
+- 大致交叉位置
 
 ---
 
-## FA-VIS-003: Backflow Detection
+## FA-VIS-002: 流向一致性
 
-**Severity**: CRITICAL
-**Deterministic**: No
+**严重级别**: MAJOR
+**确定性**: 否
 
-### Description
+### 描述
 
-Backflow occurs when a flow goes backward relative to the primary reading direction (right-to-left in LTR layouts, or bottom-to-top). Backflow indicates either a loop that should be explicit or a layout error.
+图表中的所有序列流应遵循一致的主方向（从左到右或从上到下）。方向混杂会降低可读性。
 
-### Fact Type: VISIBLE_FACT (for structured), INFERRED_RELATION (for raster)
+### 事实类型: VISIBLE_FACT（结构化格式）、INFERRED_RELATION（栅格格式）
 
-### Check Procedure
+### 检查步骤
 
-1. For each sequence flow, determine the relative position of source and target.
-2. If the target is positioned before the source in the primary reading direction, flag as backflow.
-3. Exception: explicit loop-back flows with a clear label are acceptable.
+1. 从大多数流中确定主流向。
+2. 识别与主方向相反的流。
+3. 标记反向流。
 
-### Evidence Required
+### 所需证据
 
-- Flow identifier
-- Source and target positions
-- Whether the flow is labeled as a loop
-
----
-
-## FA-VIS-004: Diagram Density
-
-**Severity**: MINOR
-**Deterministic**: Yes
-
-### Description
-
-Diagrams should not contain an excessive number of elements in a single view. High density reduces readability and comprehension.
-
-### Fact Type: VISIBLE_FACT
-
-### Check Procedure
-
-1. Count the total number of visual elements (excluding pools and lanes).
-2. Warn if element count exceeds 25 in a single process/pool.
-3. Block if element count exceeds 50.
-
-### Evidence Required
-
-- Total element count
-- Threshold exceeded
+- 检测到的主方向
+- 与主方向相反的流标识符
 
 ---
 
-## FA-VIS-005: Label Readability
+## FA-VIS-003: 回流检测
 
-**Severity**: MAJOR
-**Deterministic**: No
+**严重级别**: CRITICAL
+**确定性**: 否
 
-### Description
+### 描述
 
-All element labels must be readable: sufficient font size, not truncated, not overlapping with other elements.
+回流是指流相对于主阅读方向反向流动（在从左到右布局中为从右到左，或从下到上）。回流表明要么是一个应显式表示的循环，要么是布局错误。
 
-### Fact Type: VISIBLE_FACT (for structured), INFERRED_RELATION (for raster)
+### 事实类型: VISIBLE_FACT（结构化格式）、INFERRED_RELATION（栅格格式）
 
-### Check Procedure
+### 检查步骤
 
-1. For structured formats, check that all named elements have non-empty labels.
-2. For raster formats, assess label legibility.
-3. Flag labels that appear truncated or overlapping.
+1. 对每条序列流，确定源和目标的相对位置。
+2. 若目标在主阅读方向上位于源之前，则标记为回流。
+3. 例外：带有明确标签的显式回环流是可接受的。
 
-### Evidence Required
+### 所需证据
 
-- Element identifier
-- Label text or legibility assessment
-
----
-
-## FA-VIS-006: Spacing Consistency
-
-**Severity**: MINOR
-**Deterministic**: No
-
-### Description
-
-Elements in a diagram should have consistent spacing. Uneven spacing suggests layout problems and reduces professional appearance.
-
-### Fact Type: VISIBLE_FACT (for structured), INFERRED_RELATION (for raster)
-
-### Check Procedure
-
-1. Measure distances between adjacent elements in the same lane or row.
-2. Calculate the variance of inter-element distances.
-3. Flag diagrams with high spacing variance.
-
-### Evidence Required
-
-- Set of inter-element distances
-- Variance measure
+- 流标识符
+- 源和目标位置
+- 该流是否标记为循环
 
 ---
 
-## FA-VIS-007: Color Dependency
+## FA-VIS-004: 图表密度
 
-**Severity**: MAJOR
-**Deterministic**: No
+**严重级别**: MINOR
+**确定性**: 是
 
-### Description
+### 描述
 
-Diagrams must not rely solely on color to convey meaning. Information distinguished only by color is inaccessible to colorblind users and fails in grayscale printing.
+图表不应在单个视图中包含过多元素。密度过高会降低可读性和理解性。
 
-### Fact Type: VISIBLE_FACT
+### 事实类型: VISIBLE_FACT
 
-### Check Procedure
+### 检查步骤
 
-1. Identify elements differentiated only by color (same shape, same type, different fill/stroke).
-2. If color is the sole differentiator, flag for review.
-3. Verify that a legend or text annotation provides alternative differentiation.
+1. 统计视觉元素总数（不包括泳池和泳道）。
+2. 若单个流程/泳池中元素数超过 25 则警告。
+3. 若超过 50 则阻断。
 
-### Evidence Required
+### 所需证据
 
-- Elements distinguished only by color
-- Presence or absence of alternative differentiation
-
----
-
-## FA-VIS-008: Legend Presence
-
-**Severity**: MINOR
-**Deterministic**: Yes
-
-### Description
-
-Diagrams with custom symbols, colors, or non-standard notations should include a legend explaining the visual vocabulary.
-
-### Fact Type: VISIBLE_FACT
-
-### Check Procedure
-
-1. Check if the diagram uses custom symbols or non-standard color coding.
-2. If custom visual vocabulary is detected, check for a legend element.
-3. Flag if custom vocabulary exists without a legend.
-
-### Evidence Required
-
-- Custom visual elements detected
-- Legend presence or absence
+- 元素总数
+- 超出的阈值
 
 ---
 
-## FA-VIS-009: Title and Metadata
+## FA-VIS-005: 标签可读性
 
-**Severity**: MINOR
-**Deterministic**: Yes
+**严重级别**: MAJOR
+**确定性**: 否
 
-### Description
+### 描述
 
-Diagrams should have a title or caption that identifies the process being depicted. Metadata such as version, date, and author improves traceability.
+所有元素标签必须可读：字号足够、未被截断、不与其他元素重叠。
 
-### Fact Type: VISIBLE_FACT
+### 事实类型: VISIBLE_FACT（结构化格式）、INFERRED_RELATION（栅格格式）
 
-### Check Procedure
+### 检查步骤
 
-1. Check for a title text element in the diagram.
-2. Check for metadata annotations (version, date, author).
-3. Flag if no title is present.
+1. 对结构化格式，检查所有命名元素是否有非空标签。
+2. 对栅格格式，评估标签的可读性。
+3. 标记被截断或重叠的标签。
 
-### Evidence Required
+### 所需证据
 
-- Title text element presence
-- Metadata annotations present
+- 元素标识符
+- 标签文本或可读性评估
 
 ---
 
-## FA-VIS-010: Minimum Element Separation
+## FA-VIS-006: 间距一致性
 
-**Severity**: MINOR
-**Deterministic**: No
+**严重级别**: MINOR
+**确定性**: 否
 
-### Description
+### 描述
 
-Adjacent elements must have sufficient separation to be visually distinguishable. Overlapping elements create ambiguity about whether they are separate or merged.
+图表中的元素应保持一致的间距。间距不均匀表明布局存在问题，降低专业外观。
 
-### Fact Type: VISIBLE_FACT (for structured), INFERRED_RELATION (for raster)
+### 事实类型: VISIBLE_FACT（结构化格式）、INFERRED_RELATION（栅格格式）
 
-### Check Procedure
+### 检查步骤
 
-1. For each pair of elements, check if their bounding boxes overlap.
-2. Flag overlapping elements.
-3. For raster formats, flag elements that appear to touch or merge.
+1. 测量同一泳道或行中相邻元素之间的距离。
+2. 计算元素间距的方差。
+3. 标记间距方差较高的图表。
 
-### Evidence Required
+### 所需证据
 
-- Element pair identifiers
-- Overlap area or separation distance
+- 元素间距集合
+- 方差度量
+
+---
+
+## FA-VIS-007: 颜色依赖性
+
+**严重级别**: MAJOR
+**确定性**: 否
+
+### 描述
+
+图表不得仅依赖颜色来传达含义。仅通过颜色区分的信息对色觉障碍用户不可访问，在灰度打印时也会失效。
+
+### 事实类型: VISIBLE_FACT
+
+### 检查步骤
+
+1. 识别仅通过颜色区分的元素（相同形状、相同类型、不同填充/描边）。
+2. 若颜色是唯一的区分因素，则标记为需审查。
+3. 验证图例或文本注释是否提供了替代区分方式。
+
+### 所需证据
+
+- 仅通过颜色区分的元素
+- 替代区分方式的存在与否
+
+---
+
+## FA-VIS-008: 图例存在性
+
+**严重级别**: MINOR
+**确定性**: 是
+
+### 描述
+
+使用自定义符号、颜色或非标准标注的图表应包含解释视觉词汇的图例。
+
+### 事实类型: VISIBLE_FACT
+
+### 检查步骤
+
+1. 检查图表是否使用了自定义符号或非标准颜色编码。
+2. 若检测到自定义视觉词汇，检查是否有图例元素。
+3. 若存在自定义词汇但无图例，则标记。
+
+### 所需证据
+
+- 检测到的自定义视觉元素
+- 图例存在与否
+
+---
+
+## FA-VIS-009: 标题与元数据
+
+**严重级别**: MINOR
+**确定性**: 是
+
+### 描述
+
+图表应有标题或说明文字来标识所描述的流程。版本、日期、作者等元数据有助于追溯。
+
+### 事实类型: VISIBLE_FACT
+
+### 检查步骤
+
+1. 检查图表中是否有标题文本元素。
+2. 检查元数据注释（版本、日期、作者）。
+3. 若没有标题则标记。
+
+### 所需证据
+
+- 标题文本元素存在与否
+- 元数据注释情况
+
+---
+
+## FA-VIS-010: 最小元素间距
+
+**严重级别**: MINOR
+**确定性**: 否
+
+### 描述
+
+相邻元素必须有足够的间距以便视觉区分。重叠的元素会造成它们是独立还是合并的歧义。
+
+### 事实类型: VISIBLE_FACT（结构化格式）、INFERRED_RELATION（栅格格式）
+
+### 检查步骤
+
+1. 对每对元素，检查其边界框是否重叠。
+2. 标记重叠的元素。
+3. 对栅格格式，标记看起来接触或合并的元素。
+
+### 所需证据
+
+- 元素对标识符
+- 重叠面积或间距距离

@@ -8,9 +8,22 @@
  * - 同一 artifact 的块尽量在同一批次
  * - 单块超过 maxChars 时按自然段确定性切分并保留父 locator
  * - 生成稳定的批次 ID
+ * - 每个批次包含 context_budget 和 markdown_refs
  */
 
 import { createHash } from 'node:crypto';
+import { estimateTokens, assessBudget, buildContextBudget } from './context-budget.mjs';
+
+/**
+ * 将字符限转为 token 限
+ * 批次预算基准以中文字符表达（12,000 中文字符），转换为统一 token 估算：
+ * 对 maxChars 个纯中文字符使用 estimateTokens 得到 token 上限
+ */
+function charLimitToTokenLimit(maxChars) {
+  // 使用与 estimateTokens 相同的公式：ceil(汉字数/1.5)
+  // maxChars 以中文字符为单位，纯中文时 = ceil(maxChars / 1.5)
+  return Math.ceil(maxChars / 1.5);
+}
 
 /**
  * 构建证据批次
@@ -69,7 +82,7 @@ export function buildEvidenceBatches({ blocks, maxChars = 12000, maxBlocks = 12 
     } else {
       // 当前批次已满，开始新批次
       if (currentBatch.blocks.length > 0) {
-        batches.push(finalizeBatch(currentBatch));
+        batches.push(finalizeBatch(currentBatch, maxChars));
       }
 
       if (groupChars <= maxChars && group.length <= maxBlocks) {
@@ -87,7 +100,7 @@ export function buildEvidenceBatches({ blocks, maxChars = 12000, maxBlocks = 12 
 
   // 处理最后一个批次
   if (currentBatch.blocks.length > 0) {
-    batches.push(finalizeBatch(currentBatch));
+    batches.push(finalizeBatch(currentBatch, maxChars));
   }
 
   return batches;
@@ -132,50 +145,83 @@ function createEmptyBatch() {
 function createBatchFromBlocks(blocks, maxChars) {
   const totalChars = sumChars(blocks);
   const modalityMix = [...new Set(blocks.map(b => b.modality))];
+  const mappedBlocks = blocks.map(b => ({
+    block_id: b.block_id,
+    artifact_sha256: b.artifact_sha256,
+    source_format: b.source_format,
+    modality: b.modality,
+    locator: b.locator,
+    heading_path: b.heading_path,
+    content: b.content,
+    asset_ref: b.asset_ref,
+    content_sha256: b.content_sha256,
+  }));
+
+  const contentText = mappedBlocks.map(b => b.content || '').join('\n');
+  const budgetLimit = charLimitToTokenLimit(maxChars);
+  const contextBudget = buildContextBudget({
+    contentTexts: [contentText],
+    fixedTexts: [],
+    metadataTexts: [],
+    limit: budgetLimit,
+    sourceIds: mappedBlocks.map(b => b.block_id),
+  });
 
   return {
     batch_id: generateBatchId(blocks),
     batch_sha256: generateBatchHash(blocks),
-    blocks: blocks.map(b => ({
-      block_id: b.block_id,
-      artifact_sha256: b.artifact_sha256,
-      source_format: b.source_format,
-      modality: b.modality,
-      locator: b.locator,
-      heading_path: b.heading_path,
-      content: b.content,
-      asset_ref: b.asset_ref,
-      content_sha256: b.content_sha256,
-    })),
+    blocks: mappedBlocks,
     total_chars: totalChars,
     modality_mix: modalityMix,
     status: 'PENDING',
+    context_budget: contextBudget,
+    markdown_refs: [],
   };
 }
 
 /**
- * 完成批次（生成 ID 和哈希）
+ * 完成批次（生成 ID、哈希、context_budget 和 markdown_refs）
+ * @param {object} batch
+ * @param {number} maxChars - 字符限（用于转 token 限）
  */
-function finalizeBatch(batch) {
+function finalizeBatch(batch, maxChars = 12000) {
   const modalityMix = [...new Set(batch.blocks.map(b => b.modality))];
+  const blocks = batch.blocks.map(b => ({
+    block_id: b.block_id,
+    artifact_sha256: b.artifact_sha256,
+    source_format: b.source_format,
+    modality: b.modality,
+    locator: b.locator,
+    heading_path: b.heading_path,
+    content: b.content,
+    asset_ref: b.asset_ref,
+    content_sha256: b.content_sha256,
+  }));
+
+  // 构建 context_budget
+  const contentText = blocks.map(b => b.content || '').join('\n');
+  // 原始批次基准 12000 中文字符 → 转为 token 限
+  const budgetLimit = charLimitToTokenLimit(maxChars);
+  const contextBudget = buildContextBudget({
+    contentTexts: [contentText],
+    fixedTexts: [],
+    metadataTexts: [],
+    limit: budgetLimit,
+    sourceIds: blocks.map(b => b.block_id),
+  });
+
+  // markdown_refs: 每个块对应的归一化 Markdown 分片路径（由调用方填充）
+  const markdownRefs = batch.markdown_refs || [];
 
   return {
     batch_id: generateBatchId(batch.blocks),
     batch_sha256: generateBatchHash(batch.blocks),
-    blocks: batch.blocks.map(b => ({
-      block_id: b.block_id,
-      artifact_sha256: b.artifact_sha256,
-      source_format: b.source_format,
-      modality: b.modality,
-      locator: b.locator,
-      heading_path: b.heading_path,
-      content: b.content,
-      asset_ref: b.asset_ref,
-      content_sha256: b.content_sha256,
-    })),
+    blocks,
     total_chars: batch.total_chars,
     modality_mix: modalityMix,
     status: 'PENDING',
+    context_budget: contextBudget,
+    markdown_refs: markdownRefs,
   };
 }
 
@@ -196,7 +242,7 @@ function splitLargeGroup(blocks, maxChars, maxBlocks) {
       for (const frag of fragments) {
         if (currentBatch.blocks.length >= maxBlocks || currentBatch.total_chars + (frag.content?.length || 0) > maxChars) {
           if (currentBatch.blocks.length > 0) {
-            batches.push(finalizeBatch(currentBatch));
+            batches.push(finalizeBatch(currentBatch, maxChars));
           }
           currentBatch = createEmptyBatch();
         }
@@ -208,7 +254,7 @@ function splitLargeGroup(blocks, maxChars, maxBlocks) {
 
     if (currentBatch.blocks.length >= maxBlocks || currentBatch.total_chars + blockChars > maxChars) {
       if (currentBatch.blocks.length > 0) {
-        batches.push(finalizeBatch(currentBatch));
+        batches.push(finalizeBatch(currentBatch, maxChars));
       }
       currentBatch = createEmptyBatch();
     }
@@ -218,7 +264,7 @@ function splitLargeGroup(blocks, maxChars, maxBlocks) {
   }
 
   if (currentBatch.blocks.length > 0) {
-    batches.push(finalizeBatch(currentBatch));
+    batches.push(finalizeBatch(currentBatch, maxChars));
   }
 
   return batches;
@@ -258,11 +304,18 @@ function splitLargeBlock(block, maxChars) {
     fragments.push(createFragmentBlock(block, currentContent.trim(), offset));
   }
 
-  // 如果切分后仍有一个块超过 maxChars，按单行切分
+  // 如果切分后仍有一个块超过 maxChars，按单行切分；再不行则按字符兜底
   const result = [];
   for (const frag of fragments) {
     if ((frag.content?.length || 0) > maxChars) {
-      result.push(...splitByLines(frag, maxChars));
+      const lineSplit = splitByLines(frag, maxChars);
+      for (const lf of lineSplit) {
+        if ((lf.content?.length || 0) > maxChars) {
+          result.push(...splitByChars(lf, maxChars));
+        } else {
+          result.push(lf);
+        }
+      }
     } else {
       result.push(frag);
     }
@@ -299,6 +352,26 @@ function splitByLines(block, maxChars) {
   }
 
   return fragments;
+}
+
+/**
+ * 按字符数强制切分（最终兜底，处理无换行符的连续文本）
+ */
+function splitByChars(block, maxChars) {
+  const content = block.content || '';
+  const fragments = [];
+  let offset = 0;
+
+  while (offset < content.length) {
+    const end = Math.min(offset + maxChars, content.length);
+    const chunk = content.slice(offset, end);
+    if (chunk.length > 0) {
+      fragments.push(createFragmentBlock(block, chunk, offset));
+    }
+    offset = end;
+  }
+
+  return fragments.length > 0 ? fragments : [block];
 }
 
 /**

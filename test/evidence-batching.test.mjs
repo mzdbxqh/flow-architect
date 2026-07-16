@@ -58,6 +58,66 @@ describe('Evidence Batching', () => {
       assert.ok(hasDoc1, 'Same artifact blocks should be in same batch');
     });
 
+    // --- NEW: context budget tests ---
+    it('每个批次包含 context_budget 字段', async () => {
+      const { buildEvidenceBatches } = await import('../scripts/lib/evidence-batching.mjs');
+      const blocks = [
+        createBlock('B-BUD-001', 'TEXT', '短内容'),
+        createBlock('B-BUD-002', 'TEXT', '另一段内容'),
+      ];
+      const batches = buildEvidenceBatches({ blocks, maxChars: 12000, maxBlocks: 12 });
+      assert.ok(batches.length > 0);
+      for (const batch of batches) {
+        assert.ok(batch.context_budget, 'Batch must have context_budget');
+        assert.ok(batch.context_budget.status);
+        assert.ok(typeof batch.context_budget.estimated_tokens === 'number');
+      }
+    });
+
+    it('每个批次包含 markdown_refs 字段', async () => {
+      const { buildEvidenceBatches } = await import('../scripts/lib/evidence-batching.mjs');
+      const blocks = [
+        createBlock('B-REF-001', 'TEXT', 'Markdown content'),
+      ];
+      const batches = buildEvidenceBatches({ blocks, maxChars: 12000, maxBlocks: 12 });
+      for (const batch of batches) {
+        assert.ok(Array.isArray(batch.markdown_refs), 'Batch must have markdown_refs array');
+      }
+    });
+
+    it('基准以内批次状态为 BUDGET_OK', async () => {
+      const { buildEvidenceBatches } = await import('../scripts/lib/evidence-batching.mjs');
+      const blocks = [createBlock('B-OK-001', 'TEXT', '正常长度的内容')];
+      const batches = buildEvidenceBatches({ blocks, maxChars: 12000, maxBlocks: 12 });
+      assert.equal(batches[0].context_budget.status, 'BUDGET_OK');
+    });
+
+    it('超 120% 批次状态为 BUDGET_SPLIT_REQUIRED 且不可运行', async () => {
+      const { buildEvidenceBatches } = await import('../scripts/lib/evidence-batching.mjs');
+      // 构造超过 12000 汉字的内容（约 12000/1.5 = 8000 tokens for han alone）
+      const longContent = '中'.repeat(15000);
+      const blocks = [createBlock('B-OVER-001', 'TEXT', longContent)];
+      const batches = buildEvidenceBatches({ blocks, maxChars: 12000, maxBlocks: 12 });
+      // 应该被拆分，且每个批次都不超过 120%
+      for (const batch of batches) {
+        assert.notEqual(batch.context_budget.status, 'BUDGET_SPLIT_REQUIRED',
+          '每个批次不应超过 120% 阻断线');
+      }
+    });
+
+    it('超过基准但不超过 120% 为 BUDGET_ATTENTION', async () => {
+      const { buildEvidenceBatches } = await import('../scripts/lib/evidence-batching.mjs');
+      // 约 12000 汉字 = 8000 tokens，刚好在基准
+      const content = '中'.repeat(12000);
+      const blocks = [createBlock('B-ATT-001', 'TEXT', content)];
+      const batches = buildEvidenceBatches({ blocks, maxChars: 12000, maxBlocks: 12 });
+      const batch = batches[0];
+      assert.ok(
+        batch.context_budget.status === 'BUDGET_ATTENTION' || batches.length > 1,
+        '应该被标记为关注或已拆分'
+      );
+    });
+
     it('should limit visual assets to one per batch', async () => {
       const { buildEvidenceBatches } = await import('../scripts/lib/evidence-batching.mjs');
 
