@@ -180,12 +180,12 @@ describe('Process Draft Finalize Safe Publish', () => {
       const draftFile = JSON.parse(await readFile(join(runDir, 'final', 'process-draft.json'), 'utf8'));
       assert.equal(
         payload.metadata.process_id,
-        `Process_${draftFile.process_id}`,
+        `Process_${draftFile.process_card.process_id}`,
         'HTML payload 的 metadata.process_id 必须与 draft 一致'
       );
       assert.equal(
         payload.metadata.title,
-        draftFile.title,
+        draftFile.process_card.name,
         'HTML payload 的 metadata.title 必须与 draft 一致'
       );
     });
@@ -220,12 +220,23 @@ describe('Process Draft Finalize Safe Publish', () => {
       const result = await finalizeProcessDraft({ runDir, revision: 'r01' });
       const payload = extractMeetingPackageHtml(result.html);
       const model = extractBpmn(payload.bpmn_xml);
-      const elementIds = new Set(model.elements.map(e => e.element_id));
+
+      // V2: diagram.nodes, V1: elements
+      const nodes = model.diagram?.nodes || model.elements || [];
+      const elementIds = new Set(nodes.map(e => e.element_id || e.node_id));
       elementIds.add(payload.metadata.process_id);
 
       for (const q of payload.questions) {
-        for (const refId of q.element_ids) {
-          assert.ok(elementIds.has(refId), `问题 ${q.id} 引用的元素 ${refId} 应在 BPMN 中存在`);
+        for (const refId of q.target_paths) {
+          // V2 支持 Activity-xxxx → Task-xxxx 映射
+          let found = elementIds.has(refId);
+          if (!found && refId.startsWith('Activity-')) {
+            found = elementIds.has(refId.replace('Activity-', 'Task-'));
+          }
+          if (!found && refId.startsWith('Task-')) {
+            found = elementIds.has(refId.replace('Task-', 'Activity-'));
+          }
+          assert.ok(found, `问题 ${q.question_id} 引用的元素 ${refId} 应在 BPMN 中存在`);
         }
       }
     });
@@ -241,16 +252,17 @@ describe('Process Draft Finalize Safe Publish', () => {
       const questions = JSON.parse(
         await readFile(join(runDir, 'final', 'questions.json'), 'utf8')
       );
-      const questionIds = new Set(questions.map(q => q.id));
+      const questionIds = new Set(questions.map(q => q.question_id));
       const draft = JSON.parse(
         await readFile(join(runDir, 'final', 'process-draft.json'), 'utf8')
       );
 
-      for (const element of draft.elements) {
-        for (const qid of (element.question_ids || [])) {
+      // V2: 检查活动级别的 question_ids 反向引用
+      for (const activity of draft.activities) {
+        for (const qid of (activity.question_ids || [])) {
           assert.ok(
             questionIds.has(qid),
-            `元素 ${element.element_id} 引用的问题 ${qid} 应在 questions 中存在`
+            `活动 ${activity.activity_id} 引用的问题 ${qid} 应在 questions 中存在`
           );
         }
       }
@@ -401,135 +413,205 @@ async function createTestRunDir(runDir) {
     modality_mix: ['TEXT'],
   }));
 
-  // fragment（含双向引用）
-  const fragment = {
-    schema_version: '1.0.0',
-    batch_id: 'EB-001',
-    batch_sha256: 'c'.repeat(64),
-    facts: [
-      {
-        fact_id: 'F-001',
-        kind: 'ACTIVITY',
-        process_key: 'test',
-        subject_key: 'submit',
-        label: '提交申请',
-        attributes: { role: '申请人' },
-        certainty: 'EXPLICIT',
-        evidence_refs: ['B-001'],
-      },
-      {
-        fact_id: 'F-002',
-        kind: 'ACTIVITY',
-        process_key: 'test',
-        subject_key: 'review',
-        label: '审批申请',
-        attributes: { role: '审批人' },
-        certainty: 'EXPLICIT',
-        evidence_refs: ['B-001'],
-      },
-      {
-        fact_id: 'F-003',
-        kind: 'ROLE',
-        process_key: 'test',
-        subject_key: 'applicant',
-        label: '申请人',
-        attributes: {},
-        certainty: 'EXPLICIT',
-        evidence_refs: ['B-001'],
-      },
-      {
-        fact_id: 'F-004',
-        kind: 'ROLE',
-        process_key: 'test',
-        subject_key: 'reviewer',
-        label: '审批人',
-        attributes: {},
-        certainty: 'EXPLICIT',
-        evidence_refs: ['B-001'],
-      },
-    ],
-    uncertainties: [],
-  };
+  // V2 fragments (每个 batch 三个 task_kind)
+  const activityFacts = [
+    {
+      fact_id: 'F-001',
+      kind: 'ACTIVITY',
+      process_key: 'test',
+      subject_key: 'submit',
+      label: '提交申请',
+      attributes: { role: '申请人' },
+      certainty: 'EXPLICIT',
+      evidence_refs: ['B-001'],
+    },
+    {
+      fact_id: 'F-002',
+      kind: 'ACTIVITY',
+      process_key: 'test',
+      subject_key: 'review',
+      label: '审批申请',
+      attributes: { role: '审批人' },
+      certainty: 'EXPLICIT',
+      evidence_refs: ['B-001'],
+    },
+    {
+      fact_id: 'F-003',
+      kind: 'ROLE',
+      process_key: 'test',
+      subject_key: 'applicant',
+      label: '申请人',
+      attributes: {},
+      certainty: 'EXPLICIT',
+      evidence_refs: ['B-001'],
+    },
+    {
+      fact_id: 'F-004',
+      kind: 'ROLE',
+      process_key: 'test',
+      subject_key: 'reviewer',
+      label: '审批人',
+      attributes: {},
+      certainty: 'EXPLICIT',
+      evidence_refs: ['B-001'],
+    },
+  ];
 
-  await writeFile(
-    join(runDir, 'stages', 'semantic', 'fragments', 'EB-001.json'),
-    JSON.stringify(fragment, null, 2) + '\n'
-  );
+  const fragmentFragments = [
+    {
+      schema_version: '2.0.0',
+      batch_id: 'EB-001',
+      batch_sha256: 'c'.repeat(64),
+      task_kind: 'PROCESS_CARD',
+      payload: { facts: [], uncertainties: [] },
+    },
+    {
+      schema_version: '2.0.0',
+      batch_id: 'EB-001',
+      batch_sha256: 'c'.repeat(64),
+      task_kind: 'ACTIVITY_CATALOG',
+      payload: { facts: activityFacts, uncertainties: [] },
+    },
+    {
+      schema_version: '2.0.0',
+      batch_id: 'EB-001',
+      batch_sha256: 'c'.repeat(64),
+      task_kind: 'CONTROL_FLOW',
+      payload: {
+        facts: [{
+          fact_id: 'F-flow-001',
+          kind: 'FLOW',
+          process_key: 'test',
+          subject_key: 'flow-1',
+          label: '提交→审批',
+          attributes: { source: '提交申请', target: '审批申请' },
+          certainty: 'EXPLICIT',
+          evidence_refs: ['B-001'],
+        }],
+        uncertainties: [],
+      },
+    },
+  ];
 
-  // fragment sha256
-  const fragmentContent = JSON.stringify(fragment, null, 2) + '\n';
-  const fragmentSha256 = createHash('sha256').update(fragmentContent).digest('hex');
+  const queueEntries = [];
+  for (const fragment of fragmentFragments) {
+    const taskSuffixMap = { PROCESS_CARD: 'card', ACTIVITY_CATALOG: 'activity', CONTROL_FLOW: 'flow' };
+    const taskId = `EB-001-${taskSuffixMap[fragment.task_kind]}`;
+    const fragmentContent = JSON.stringify(fragment, null, 2) + '\n';
+    const fragmentSha256 = createHash('sha256').update(fragmentContent).digest('hex');
+
+    await writeFile(
+      join(runDir, 'stages', 'semantic', 'fragments', `${taskId}.json`),
+      fragmentContent
+    );
+
+    queueEntries.push({
+      batch_id: 'EB-001',
+      task_id: taskId,
+      task_kind: fragment.task_kind,
+      batch_sha256: 'c'.repeat(64),
+      status: 'ACCEPTED',
+      fragment_sha256: fragmentSha256,
+    });
+  }
 
   // queue
   await writeFile(join(runDir, 'stages', 'semantic', 'queue.json'), JSON.stringify({
     schema_version: '1.0.0',
-    batches: [{
-      batch_id: 'EB-001',
-      batch_sha256: 'c'.repeat(64),
-      total_chars: 100,
-      modality_mix: ['TEXT'],
-      block_count: 1,
-      status: 'ACCEPTED',
-      fragment_sha256: fragmentSha256,
-    }],
+    batches: queueEntries,
     total_batches: 1,
     total_blocks: 1,
   }));
 
-  // process-draft（element.question_ids ←→ question.element_ids 双向引用）
+  // process-draft（V2 格式，含双向 question↔element 引用）
   await writeFile(join(runDir, 'stages', 'merge', 'process-draft.json'), JSON.stringify({
-    title: '测试流程',
-    level: 'L5',
-    process_id: 'test',
-    boundary: { start: '开始', end: '结束' },
-    lanes: [
-      { lane_id: 'Lane-001', name: '申请人', org_candidates: [] },
-      { lane_id: 'Lane-002', name: '审批人', org_candidates: [] },
-    ],
-    elements: [
+    schema_version: '2.0.0',
+    process_card: {
+      process_id: 'test',
+      name: '测试流程',
+      level: 'L4',
+      is_leaf: true,
+      description: '测试流程',
+      purpose: '测试',
+      owner: 'Role-owner',
+      parent_process_name: null,
+      inputs: [],
+      outputs: [],
+      start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+      end_results: [{ event_id: 'End-1', name: '结束' }],
+      performance_indicators: [],
+    },
+    activities: [
       {
-        element_id: 'Activity-001',
-        kind: 'ACTIVITY',
+        activity_id: 'Activity-001',
         name: '提交申请',
-        lane_id: 'Lane-001',
+        description: '提交申请',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-001', responsibility: 'R' }],
+        sla: null,
+        tools: [],
         inputs: [],
+        process_summary: '',
         outputs: ['申请单'],
-        evidence_refs: ['B-001'],
-        certainty: 'EXPLICIT',
-        question_ids: [],
+        completion_criteria: [],
+        references: [],
+        main_task_id: 'Task-001',
+        confirmation: null,
+        completeness: 'COMPLETE',
       },
       {
-        element_id: 'Activity-002',
-        kind: 'ACTIVITY',
+        activity_id: 'Activity-002',
         name: '审批申请',
-        lane_id: 'Lane-002',
+        description: '审批申请',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-002', responsibility: 'R' }],
+        sla: null,
+        tools: [],
         inputs: ['申请单'],
+        process_summary: '',
         outputs: ['审批结果'],
-        evidence_refs: ['B-001'],
-        certainty: 'EXPLICIT',
-        question_ids: ['Q-001'],   // 反向引用：元素→问题
+        completion_criteria: [],
+        references: [],
+        main_task_id: 'Task-002',
+        confirmation: null,
+        completeness: 'COMPLETE',
       },
     ],
-    flows: [
-      {
-        flow_id: 'Flow-001',
-        source_ref: 'Activity-001',
-        target_ref: 'Activity-002',
-        condition: null,
-        evidence_refs: ['B-001'],
-      },
-    ],
+    diagram: {
+      lanes: [
+        { lane_id: 'Lane-001', name: '申请人', role_id: 'Role-001' },
+        { lane_id: 'Lane-002', name: '审批人', role_id: 'Role-002' },
+      ],
+      nodes: [
+        { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+        { node_id: 'Task-001', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-001' },
+        { node_id: 'Task-002', node_type: 'MAIN_TASK', name: '审批申请', lane_id: 'Lane-002' },
+        { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+      ],
+      flows: [
+        { flow_id: 'Flow-1', source_ref: 'Start-1', target_ref: 'Task-001', condition: null },
+        { flow_id: 'Flow-2', source_ref: 'Task-001', target_ref: 'Task-002', condition: null },
+        { flow_id: 'Flow-3', source_ref: 'Task-002', target_ref: 'End-1', condition: null },
+      ],
+      task_bindings: [
+        { activity_id: 'Activity-001', main_task_id: 'Task-001', confirmation_task_id: null },
+        { activity_id: 'Activity-002', main_task_id: 'Task-002', confirmation_task_id: null },
+      ],
+      layout_version: '2.0.0',
+    },
     questions: [
       {
         question_id: 'Q-001',
         text: '审批人是谁？',
-        element_ids: ['Activity-002'],   // 前向引用：问题→元素
+        target_paths: ['Task-002'],
         status: 'OPEN',
         answer: '',
         evidence_refs: ['B-001'],
       },
     ],
-    conflicts: [],
+    provenance: {},
     source_summary: {
       total_blocks: 1,
       formats: ['md'],

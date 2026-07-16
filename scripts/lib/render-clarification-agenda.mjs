@@ -7,31 +7,46 @@
 /**
  * 渲染澄清议题
  *
- * @param {object} draft - 流程草稿
+ * @param {object} draft - 流程草稿（V2 格式）
  * @returns {string} Markdown 格式的议题
  */
 export function renderClarificationAgenda(draft) {
+  if (draft.schema_version !== '2.0.0') {
+    throw new Error('仅支持 schema_version 2.0.0 的流程草稿');
+  }
+
   const lines = [];
 
+  // 只读取 V2 字段
+  const processName = draft.process_card.name;
+  const processId = draft.process_card.process_id;
+  const processLevel = draft.process_card.level;
+  const boundaryStart = draft.process_card.start?.name || '开始';
+  const boundaryEnd = draft.process_card.end_results?.map(e => e.name).join(', ') || '结束';
+  const diagramLanes = draft.diagram.lanes || [];
+  const diagramFlows = draft.diagram.flows || [];
+  const activities = draft.activities || [];
+  const questions = draft.questions || [];
+
   // 标题
-  lines.push(`# ${draft.title} - 待确认议题`);
+  lines.push(`# ${processName} - 待确认议题`);
   lines.push('');
-  lines.push(`流程 ID: ${draft.process_id}`);
-  lines.push(`层级: ${draft.level}`);
+  lines.push(`流程 ID: ${processId}`);
+  lines.push(`层级: ${processLevel}`);
   lines.push('');
 
   // 摘要
   lines.push('## 流程摘要');
   lines.push('');
-  lines.push(`- **边界**: ${draft.boundary.start} → ${draft.boundary.end}`);
-  lines.push(`- **泳道**: ${draft.lanes.map(l => l.name).join(', ')}`);
-  lines.push(`- **元素**: ${draft.elements.length} 个`);
-  lines.push(`- **流转**: ${draft.flows.length} 个`);
+  lines.push(`- **边界**: ${boundaryStart} → ${boundaryEnd}`);
+  lines.push(`- **泳道**: ${diagramLanes.map(l => l.name).join(', ')}`);
+  lines.push(`- **活动**: ${activities.length} 个`);
+  lines.push(`- **流转**: ${diagramFlows.length} 个`);
   lines.push('');
 
   // 待确认问题
-  const openQuestions = draft.questions.filter(q => q.status === 'OPEN');
-  const confirmedQuestions = draft.questions.filter(q => q.status === 'CONFIRMED');
+  const openQuestions = questions.filter(q => q.status === 'OPEN');
+  const confirmedQuestions = questions.filter(q => q.status === 'CONFIRMED');
 
   if (openQuestions.length > 0) {
     lines.push('## 待确认问题');
@@ -52,14 +67,20 @@ export function renderClarificationAgenda(draft) {
         lines.push(`**问题**: ${question.text}`);
         lines.push('');
 
-        if (question.element_ids.length > 0) {
-          const elementNames = question.element_ids
-            .map(id => {
-              const element = draft.elements.find(e => e.element_id === id);
-              return element ? element.name : id;
+        const targetPaths = question.target_paths || question.element_ids || [];
+        if (targetPaths.length > 0) {
+          const targetNames = targetPaths
+            .map(path => {
+              // 尝试从活动或图节点中查找名称
+              const activity = activities.find(a => (a.activity_id || a.element_id) === path);
+              if (activity) return activity.name;
+              const diagramNodes = draft.diagram?.nodes || [];
+              const node = diagramNodes.find(n => n.node_id === path);
+              if (node) return node.name;
+              return path;
             })
             .join(', ');
-          lines.push(`**关联元素**: ${elementNames}`);
+          lines.push(`**关联目标**: ${targetNames}`);
           lines.push('');
         }
 
@@ -88,41 +109,29 @@ export function renderClarificationAgenda(draft) {
     lines.push('');
   }
 
-  // 冲突
-  if (draft.conflicts.length > 0) {
-    lines.push('## 信息冲突');
-    lines.push('');
-
-    for (const conflict of draft.conflicts) {
-      lines.push(`### ${conflict.conflict_id}`);
-      lines.push('');
-      lines.push(conflict.description);
-      lines.push('');
-    }
-  }
-
-  // 不确定元素
-  const uncertainElements = draft.elements.filter(e =>
-    e.certainty !== 'EXPLICIT' && e.certainty !== 'NOT_APPLICABLE'
+  // 不确定活动
+  const uncertainActivities = activities.filter(a =>
+    a.completeness !== 'COMPLETE'
   );
 
-  if (uncertainElements.length > 0) {
-    lines.push('## 不确定元素');
+  if (uncertainActivities.length > 0) {
+    lines.push('## 不确定活动');
     lines.push('');
-    lines.push('以下元素的确定性状态需要确认：');
+    lines.push('以下活动的完整度状态需要确认：');
     lines.push('');
 
-    for (const element of uncertainElements) {
-      lines.push(`- **${element.name}** (${element.kind}): ${element.certainty}`);
+    for (const activity of uncertainActivities) {
+      lines.push(`- **${activity.name}**: ${activity.completeness}`);
     }
     lines.push('');
   }
 
   // 证据来源
+  const sourceSummary = draft.source_summary || { total_blocks: 0, formats: [] };
   lines.push('## 证据来源');
   lines.push('');
-  lines.push(`- 总证据块: ${draft.source_summary.total_blocks}`);
-  lines.push(`- 文件格式: ${draft.source_summary.formats.join(', ')}`);
+  lines.push(`- 总证据块: ${sourceSummary.total_blocks}`);
+  lines.push(`- 文件格式: ${(sourceSummary.formats || []).join(', ')}`);
   lines.push('');
 
   return lines.join('\n');

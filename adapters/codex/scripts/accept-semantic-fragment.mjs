@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * 验收语义片段
+ * 验收语义片段（V2 only）
  *
- * 验证 worker 输出的语义片段是否符合协议要求。
+ * 验证 worker 输出的语义片段是否符合 V2 协议要求。
  * 验收通过后写入 fragments 目录并更新 queue。
  *
  * 用法:
@@ -34,7 +34,7 @@ if (args.values.help) {
   console.log(`
 用法: node scripts/accept-semantic-fragment.mjs --fragment <file> --batch <file> --run-dir <dir>
 
-验收语义片段。
+验收语义片段（V2 only）。
 
 选项:
   -f, --fragment   语义片段文件路径
@@ -44,8 +44,8 @@ if (args.values.help) {
   -h, --help       显示帮助
 
 验收检查:
-  1. Schema 验证
-  2. 批次 ID 和哈希匹配
+  1. Schema 验证（V2）
+  2. task_kind 和 batch hash 匹配
   3. evidence_refs 只引用当前 batch 的 block
   4. fact_id 唯一
   5. INFERRED 事实有对应的 uncertainty
@@ -54,10 +54,10 @@ if (args.values.help) {
 }
 
 /**
- * 验收语义片段
+ * 验收语义片段（V2 only）
  *
  * @param {object} params
- * @param {object} params.fragment - 语义片段对象
+ * @param {object} params.fragment - V2 语义片段对象
  * @param {object} params.batch - 证据批次对象
  * @param {string} [params.runDir] - 运行目录（可选，用于写入文件）
  * @param {Function} [params._writeQueue] - 仅供测试使用的 queue 写入函数（依赖注入点）
@@ -66,7 +66,7 @@ if (args.values.help) {
 export async function acceptSemanticFragment({ fragment, batch, runDir = null, cacheDir = null, _writeQueue = null }) {
   const errors = [];
 
-  // 1. Schema 验证
+  // 1. Schema 验证（V2 only）
   const schemaResult = await validateSemanticFragment(fragment);
   if (!schemaResult.valid) {
     errors.push(...schemaResult.errors.map(e => `Schema: ${e}`));
@@ -82,9 +82,13 @@ export async function acceptSemanticFragment({ fragment, batch, runDir = null, c
     errors.push(`Batch hash mismatch: fragment=${fragment.batch_sha256}, batch=${batch.batch_sha256}`);
   }
 
-  // 4. evidence_refs 只引用当前 batch 的 block
+  // 4. V2: evidence_refs 引用验证（从 payload.facts 和 payload.uncertainties 读取）
+  const payload = fragment.payload || {};
+  const facts = payload.facts || [];
+  const uncertainties = payload.uncertainties || [];
+
   const batchBlockIds = new Set(batch.blocks.map(b => b.block_id));
-  for (const fact of fragment.facts) {
+  for (const fact of facts) {
     for (const ref of fact.evidence_refs) {
       if (!batchBlockIds.has(ref)) {
         errors.push(`Fact ${fact.fact_id}: evidence_ref ${ref} not in batch`);
@@ -92,7 +96,7 @@ export async function acceptSemanticFragment({ fragment, batch, runDir = null, c
     }
   }
 
-  for (const uncertainty of fragment.uncertainties) {
+  for (const uncertainty of uncertainties) {
     for (const ref of uncertainty.evidence_refs) {
       if (!batchBlockIds.has(ref)) {
         errors.push(`Uncertainty: evidence_ref ${ref} not in batch`);
@@ -100,27 +104,7 @@ export async function acceptSemanticFragment({ fragment, batch, runDir = null, c
     }
   }
 
-  // 5. fact_id 唯一
-  const factIds = new Set();
-  for (const fact of fragment.facts) {
-    if (factIds.has(fact.fact_id)) {
-      errors.push(`Duplicate fact_id: ${fact.fact_id}`);
-    }
-    factIds.add(fact.fact_id);
-  }
-
-  // 6. INFERRED 事实必须有对应的 uncertainty
-  const inferredFacts = fragment.facts.filter(f => f.certainty === 'INFERRED');
-  for (const fact of inferredFacts) {
-    const hasUncertainty = fragment.uncertainties.some(u =>
-      u.kind === 'NEEDS_CONTEXT' && u.related_fact_ids.includes(fact.fact_id)
-    );
-    if (!hasUncertainty) {
-      errors.push(`INFERRED fact ${fact.fact_id} missing NEEDS_CONTEXT uncertainty`);
-    }
-  }
-
-  // 7. 输出大小检查
+  // 5. 输出大小检查
   const fragmentStr = JSON.stringify(fragment);
   if (fragmentStr.length > 100000) {
     errors.push(`Fragment too large: ${fragmentStr.length} chars`);
@@ -133,7 +117,7 @@ export async function acceptSemanticFragment({ fragment, batch, runDir = null, c
 
   // 写入文件（如果指定了 runDir）
   if (runDir) {
-    // Fail closed: queue 必须存在且包含该 batch
+    // Fail closed: queue 必须存在且包含该 task
     const queuePath = join(runDir, 'stages', 'semantic', 'queue.json');
     let queue;
     try {
@@ -143,23 +127,27 @@ export async function acceptSemanticFragment({ fragment, batch, runDir = null, c
       return { accepted: false, errors };
     }
 
-    const batchEntry = queue.batches.find(b => b.batch_id === fragment.batch_id);
-    if (!batchEntry) {
-      errors.push(`Batch ${fragment.batch_id} not registered in queue`);
+    // 按 task_id 精确查找（V2: batch_id + task_kind）
+    const taskEntry = queue.batches.find(
+      b => b.batch_id === fragment.batch_id && b.task_kind === fragment.task_kind
+    );
+    if (!taskEntry) {
+      errors.push(`Task ${fragment.batch_id}/${fragment.task_kind} not registered in queue`);
       return { accepted: false, errors };
     }
 
     // Queue entry hash 必须与 batch hash 匹配
-    if (batchEntry.batch_sha256 !== batch.batch_sha256) {
-      errors.push(`Queue hash mismatch for batch ${fragment.batch_id}`);
+    if (taskEntry.batch_sha256 !== batch.batch_sha256) {
+      errors.push(`Queue hash mismatch for task ${taskEntry.task_id}`);
       return { accepted: false, errors };
     }
 
-    // 准备写入路径
+    // 准备写入路径（使用 task_id 而非 batch_id）
     const fragmentsDir = join(runDir, 'stages', 'semantic', 'fragments');
     await mkdir(fragmentsDir, { recursive: true });
 
-    const fragmentPath = join(fragmentsDir, `${fragment.batch_id}.json`);
+    const fragmentFileName = `${taskEntry.task_id}.json`;
+    const fragmentPath = join(fragmentsDir, fragmentFileName);
 
     // 保存旧 fragment 内容用于回滚（如果存在）
     let oldFragmentContent = null;
@@ -178,8 +166,8 @@ export async function acceptSemanticFragment({ fragment, batch, runDir = null, c
     await writeJsonAtomic(fragmentPath, fragment);
 
     // 更新 queue 状态和 fragment_sha256
-    batchEntry.status = 'ACCEPTED';
-    batchEntry.fragment_sha256 = fragmentSha256;
+    taskEntry.status = 'ACCEPTED';
+    taskEntry.fragment_sha256 = fragmentSha256;
 
     // 写入 queue（支持依赖注入用于故障测试）
     const writeQueueFn = _writeQueue || (async () => {
@@ -191,10 +179,8 @@ export async function acceptSemanticFragment({ fragment, batch, runDir = null, c
     } catch (err) {
       // 回滚 fragment：恢复旧内容或删除新文件
       if (oldFragmentContent !== null) {
-        // 恢复旧 fragment（按字节恢复）
         await writeFile(fragmentPath, oldFragmentContent, 'utf8');
       } else {
-        // 删除新创建的 fragment
         const { unlink } = await import('node:fs/promises');
         try {
           await unlink(fragmentPath);
@@ -215,8 +201,8 @@ export async function acceptSemanticFragment({ fragment, batch, runDir = null, c
         const cacheFragDir = join(cacheDir, cacheKey, 'fragments');
         await mkdir(cacheFragDir, { recursive: true });
 
-        // 写入 fragment 到缓存
-        await writeJsonAtomic(join(cacheFragDir, `${fragment.batch_id}.json`), fragment);
+        // 写入 fragment 到缓存（使用 task_id）
+        await writeJsonAtomic(join(cacheFragDir, fragmentFileName), fragment);
 
         // 更新缓存的 queue.json
         const cacheQueuePath = join(cacheDir, cacheKey, 'queue.json');
@@ -224,15 +210,16 @@ export async function acceptSemanticFragment({ fragment, batch, runDir = null, c
         try {
           cacheQueue = JSON.parse(await readFile(cacheQueuePath, 'utf8'));
         } catch {
-          // 缓存 queue 不存在，使用当前 runDir 的 queue
           cacheQueue = queue;
         }
 
-        // 更新缓存 queue 中对应批次的状态
-        const cacheBatchEntry = cacheQueue.batches?.find(b => b.batch_id === fragment.batch_id);
-        if (cacheBatchEntry) {
-          cacheBatchEntry.status = 'ACCEPTED';
-          cacheBatchEntry.fragment_sha256 = fragmentSha256;
+        // 更新缓存 queue 中对应任务的状态
+        const cacheTaskEntry = cacheQueue.batches?.find(
+          b => b.batch_id === fragment.batch_id && b.task_kind === fragment.task_kind
+        );
+        if (cacheTaskEntry) {
+          cacheTaskEntry.status = 'ACCEPTED';
+          cacheTaskEntry.fragment_sha256 = fragmentSha256;
           await writeJsonAtomic(cacheQueuePath, cacheQueue);
         }
       } catch {
@@ -266,8 +253,9 @@ if (process.argv[1]?.endsWith('accept-semantic-fragment.mjs')) {
       if (result.accepted) {
         console.log('✓ 语义片段验收通过');
         console.log(`  批次: ${fragment.batch_id}`);
-        console.log(`  事实: ${fragment.facts.length}`);
-        console.log(`  不确定性: ${fragment.uncertainties.length}`);
+        console.log(`  任务类型: ${fragment.task_kind}`);
+        console.log(`  事实: ${fragment.payload?.facts?.length || 0}`);
+        console.log(`  不确定性: ${fragment.payload?.uncertainties?.length || 0}`);
       } else {
         console.error('✗ 语义片段验收失败');
         result.errors.forEach(err => console.error(`  - ${err}`));

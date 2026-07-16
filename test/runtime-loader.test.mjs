@@ -83,7 +83,7 @@ test('插件本地精确版本优先于损坏缓存', async (t) => {
   await installReadyCache(pluginRoot, cacheDir, ['core']);
 
   // 损坏缓存中的 core 包
-  const coreNmDir = path.join(cacheDir, 'runtimes', '1.0.0', 'core', 'node_modules', 'fast-xml-parser');
+  const coreNmDir = path.join(cacheDir, 'runtimes', '2.0.0', 'core', 'node_modules', 'fast-xml-parser');
   if (fs.existsSync(coreNmDir)) {
     fs.writeFileSync(path.join(coreNmDir, 'index.js'), 'throw new Error("corrupted")');
   }
@@ -257,7 +257,7 @@ test('损坏的 state 文件导致缓存不被加载', async (t) => {
   t.after(() => fixture.cleanup?.());
 
   // 损坏 state 文件
-  const statePath = path.join(fixture.cacheDir, 'runtimes', '1.0.0', 'runtime-state.json');
+  const statePath = path.join(fixture.cacheDir, 'runtimes', '2.0.0', 'runtime-state.json');
   fs.writeFileSync(statePath, '{ invalid json !!!');
 
   const result = spawnSync(process.execPath, [
@@ -298,7 +298,7 @@ test('错误的 lock SHA 导致缓存不被加载', async (t) => {
   t.after(() => fixture.cleanup?.());
 
   // 修改 state 中的 lock SHA
-  const statePath = path.join(fixture.cacheDir, 'runtimes', '1.0.0', 'runtime-state.json');
+  const statePath = path.join(fixture.cacheDir, 'runtimes', '2.0.0', 'runtime-state.json');
   const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
   state.components.core.lock_sha256 = 'wrong-sha-' + '0'.repeat(54);
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
@@ -341,7 +341,7 @@ test('损坏的入口文件导致缓存不被加载', async (t) => {
   t.after(() => fixture.cleanup?.());
 
   // 损坏 fast-xml-parser 入口
-  const entryPath = path.join(fixture.cacheDir, 'runtimes', '1.0.0', 'core', 'node_modules', 'fast-xml-parser', 'index.js');
+  const entryPath = path.join(fixture.cacheDir, 'runtimes', '2.0.0', 'core', 'node_modules', 'fast-xml-parser', 'index.js');
   if (fs.existsSync(entryPath)) {
     fs.writeFileSync(entryPath, 'throw new Error("entry corrupted")');
   }
@@ -386,7 +386,7 @@ test('错误版本的包不被加载', async (t) => {
   t.after(() => fixture.cleanup?.());
 
   // 修改缓存中 fast-xml-parser 的 package.json 版本
-  const pkgJsonPath = path.join(fixture.cacheDir, 'runtimes', '1.0.0', 'core', 'node_modules', 'fast-xml-parser', 'package.json');
+  const pkgJsonPath = path.join(fixture.cacheDir, 'runtimes', '2.0.0', 'core', 'node_modules', 'fast-xml-parser', 'package.json');
   if (fs.existsSync(pkgJsonPath)) {
     const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
     pkg.version = '999.0.0'; // 错误版本

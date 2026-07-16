@@ -1,4 +1,5 @@
 import { requireRuntimePackage } from './lib/runtime-loader.mjs';
+import { normalizeBpmnXml } from './lib/bpmn-compiler.mjs';
 
 let _XMLParser;
 function getXMLParser() {
@@ -16,10 +17,25 @@ function getXMLParser() {
  * @returns {import('./types.mjs').DiagramModel} Structured diagram model.
  * @throws {Error} If XML contains DOCTYPE or ENTITY declarations (XXE attack).
  */
-export function extractBpmn(xml) {
+export function extractBpmn(xml, { activities = [], v2Mode = false } = {}) {
   // Security: reject any DOCTYPE or ENTITY declarations
   if (/<\s*!DOCTYPE/i.test(xml) || /<\s*!ENTITY/i.test(xml)) {
     throw new Error('BPMN input rejected: contains DOCTYPE or ENTITY declarations (XXE risk)');
+  }
+
+  // V2 格式检测：显式 V2 模式或 V2 marker
+  if (isV2Bpmn(xml, { v2Mode })) {
+    const { diagram, warnings } = normalizeBpmnXml(xml, { activities });
+    return {
+      schema_version: '2.0.0',
+      diagram,
+      metadata: {
+        parse_mode: 'V2_NORMALIZER',
+        source_format: 'bpmn',
+        confidence: warnings.length === 0 ? 0.95 : 0.7,
+        warnings,
+      },
+    };
   }
 
   const parser = new (getXMLParser())({
@@ -371,4 +387,22 @@ function numericObject(raw, keys) {
     result[key] = value;
   }
   return result;
+}
+
+/**
+ * 检测 BPMN XML 是否为 V2 格式
+ * V2 特征：包含中间事件或 linkEventDefinition（这些是 V2 独有的元素）
+ */
+function isV2Bpmn(xml, options = {}) {
+  // 显式 V2 模式
+  if (options.v2Mode === true) {
+    return true;
+  }
+
+  // 检查 V2 marker：exporter="Flow Architect" exporterVersion="2.0.0"
+  if (/exporter="Flow Architect"\s+exporterVersion="2\.0\.0"/.test(xml)) {
+    return true;
+  }
+
+  return false;
 }

@@ -92,20 +92,33 @@ test('多源材料经零 LLM CLI 流水线生成可复读的 L5 会议包', asyn
       evidence_refs: [evidenceRef],
     });
 
-    const fragment = {
-      schema_version: '1.0.0',
-      batch_id: batch.batch_id,
-      batch_sha256: batch.batch_sha256,
-      facts,
-      uncertainties: [],
+    // 为每个 batch 创建三个 task_kind 的 fragment
+    const taskKinds = ['PROCESS_CARD', 'ACTIVITY_CATALOG', 'CONTROL_FLOW'];
+    const taskSuffixMap = {
+      'PROCESS_CARD': 'card',
+      'ACTIVITY_CATALOG': 'activity',
+      'CONTROL_FLOW': 'flow',
     };
-    const fragmentPath = join(root, `${batch.batch_id}.fragment.json`);
-    await writeFile(fragmentPath, `${JSON.stringify(fragment, null, 2)}\n`);
-    await runScript('accept-semantic-fragment.mjs', [
-      '--fragment', fragmentPath,
-      '--batch', batchPath,
-      '--run-dir', runDir,
-    ]);
+    for (const taskKind of taskKinds) {
+      const taskId = `${batch.batch_id}-${taskSuffixMap[taskKind]}`;
+      const fragment = {
+        schema_version: '2.0.0',
+        batch_id: batch.batch_id,
+        batch_sha256: batch.batch_sha256,
+        task_kind: taskKind,
+        payload: {
+          facts: taskKind === 'ACTIVITY_CATALOG' ? facts : [],
+          uncertainties: [],
+        },
+      };
+      const fragmentPath = join(root, `${taskId}.fragment.json`);
+      await writeFile(fragmentPath, `${JSON.stringify(fragment, null, 2)}\n`);
+      await runScript('accept-semantic-fragment.mjs', [
+        '--fragment', fragmentPath,
+        '--batch', batchPath,
+        '--run-dir', runDir,
+      ]);
+    }
   }
 
   const acceptedQueue = JSON.parse(await readFile(join(runDir, 'stages', 'semantic', 'queue.json'), 'utf8'));
@@ -123,12 +136,20 @@ test('多源材料经零 LLM CLI 流水线生成可复读的 L5 会议包', asyn
   assert.ok(htmlName, 'finalize 必须生成 r01 HTML');
   const html = await readFile(join(finalDir, htmlName), 'utf8');
 
+  assert.equal(draft.schema_version, '2.0.0', 'Draft 必须是 V2');
+  assert.ok(draft.process_card, '应有流程卡片');
+  assert.ok(draft.activities, '应有活动一览表');
+  assert.ok(draft.diagram, '应有图模型');
   assert.ok(draft.questions.some(question => question.status === 'OPEN'), '缺少责任角色必须形成 OPEN 问题');
   assert.ok(questions.some(question => question.status === 'OPEN'));
 
-  const diagram = extractBpmn(bpmn);
-  assert.ok(diagram.elements.some(element => element.type === 'TASK'), '生成 BPMN 必须可由 extractBpmn 复读');
-  assert.ok(diagram.flows.length >= draft.elements.length, '开始/结束连接必须可复读');
+  const parsedDiagram = extractBpmn(bpmn);
+  // V2: diagram.nodes, V1: elements
+  const nodes = parsedDiagram.diagram?.nodes || parsedDiagram.elements || [];
+  const flows = parsedDiagram.diagram?.flows || parsedDiagram.flows || [];
+  assert.ok(nodes.some(n => n.type === 'TASK' || n.node_type === 'MAIN_TASK'), '生成 BPMN 必须可由 extractBpmn 复读');
+  // 至少应有开始→首活动和末活动→结束的流转
+  assert.ok(flows.length >= 2, '至少应有首尾流转');
 
   const payload = extractMeetingPackageHtml(html);
   assert.equal(payload.bpmn_xml, bpmn, 'HTML BPMN payload 必须与独立文件按字节一致');

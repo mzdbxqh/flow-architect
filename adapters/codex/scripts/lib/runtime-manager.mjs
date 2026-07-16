@@ -109,8 +109,8 @@ async function componentReadyFromDirAsync(dir, component) {
 
 // ─── 内部辅助：读取缓存状态 ────────────────────────────────────────────
 
-function readCacheState(cacheDir) {
-  const statePath = path.join(cacheDir, 'runtimes', '1.0.0', 'runtime-state.json');
+function readCacheState(cacheDir, runtimeVersion) {
+  const statePath = path.join(cacheDir, 'runtimes', runtimeVersion, 'runtime-state.json');
   try {
     if (!fs.existsSync(statePath)) return null;
     return JSON.parse(fs.readFileSync(statePath, 'utf8'));
@@ -119,7 +119,7 @@ function readCacheState(cacheDir) {
   }
 }
 
-function checkComponentCached(cacheDir, state, component) {
+function checkComponentCached(cacheDir, state, component, runtimeVersion) {
   if (!state || state._corrupted) {
     return {
       status: state?._corrupted ? 'CORRUPT' : 'MISSING',
@@ -133,7 +133,7 @@ function checkComponentCached(cacheDir, state, component) {
     return { status: 'MISSING', missing_packages: Object.keys(component.packages), source: 'cache' };
   }
 
-  const compDir = path.join(cacheDir, 'runtimes', '1.0.0', component.name);
+  const compDir = path.join(cacheDir, 'runtimes', runtimeVersion, component.name);
   if (!fs.existsSync(compDir)) {
     return { status: 'MISSING', missing_packages: Object.keys(component.packages), source: 'cache' };
   }
@@ -157,7 +157,8 @@ function checkComponentCached(cacheDir, state, component) {
 
 export function checkRuntime({ pluginRoot, cacheDir, env = {} }) {
   const manifest = readManifest(pluginRoot);
-  const state = readCacheState(cacheDir);
+  const runtimeVersion = manifest.runtime_version;
+  const state = readCacheState(cacheDir, runtimeVersion);
   const components = [];
 
   for (const component of manifest.components) {
@@ -170,7 +171,7 @@ export function checkRuntime({ pluginRoot, cacheDir, env = {} }) {
 
     // 2) 检查缓存（仅当状态文件完好时）
     if (state && !state._corrupted && state.components?.[component.name]?.status === 'READY') {
-      const cached = checkComponentCached(cacheDir, state, component);
+      const cached = checkComponentCached(cacheDir, state, component, runtimeVersion);
       components.push({ name: component.name, ...cached });
       continue;
     }
@@ -197,6 +198,7 @@ export function checkRuntime({ pluginRoot, cacheDir, env = {} }) {
 
 export function buildInstallPlan({ pluginRoot, cacheDir, components = ['core'], env = {} }) {
   const manifest = readManifest(pluginRoot);
+  const runtimeVersion = manifest.runtime_version;
   const manifestNames = manifest.components.map(c => c.name);
 
   // 校验组件名
@@ -226,8 +228,9 @@ export function buildInstallPlan({ pluginRoot, cacheDir, components = ['core'], 
   const plan = {
     plugin_root: pluginRoot,
     cache_dir: cacheDir,
+    runtime_version: runtimeVersion,
     components: planComponents,
-    temp_dir_pattern: path.join(cacheDir, 'runtimes', '1.0.0', '.tmp-XXXX'),
+    temp_dir_pattern: path.join(cacheDir, 'runtimes', runtimeVersion, '.tmp-XXXX'),
     registry: 'https://registry.npmjs.org/',
     npm_command: 'npm ci --omit=dev --omit=optional --ignore-scripts'
   };
@@ -278,9 +281,9 @@ export async function installRuntime(plan, options = {}) {
     });
   });
 
-  const { cache_dir: cacheDir, plugin_root: pluginRoot, components: planComponents } = plan;
-  const runtimesDir = path.join(cacheDir, 'runtimes', '1.0.0');
-  const lockFile = path.join(cacheDir, 'locks', 'runtime-1.0.0.lock');
+  const { cache_dir: cacheDir, plugin_root: pluginRoot, runtime_version: runtimeVersion, components: planComponents } = plan;
+  const runtimesDir = path.join(cacheDir, 'runtimes', runtimeVersion);
+  const lockFile = path.join(cacheDir, 'locks', `runtime-${runtimeVersion}.lock`);
 
   // 获取锁（并发保护）
   fs.mkdirSync(path.join(cacheDir, 'locks'), { recursive: true });
@@ -301,7 +304,7 @@ export async function installRuntime(plan, options = {}) {
 
   try {
     // 读取现有状态（幂等复用）
-    const existingState = readCacheState(cacheDir);
+    const existingState = readCacheState(cacheDir, runtimeVersion);
     const hasExisting = existingState && !existingState._corrupted;
 
     // 确定哪些组件需要安装
@@ -329,7 +332,7 @@ export async function installRuntime(plan, options = {}) {
 
     // 如果全部复用，直接返回（finally 统一释放锁）
     if (componentsToInstall.length === 0) {
-      return buildCheckResultFromExisting(cacheDir, pluginRoot, existingState);
+      return buildCheckResultFromExisting(cacheDir, pluginRoot, existingState, runtimeVersion);
     }
 
     // 确保 runtimesDir 存在
@@ -439,7 +442,7 @@ export async function installRuntime(plan, options = {}) {
     }
 
     const stateObj = {
-      runtime_version: '1.0.0',
+      runtime_version: runtimeVersion,
       plugin_compatibility: '>=0.1.2 <0.3.0',
       installed_at: timestamp,
       node_version: processInfo.nodeVersion || process.version,
@@ -453,7 +456,7 @@ export async function installRuntime(plan, options = {}) {
     ensureContained(runtimesDir, cacheDir);
 
     // 在提交 state 前构建返回结果，避免提交成功后再出现可回滚异常。
-    const result = buildCheckResultFromExisting(cacheDir, pluginRoot, { components: mergedComponents });
+    const result = buildCheckResultFromExisting(cacheDir, pluginRoot, { components: mergedComponents }, runtimeVersion);
 
     // 原子写入 state
     const stateTmp = path.join(runtimesDir, `.tmp-state-${Date.now()}.json`);
@@ -498,7 +501,8 @@ export async function installRuntime(plan, options = {}) {
 
 export function doctorRuntime({ pluginRoot, cacheDir, env = {}, processInfo = {} }) {
   const manifest = readManifest(pluginRoot);
-  const state = readCacheState(cacheDir);
+  const runtimeVersion = manifest.runtime_version;
+  const state = readCacheState(cacheDir, runtimeVersion);
   const components = [];
 
   for (const component of manifest.components) {
@@ -511,7 +515,7 @@ export function doctorRuntime({ pluginRoot, cacheDir, env = {}, processInfo = {}
 
     // 2) 检查缓存
     if (state && !state._corrupted && state.components?.[component.name]?.status === 'READY') {
-      const cached = checkComponentCached(cacheDir, state, component);
+      const cached = checkComponentCached(cacheDir, state, component, runtimeVersion);
       components.push({ name: component.name, status: cached.status, source: 'cache' });
       continue;
     }
@@ -534,11 +538,11 @@ export function doctorRuntime({ pluginRoot, cacheDir, env = {}, processInfo = {}
 
 // ─── 辅助：从已有状态构建 check 结果 ──────────────────────────────────
 
-function buildCheckResultFromExisting(cacheDir, pluginRoot, state) {
+function buildCheckResultFromExisting(cacheDir, pluginRoot, state, runtimeVersion) {
   const manifest = readManifest(pluginRoot);
   const components = [];
   for (const component of manifest.components) {
-    const cached = checkComponentCached(cacheDir, state, component);
+    const cached = checkComponentCached(cacheDir, state, component, runtimeVersion);
     components.push({ name: component.name, ...cached });
   }
   const coreOk = components.find(c => c.name === 'core')?.status === 'READY';

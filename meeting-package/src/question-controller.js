@@ -25,11 +25,11 @@ export class QuestionController {
     this.overlayIds = [];
     this.root.replaceChildren(...this.questions.map(q => this.#questionNode(q)));
     for (const q of this.questions.filter(q => q.status === 'OPEN')) {
-      for (const elementId of q.element_ids) {
+      for (const elementId of (q.target_paths || q.element_ids || [])) {
         if (!registry.get(elementId)) continue;
         this.overlayIds.push(overlays.add(elementId, 'fa-question', {
           position: { top: -10, right: -10 },
-          html: `<button type="button" class="fa-question-badge" data-overlay-question-id="${q.id}" aria-label="打开问题 ${q.id}">?</button>`,
+          html: `<button type="button" class="fa-question-badge" data-overlay-question-id="${q.question_id || q.id}" aria-label="打开问题 ${q.question_id || q.id}">?</button>`,
         }));
       }
     }
@@ -44,14 +44,15 @@ export class QuestionController {
   }
 
   selectQuestion(id) {
-    const q = this.questions.find(item => item.id === id);
+    const q = this.questions.find(item => (item.question_id || item.id) === id);
     if (!q) return;
     const canvas = this.modeler.get('canvas');
     const registry = this.modeler.get('elementRegistry');
     this.clearHighlights();
     document.querySelectorAll('[aria-current]').forEach(n => n.removeAttribute('aria-current'));
     document.querySelector(`[data-question-id="${CSS.escape(id)}"]`)?.setAttribute('aria-current', 'true');
-    const newHighlighted = q.element_ids.filter(elementId => registry.get(elementId));
+    const paths = q.target_paths || q.element_ids || [];
+    const newHighlighted = paths.filter(elementId => registry.get(elementId));
     for (const elementId of newHighlighted) {
       canvas.addMarker(elementId, 'fa-question-highlight');
     }
@@ -59,41 +60,42 @@ export class QuestionController {
   }
 
   setStatus(id, status) {
-    const q = this.questions.find(item => item.id === id);
+    const q = this.questions.find(item => (item.question_id || item.id) === id);
     q.status = status;
     this.onChange(this.questions);
     this.render();
   }
 
   setAnswer(id, answer) {
-    const q = this.questions.find(item => item.id === id);
+    const q = this.questions.find(item => (item.question_id || item.id) === id);
     q.answer = answer;
     this.onChange(this.questions);
   }
 
   addQuestion({ id, text, elementIds }) {
-    if (this.questions.some(q => q.id === id)) throw new Error(`问题 ID 已存在：${id}`);
-    this.questions.push({ id, text, element_ids: elementIds, status: 'OPEN', answer: '' });
+    if (this.questions.some(q => (q.question_id || q.id) === id)) throw new Error(`问题 ID 已存在：${id}`);
+    this.questions.push({ question_id: id, text, target_paths: elementIds, status: 'OPEN', answer: '' });
     this.onChange(this.questions);
     this.render();
   }
 
   #questionNode(q) {
+    const qid = q.question_id || q.id;
     const item = document.createElement('article');
-    item.dataset.questionId = q.id;
+    item.dataset.questionId = qid;
     const title = document.createElement('button');
     title.type = 'button';
-    title.textContent = `${q.id} ${q.text}`;
-    title.addEventListener('click', () => this.selectQuestion(q.id));
+    title.textContent = `${qid} ${q.text}`;
+    title.addEventListener('click', () => this.selectQuestion(qid));
     const answer = document.createElement('textarea');
     answer.value = q.answer;
-    answer.setAttribute('aria-label', `${q.id} 回答`);
+    answer.setAttribute('aria-label', `${qid} 回答`);
     answer.addEventListener('change', () => {
       q.answer = answer.value;
       this.onChange(this.questions);
     });
     const status = document.createElement('select');
-    status.setAttribute('aria-label', `${q.id} 状态`);
+    status.setAttribute('aria-label', `${qid} 状态`);
     for (const value of ['OPEN', 'CONFIRMED', 'NOT_APPLICABLE']) {
       const option = document.createElement('option');
       option.value = value;
@@ -101,7 +103,7 @@ export class QuestionController {
       option.selected = value === q.status;
       status.append(option);
     }
-    status.addEventListener('change', () => this.setStatus(q.id, status.value));
+    status.addEventListener('change', () => this.setStatus(qid, status.value));
     item.append(title, answer, status);
     return item;
   }

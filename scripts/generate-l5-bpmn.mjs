@@ -13,6 +13,7 @@ import { parseArgs } from 'node:util';
 import { readFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { generateL5Bpmn } from './lib/l5-bpmn-generator.mjs';
+import { compileBpmn } from './lib/bpmn-compiler.mjs';
 import { renderClarificationAgenda } from './lib/render-clarification-agenda.mjs';
 import { writeJsonAtomic } from './lib/atomic-json.mjs';
 
@@ -66,13 +67,23 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`  流程: ${draft.title}`);
-  console.log(`  元素: ${draft.elements.length}`);
-  console.log(`  问题: ${draft.questions.length}`);
+  const processName = draft.process_card?.name;
+  const elementCount = draft.activities?.length || 0;
+  const questionCount = draft.questions?.length || 0;
+  console.log(`  流程: ${processName}`);
+  console.log(`  元素: ${elementCount}`);
+  console.log(`  问题: ${questionCount}`);
 
-  // 2. 生成 BPMN
+  // 2. 生成 BPMN（仅支持 V2）
   console.log('\n生成 BPMN 2.0...');
-  const bpmn = generateL5Bpmn(draft);
+  if (draft.schema_version !== '2.0.0') {
+    console.error('错误: 仅支持 schema_version 2.0.0 的流程草稿');
+    process.exit(1);
+  }
+
+  const result = compileBpmn(draft);
+  const bpmn = result.xml;
+  console.log('  使用 V2 编译器');
   console.log(`  生成 ${bpmn.length} 字节的 BPMN XML`);
 
   // 3. 生成澄清议题

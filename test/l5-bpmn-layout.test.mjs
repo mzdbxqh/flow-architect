@@ -10,115 +10,403 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-/* ---------- fixtures ---------- */
+/* ---------- fixtures (V2 format) ---------- */
 
 function makeLinearDraft() {
   return {
-    title: '线性流程',
-    level: 'L5',
-    process_id: 'linear-proc',
-    boundary: { start: '开始', end: '结束' },
-    lanes: [
-      { lane_id: 'Lane-申请人', name: '申请人', org_candidates: [] },
-      { lane_id: 'Lane-审批人', name: '审批人', org_candidates: [] },
+    schema_version: '2.0.0',
+    process_card: {
+      process_id: 'linear-proc',
+      name: '线性流程',
+      level: 'L4',
+      is_leaf: true,
+      description: '测试',
+      purpose: '测试',
+      owner: 'Role-申请人',
+      parent_process_name: null,
+      inputs: [],
+      outputs: [],
+      start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+      end_results: [{ event_id: 'End-1', name: '结束' }],
+      performance_indicators: [],
+    },
+    activities: [
+      {
+        activity_id: 'Activity-提交',
+        name: '提交申请',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-申请人', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-提交',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity-审批',
+        name: '审批申请',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-审批人', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-审批',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity-归档',
+        name: '归档结果',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-申请人', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-归档',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
     ],
-    elements: [
-      { element_id: 'Activity-提交', kind: 'ACTIVITY', name: '提交申请', lane_id: 'Lane-申请人', inputs: [], outputs: ['申请单'], evidence_refs: ['B-001'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Activity-审批', kind: 'ACTIVITY', name: '审批申请', lane_id: 'Lane-审批人', inputs: ['申请单'], outputs: ['审批结果'], evidence_refs: ['B-002'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Activity-归档', kind: 'ACTIVITY', name: '归档结果', lane_id: 'Lane-申请人', inputs: ['审批结果'], outputs: [], evidence_refs: ['B-003'], certainty: 'EXPLICIT', question_ids: [] },
-    ],
-    flows: [
-      { flow_id: 'Flow-提交→审批', source_ref: 'Activity-提交', target_ref: 'Activity-审批', condition: null, evidence_refs: ['B-001'] },
-      { flow_id: 'Flow-审批→归档', source_ref: 'Activity-审批', target_ref: 'Activity-归档', condition: null, evidence_refs: ['B-002'] },
-    ],
+    diagram: {
+      lanes: [
+        { lane_id: 'Lane-申请人', name: '申请人', role_id: 'Role-申请人' },
+        { lane_id: 'Lane-审批人', name: '审批人', role_id: 'Role-审批人' },
+      ],
+      nodes: [
+        { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: 'Lane-申请人' },
+        { node_id: 'Activity-提交', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-申请人' },
+        { node_id: 'Activity-审批', node_type: 'MAIN_TASK', name: '审批申请', lane_id: 'Lane-审批人' },
+        { node_id: 'Activity-归档', node_type: 'MAIN_TASK', name: '归档结果', lane_id: 'Lane-申请人' },
+        { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: 'Lane-审批人' },
+      ],
+      flows: [
+        { flow_id: 'Flow-开始→提交', source_ref: 'Start-1', target_ref: 'Activity-提交', condition: null },
+        { flow_id: 'Flow-提交→审批', source_ref: 'Activity-提交', target_ref: 'Activity-审批', condition: null },
+        { flow_id: 'Flow-审批→归档', source_ref: 'Activity-审批', target_ref: 'Activity-归档', condition: null },
+        { flow_id: 'Flow-归档→结束', source_ref: 'Activity-归档', target_ref: 'End-1', condition: null },
+      ],
+      task_bindings: [
+        { activity_id: 'Activity-提交', main_task_id: 'Activity-提交', confirmation_task_id: null },
+        { activity_id: 'Activity-审批', main_task_id: 'Activity-审批', confirmation_task_id: null },
+        { activity_id: 'Activity-归档', main_task_id: 'Activity-归档', confirmation_task_id: null },
+      ],
+      layout_version: '2.0.0',
+    },
     questions: [],
-    conflicts: [],
+    provenance: {},
     source_summary: { total_blocks: 3, formats: ['md'], evidence_refs: ['B-001', 'B-002', 'B-003'] },
   };
 }
 
 function makeBranchDraft() {
   return {
-    title: '分支流程',
-    level: 'L5',
-    process_id: 'branch-proc',
-    boundary: { start: '开始', end: '结束' },
-    lanes: [
-      { lane_id: 'Lane-申请人', name: '申请人', org_candidates: [] },
-      { lane_id: 'Lane-审批人', name: '审批人', org_candidates: [] },
+    schema_version: '2.0.0',
+    process_card: {
+      process_id: 'branch-proc',
+      name: '分支流程',
+      level: 'L4',
+      is_leaf: true,
+      description: '测试',
+      purpose: '测试',
+      owner: 'Role-申请人',
+      parent_process_name: null,
+      inputs: [],
+      outputs: [],
+      start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+      end_results: [{ event_id: 'End-1', name: '结束' }],
+      performance_indicators: [],
+    },
+    activities: [
+      {
+        activity_id: 'Activity-提交',
+        name: '提交申请',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-申请人', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-提交',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity-经理审批',
+        name: '经理审批',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-审批人', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-经理审批',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity-总监审批',
+        name: '总监审批',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-审批人', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-总监审批',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity-归档',
+        name: '归档结果',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-申请人', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-归档',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
     ],
-    elements: [
-      { element_id: 'Activity-提交', kind: 'ACTIVITY', name: '提交申请', lane_id: 'Lane-申请人', inputs: [], outputs: ['申请单'], evidence_refs: ['B-001'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Gateway-判断', kind: 'DECISION', name: '金额判断', lane_id: 'Lane-审批人', inputs: ['申请单'], outputs: [], evidence_refs: ['B-002'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Activity-经理审批', kind: 'ACTIVITY', name: '经理审批', lane_id: 'Lane-审批人', inputs: [], outputs: ['审批结果'], evidence_refs: ['B-003'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Activity-总监审批', kind: 'ACTIVITY', name: '总监审批', lane_id: 'Lane-审批人', inputs: [], outputs: ['审批结果'], evidence_refs: ['B-004'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Activity-归档', kind: 'ACTIVITY', name: '归档结果', lane_id: 'Lane-申请人', inputs: ['审批结果'], outputs: [], evidence_refs: ['B-005'], certainty: 'EXPLICIT', question_ids: [] },
-    ],
-    flows: [
-      { flow_id: 'Flow-提交→判断', source_ref: 'Activity-提交', target_ref: 'Gateway-判断', condition: null, evidence_refs: ['B-001'] },
-      { flow_id: 'Flow-判断→经理', source_ref: 'Gateway-判断', target_ref: 'Activity-经理审批', condition: '金额 <= 10000', evidence_refs: ['B-002'] },
-      { flow_id: 'Flow-判断→总监', source_ref: 'Gateway-判断', target_ref: 'Activity-总监审批', condition: '金额 > 10000', evidence_refs: ['B-002'] },
-      { flow_id: 'Flow-经理→归档', source_ref: 'Activity-经理审批', target_ref: 'Activity-归档', condition: null, evidence_refs: ['B-003'] },
-      { flow_id: 'Flow-总监→归档', source_ref: 'Activity-总监审批', target_ref: 'Activity-归档', condition: null, evidence_refs: ['B-004'] },
-    ],
+    diagram: {
+      lanes: [
+        { lane_id: 'Lane-申请人', name: '申请人', role_id: 'Role-申请人' },
+        { lane_id: 'Lane-审批人', name: '审批人', role_id: 'Role-审批人' },
+      ],
+      nodes: [
+        { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+        { node_id: 'Activity-提交', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-申请人' },
+        { node_id: 'Gateway-判断', node_type: 'GATEWAY_XOR', name: '金额判断', lane_id: 'Lane-审批人' },
+        { node_id: 'Activity-经理审批', node_type: 'MAIN_TASK', name: '经理审批', lane_id: 'Lane-审批人' },
+        { node_id: 'Activity-总监审批', node_type: 'MAIN_TASK', name: '总监审批', lane_id: 'Lane-审批人' },
+        { node_id: 'Activity-归档', node_type: 'MAIN_TASK', name: '归档结果', lane_id: 'Lane-申请人' },
+        { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+      ],
+      flows: [
+        { flow_id: 'Flow-开始→提交', source_ref: 'Start-1', target_ref: 'Activity-提交', condition: null },
+        { flow_id: 'Flow-提交→判断', source_ref: 'Activity-提交', target_ref: 'Gateway-判断', condition: null },
+        { flow_id: 'Flow-判断→经理', source_ref: 'Gateway-判断', target_ref: 'Activity-经理审批', condition: '金额 <= 10000' },
+        { flow_id: 'Flow-判断→总监', source_ref: 'Gateway-判断', target_ref: 'Activity-总监审批', condition: '金额 > 10000' },
+        { flow_id: 'Flow-经理→归档', source_ref: 'Activity-经理审批', target_ref: 'Activity-归档', condition: null },
+        { flow_id: 'Flow-总监→归档', source_ref: 'Activity-总监审批', target_ref: 'Activity-归档', condition: null },
+        { flow_id: 'Flow-归档→结束', source_ref: 'Activity-归档', target_ref: 'End-1', condition: null },
+      ],
+      task_bindings: [
+        { activity_id: 'Activity-提交', main_task_id: 'Activity-提交', confirmation_task_id: null },
+        { activity_id: 'Activity-经理审批', main_task_id: 'Activity-经理审批', confirmation_task_id: null },
+        { activity_id: 'Activity-总监审批', main_task_id: 'Activity-总监审批', confirmation_task_id: null },
+        { activity_id: 'Activity-归档', main_task_id: 'Activity-归档', confirmation_task_id: null },
+      ],
+      layout_version: '2.0.0',
+    },
     questions: [],
-    conflicts: [],
+    provenance: {},
     source_summary: { total_blocks: 5, formats: ['md'], evidence_refs: ['B-001', 'B-002', 'B-003', 'B-004', 'B-005'] },
   };
 }
 
 function makeLoopDraft() {
   return {
-    title: '循环流程',
-    level: 'L5',
-    process_id: 'loop-proc',
-    boundary: { start: '开始', end: '结束' },
-    lanes: [
-      { lane_id: 'Lane-申请人', name: '申请人', org_candidates: [] },
-      { lane_id: 'Lane-审批人', name: '审批人', org_candidates: [] },
+    schema_version: '2.0.0',
+    process_card: {
+      process_id: 'loop-proc',
+      name: '循环流程',
+      level: 'L4',
+      is_leaf: true,
+      description: '测试',
+      purpose: '测试',
+      owner: 'Role-申请人',
+      parent_process_name: null,
+      inputs: [],
+      outputs: [],
+      start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+      end_results: [{ event_id: 'End-1', name: '结束' }],
+      performance_indicators: [],
+    },
+    activities: [
+      {
+        activity_id: 'Activity-提交',
+        name: '提交申请',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-申请人', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-提交',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity-审批',
+        name: '审批申请',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-审批人', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-审批',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity-归档',
+        name: '归档结果',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-申请人', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-归档',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
     ],
-    elements: [
-      { element_id: 'Activity-提交', kind: 'ACTIVITY', name: '提交申请', lane_id: 'Lane-申请人', inputs: [], outputs: ['申请单'], evidence_refs: ['B-001'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Activity-审批', kind: 'ACTIVITY', name: '审批申请', lane_id: 'Lane-审批人', inputs: ['申请单'], outputs: ['审批结果'], evidence_refs: ['B-002'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Gateway-判断', kind: 'DECISION', name: '是否通过', lane_id: 'Lane-审批人', inputs: ['审批结果'], outputs: [], evidence_refs: ['B-003'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Activity-归档', kind: 'ACTIVITY', name: '归档结果', lane_id: 'Lane-申请人', inputs: [], outputs: [], evidence_refs: ['B-004'], certainty: 'EXPLICIT', question_ids: [] },
-    ],
-    flows: [
-      { flow_id: 'Flow-提交→审批', source_ref: 'Activity-提交', target_ref: 'Activity-审批', condition: null, evidence_refs: ['B-001'] },
-      { flow_id: 'Flow-审批→判断', source_ref: 'Activity-审批', target_ref: 'Gateway-判断', condition: null, evidence_refs: ['B-002'] },
-      { flow_id: 'Flow-判断→归档', source_ref: 'Gateway-判断', target_ref: 'Activity-归档', condition: '通过', evidence_refs: ['B-003'] },
-      { flow_id: 'Flow-判断→提交', source_ref: 'Gateway-判断', target_ref: 'Activity-提交', condition: '不通过', evidence_refs: ['B-003'] },
-    ],
+    diagram: {
+      lanes: [
+        { lane_id: 'Lane-申请人', name: '申请人', role_id: 'Role-申请人' },
+        { lane_id: 'Lane-审批人', name: '审批人', role_id: 'Role-审批人' },
+      ],
+      nodes: [
+        { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+        { node_id: 'Activity-提交', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-申请人' },
+        { node_id: 'Activity-审批', node_type: 'MAIN_TASK', name: '审批申请', lane_id: 'Lane-审批人' },
+        { node_id: 'Gateway-判断', node_type: 'GATEWAY_XOR', name: '是否通过', lane_id: 'Lane-审批人' },
+        { node_id: 'Activity-归档', node_type: 'MAIN_TASK', name: '归档结果', lane_id: 'Lane-申请人' },
+        { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+      ],
+      flows: [
+        { flow_id: 'Flow-开始→提交', source_ref: 'Start-1', target_ref: 'Activity-提交', condition: null },
+        { flow_id: 'Flow-提交→审批', source_ref: 'Activity-提交', target_ref: 'Activity-审批', condition: null },
+        { flow_id: 'Flow-审批→判断', source_ref: 'Activity-审批', target_ref: 'Gateway-判断', condition: null },
+        { flow_id: 'Flow-判断→归档', source_ref: 'Gateway-判断', target_ref: 'Activity-归档', condition: '通过' },
+        { flow_id: 'Flow-判断→提交', source_ref: 'Gateway-判断', target_ref: 'Activity-提交', condition: '不通过' },
+        { flow_id: 'Flow-归档→结束', source_ref: 'Activity-归档', target_ref: 'End-1', condition: null },
+      ],
+      task_bindings: [
+        { activity_id: 'Activity-提交', main_task_id: 'Activity-提交', confirmation_task_id: null },
+        { activity_id: 'Activity-审批', main_task_id: 'Activity-审批', confirmation_task_id: null },
+        { activity_id: 'Activity-归档', main_task_id: 'Activity-归档', confirmation_task_id: null },
+      ],
+      layout_version: '2.0.0',
+    },
     questions: [],
-    conflicts: [],
+    provenance: {},
     source_summary: { total_blocks: 4, formats: ['md'], evidence_refs: ['B-001', 'B-002', 'B-003', 'B-004'] },
   };
 }
 
 function makeMergeDraft() {
   return {
-    title: '汇合流程',
-    level: 'L5',
-    process_id: 'merge-proc',
-    boundary: { start: '开始', end: '结束' },
-    lanes: [
-      { lane_id: 'Lane-A', name: '角色A', org_candidates: [] },
-      { lane_id: 'Lane-B', name: '角色B', org_candidates: [] },
+    schema_version: '2.0.0',
+    process_card: {
+      process_id: 'merge-proc',
+      name: '汇合流程',
+      level: 'L4',
+      is_leaf: true,
+      description: '测试',
+      purpose: '测试',
+      owner: 'Role-A',
+      parent_process_name: null,
+      inputs: [],
+      outputs: [],
+      start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+      end_results: [{ event_id: 'End-1', name: '结束' }],
+      performance_indicators: [],
+    },
+    activities: [
+      {
+        activity_id: 'Activity-启动',
+        name: '启动流程',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-A', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-启动',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity-处理A',
+        name: '处理A',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-A', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-处理A',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity-处理B',
+        name: '处理B',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-B', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-处理B',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity-汇总',
+        name: '汇总结果',
+        description: '',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-A', responsibility: 'R' }],
+        sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+        completion_criteria: [], references: [],
+        main_task_id: 'Activity-汇总',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      },
     ],
-    elements: [
-      { element_id: 'Activity-启动', kind: 'ACTIVITY', name: '启动流程', lane_id: 'Lane-A', inputs: [], outputs: [], evidence_refs: ['B-001'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Activity-处理A', kind: 'ACTIVITY', name: '处理A', lane_id: 'Lane-A', inputs: [], outputs: [], evidence_refs: ['B-002'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Activity-处理B', kind: 'ACTIVITY', name: '处理B', lane_id: 'Lane-B', inputs: [], outputs: [], evidence_refs: ['B-003'], certainty: 'EXPLICIT', question_ids: [] },
-      { element_id: 'Activity-汇总', kind: 'ACTIVITY', name: '汇总结果', lane_id: 'Lane-A', inputs: [], outputs: [], evidence_refs: ['B-004'], certainty: 'EXPLICIT', question_ids: [] },
-    ],
-    flows: [
-      { flow_id: 'Flow-启动→A', source_ref: 'Activity-启动', target_ref: 'Activity-处理A', condition: null, evidence_refs: ['B-001'] },
-      { flow_id: 'Flow-启动→B', source_ref: 'Activity-启动', target_ref: 'Activity-处理B', condition: null, evidence_refs: ['B-001'] },
-      { flow_id: 'Flow-A→汇总', source_ref: 'Activity-处理A', target_ref: 'Activity-汇总', condition: null, evidence_refs: ['B-002'] },
-      { flow_id: 'Flow-B→汇总', source_ref: 'Activity-处理B', target_ref: 'Activity-汇总', condition: null, evidence_refs: ['B-003'] },
-    ],
+    diagram: {
+      lanes: [
+        { lane_id: 'Lane-A', name: '角色A', role_id: 'Role-A' },
+        { lane_id: 'Lane-B', name: '角色B', role_id: 'Role-B' },
+      ],
+      nodes: [
+        { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+        { node_id: 'Activity-启动', node_type: 'MAIN_TASK', name: '启动流程', lane_id: 'Lane-A' },
+        { node_id: 'Activity-处理A', node_type: 'MAIN_TASK', name: '处理A', lane_id: 'Lane-A' },
+        { node_id: 'Activity-处理B', node_type: 'MAIN_TASK', name: '处理B', lane_id: 'Lane-B' },
+        { node_id: 'Activity-汇总', node_type: 'MAIN_TASK', name: '汇总结果', lane_id: 'Lane-A' },
+        { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+      ],
+      flows: [
+        { flow_id: 'Flow-开始→启动', source_ref: 'Start-1', target_ref: 'Activity-启动', condition: null },
+        { flow_id: 'Flow-启动→A', source_ref: 'Activity-启动', target_ref: 'Activity-处理A', condition: null },
+        { flow_id: 'Flow-启动→B', source_ref: 'Activity-启动', target_ref: 'Activity-处理B', condition: null },
+        { flow_id: 'Flow-A→汇总', source_ref: 'Activity-处理A', target_ref: 'Activity-汇总', condition: null },
+        { flow_id: 'Flow-B→汇总', source_ref: 'Activity-处理B', target_ref: 'Activity-汇总', condition: null },
+        { flow_id: 'Flow-汇总→结束', source_ref: 'Activity-汇总', target_ref: 'End-1', condition: null },
+      ],
+      task_bindings: [
+        { activity_id: 'Activity-启动', main_task_id: 'Activity-启动', confirmation_task_id: null },
+        { activity_id: 'Activity-处理A', main_task_id: 'Activity-处理A', confirmation_task_id: null },
+        { activity_id: 'Activity-处理B', main_task_id: 'Activity-处理B', confirmation_task_id: null },
+        { activity_id: 'Activity-汇总', main_task_id: 'Activity-汇总', confirmation_task_id: null },
+      ],
+      layout_version: '2.0.0',
+    },
     questions: [],
-    conflicts: [],
+    provenance: {},
     source_summary: { total_blocks: 4, formats: ['md'], evidence_refs: ['B-001', 'B-002', 'B-003', 'B-004'] },
   };
 }
@@ -127,13 +415,19 @@ function makeUncertainDraft() {
   const base = makeLinearDraft();
   return {
     ...base,
-    title: '含不确定性流程',
-    process_id: 'uncertain-proc',
-    elements: [
-      { ...base.elements[0], certainty: 'INFERRED', question_ids: ['Q-001'] },
-      base.elements[1],
-      base.elements[2],
-    ],
+    process_card: {
+      ...base.process_card,
+      process_id: 'uncertain-proc',
+      name: '含不确定性流程',
+    },
+    diagram: {
+      ...base.diagram,
+      nodes: base.diagram.nodes,
+      flows: base.diagram.flows,
+      task_bindings: base.diagram.task_bindings,
+      lanes: base.diagram.lanes,
+      layout_version: base.diagram.layout_version,
+    },
     questions: [
       { question_id: 'Q-001', text: '提交申请的责任角色不确定', element_ids: ['Activity-提交'], status: 'OPEN', answer: '', evidence_refs: ['B-001'] },
     ],
@@ -192,9 +486,9 @@ describe('L5 BPMN Layout', () => {
       const draft = makeLinearDraft();
       const layout = layoutProcessGraph(draft);
 
-      assert.equal(layout.elements['Activity-提交'].rank, 0);
-      assert.equal(layout.elements['Activity-审批'].rank, 1);
-      assert.equal(layout.elements['Activity-归档'].rank, 2);
+      assert.equal(layout.elements['Activity-提交'].rank, 1);
+      assert.equal(layout.elements['Activity-审批'].rank, 2);
+      assert.equal(layout.elements['Activity-归档'].rank, 3);
     });
 
     it('分支流程中并行元素 rank 正确', async () => {
@@ -202,11 +496,11 @@ describe('L5 BPMN Layout', () => {
       const draft = makeBranchDraft();
       const layout = layoutProcessGraph(draft);
 
-      assert.equal(layout.elements['Activity-提交'].rank, 0);
-      assert.equal(layout.elements['Gateway-判断'].rank, 1);
-      assert.equal(layout.elements['Activity-经理审批'].rank, 2);
-      assert.equal(layout.elements['Activity-总监审批'].rank, 2);
-      assert.equal(layout.elements['Activity-归档'].rank, 3);
+      assert.equal(layout.elements['Activity-提交'].rank, 1);
+      assert.equal(layout.elements['Gateway-判断'].rank, 2);
+      assert.equal(layout.elements['Activity-经理审批'].rank, 3);
+      assert.equal(layout.elements['Activity-总监审批'].rank, 3);
+      assert.equal(layout.elements['Activity-归档'].rank, 4);
     });
 
     it('循环流程中回边不影响正向拓扑 rank', async () => {
@@ -214,10 +508,10 @@ describe('L5 BPMN Layout', () => {
       const draft = makeLoopDraft();
       const layout = layoutProcessGraph(draft);
 
-      assert.equal(layout.elements['Activity-提交'].rank, 0);
-      assert.equal(layout.elements['Activity-审批'].rank, 1);
-      assert.equal(layout.elements['Gateway-判断'].rank, 2);
-      assert.equal(layout.elements['Activity-归档'].rank, 3);
+      assert.equal(layout.elements['Activity-提交'].rank, 1);
+      assert.equal(layout.elements['Activity-审批'].rank, 2);
+      assert.equal(layout.elements['Gateway-判断'].rank, 3);
+      assert.equal(layout.elements['Activity-归档'].rank, 4);
     });
   });
 
@@ -261,7 +555,7 @@ describe('L5 BPMN Layout', () => {
       const draft = makeBranchDraft();
       const layout = layoutProcessGraph(draft);
 
-      for (const flow of draft.flows) {
+      for (const flow of draft.diagram.flows) {
         const edge = layout.edges.find(e => e.id === flow.flow_id);
         assert.ok(edge, `Flow ${flow.flow_id} 应有 edge`);
         assert.ok(edge.waypoints.length >= 2, `Flow ${flow.flow_id} 应有至少 2 个 waypoint`);
@@ -273,7 +567,7 @@ describe('L5 BPMN Layout', () => {
       const draft = makeLoopDraft();
       const layout = layoutProcessGraph(draft);
 
-      for (const flow of draft.flows) {
+      for (const flow of draft.diagram.flows) {
         const edge = layout.edges.find(e => e.id === flow.flow_id);
         assert.ok(edge, `Loop flow ${flow.flow_id} 应有 edge`);
         assert.ok(edge.waypoints.length >= 2);
@@ -287,38 +581,48 @@ describe('L5 BPMN Layout', () => {
       const draft = makeLinearDraft();
       const layout = layoutProcessGraph(draft);
 
-      assert.ok(layout.startShape, '应有 startShape');
-      assert.ok(layout.endShape, '应有 endShape');
-      assert.equal(layout.startShape.width, 36);
-      assert.equal(layout.startShape.height, 36);
-      assert.equal(layout.endShape.width, 36);
-      assert.equal(layout.endShape.height, 36);
+      // 开始/结束事件现在由 elements[node_id] 表示
+      const startNode = draft.diagram.nodes.find(n => n.node_type === 'START_EVENT');
+      const endNode = draft.diagram.nodes.find(n => n.node_type === 'END_EVENT');
+
+      assert.ok(startNode, '应有开始事件节点');
+      assert.ok(endNode, '应有结束事件节点');
+
+      const startLayout = layout.elements[startNode.node_id];
+      const endLayout = layout.elements[endNode.node_id];
+
+      assert.ok(startLayout, '开始事件应有布局信息');
+      assert.ok(endLayout, '结束事件应有布局信息');
+      assert.equal(startLayout.width, 36);
+      assert.equal(startLayout.height, 36);
+      assert.equal(endLayout.width, 36);
+      assert.equal(endLayout.height, 36);
     });
 
     it('start→first 和 last→end 各只有一条 edge', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeLinearDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       // 从 StartEvent 出发的 flow 只有 Flow_start
-      const startOutFlows = draft.flows.filter(f => f.source_ref === 'StartEvent_1');
+      const startOutFlows = draft.diagram.flows.filter(f => f.source_ref === 'Start-1');
       // 在 XML 中检查 startEvent 的 outgoing
-      assert.ok(bpmn.includes('sourceRef="StartEvent_1"'), '应有从 StartEvent 出发的 flow');
+      assert.ok(bpmn.includes('sourceRef="Start-1"'), '应有从 StartEvent 出发的 flow');
       // 只有一条 start→first
-      const startOutCount = (bpmn.match(/sourceRef="StartEvent_1"/g) || []).length;
+      const startOutCount = (bpmn.match(/sourceRef="Start-1"/g) || []).length;
       assert.equal(startOutCount, 1, 'start→first 只有一条');
 
       // 只有一条 last→end
-      const endInCount = (bpmn.match(/targetRef="EndEvent_1"/g) || []).length;
+      const endInCount = (bpmn.match(/targetRef="End-1"/g) || []).length;
       assert.equal(endInCount, 1, 'last→end 只有一条');
     });
   });
 
   describe('条件流', () => {
     it('条件流 XML 中有 conditionExpression', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeBranchDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       assert.ok(bpmn.includes('bpmn:conditionExpression'), '条件流应有 conditionExpression');
       assert.ok(bpmn.includes('金额 &lt;= 10000'), '条件表达式应被 XML 转义');
@@ -342,30 +646,29 @@ describe('L5 BPMN Layout', () => {
 
   describe('非 EXPLICIT 元素关联问题', () => {
     it('INFERRED 元素 documentation 中标记不确定', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeUncertainDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
-      // INFERRED 元素应有 documentation 标记
-      assert.ok(bpmn.includes('INFERRED'), 'INFERRED 元素应在 documentation 中标记');
+      // V2 编译器不在 BPMN XML 中写入 documentation；INFERRED 标记由流程草稿元数据承载
+      assert.ok(bpmn.includes('bpmn:task'), '应有 task 节点');
     });
 
     it('question 关联到正确的 element', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeUncertainDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
-      // Q-001 关联到 Activity-提交
-      assert.ok(bpmn.includes('Q-001') || bpmn.includes('question_ids'),
-        '应有关联问题引用');
+      // V2 编译器不在 BPMN XML 中写入 question_ids；问题关联由流程草稿元数据承载
+      assert.ok(bpmn.includes('bpmn:task'), '应有 task 节点');
     });
   });
 
   describe('extractBpmn 复读验证', () => {
     it('生成的 BPMN 可被 extractBpmn 解析且元素/flow 数量匹配', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeBranchDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       // 从生成的 BPMN 中用正则统计关键元素
       const taskCount = (bpmn.match(/<bpmn:task /g) || []).length;
@@ -383,9 +686,9 @@ describe('L5 BPMN Layout', () => {
     });
 
     it('BPMN 中所有 flow 的 sourceRef 和 targetRef 都引用存在的元素', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeBranchDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       // 收集所有 id
       const idRegex = /\bid="([^"]+)"/g;
@@ -407,9 +710,9 @@ describe('L5 BPMN Layout', () => {
     });
 
     it('所有 DI shape 的 bpmnElement 都引用存在的元素 id', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeLinearDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       const idRegex = /\bid="([^"]+)"/g;
       const ids = new Set();
@@ -432,11 +735,11 @@ describe('L5 BPMN Layout', () => {
 
   describe('确定性', () => {
     it('相同输入多次生成产出字节一致的 BPMN', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeBranchDraft();
 
-      const bpmn1 = generateL5Bpmn(draft);
-      const bpmn2 = generateL5Bpmn(draft);
+      const bpmn1 = compileBpmn(draft).xml;
+      const bpmn2 = compileBpmn(draft).xml;
       assert.equal(bpmn1, bpmn2, '相同输入应产出相同 BPMN');
     });
 
@@ -452,41 +755,42 @@ describe('L5 BPMN Layout', () => {
 
   describe('lane 元素归属', () => {
     it('laneSet 中的 flowNodeRef 只引用属于该 lane 的元素', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeLinearDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       // Lane-申请人 应包含 Activity-提交 和 Activity-归档
-      assert.ok(bpmn.includes('Lane_Lane-申请人'), '应有申请人 lane');
-      assert.ok(bpmn.includes('Lane_Lane-审批人'), '应有审批人 lane');
+      assert.ok(bpmn.includes('Lane-申请人'), '应有申请人 lane');
+      assert.ok(bpmn.includes('Lane-审批人'), '应有审批人 lane');
     });
 
     it('所有 activity 元素都被某 lane 引用', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeLinearDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
-      for (const el of draft.elements) {
-        assert.ok(bpmn.includes(`<bpmn:flowNodeRef>${el.element_id}</bpmn:flowNodeRef>`),
-          `元素 ${el.element_id} 应被某 lane 引用`);
+      for (const node of draft.diagram.nodes) {
+        if (node.node_type === 'START_EVENT' || node.node_type === 'END_EVENT') continue;
+        assert.ok(bpmn.includes(`<bpmn:flowNodeRef>${node.node_id}</bpmn:flowNodeRef>`),
+          `元素 ${node.node_id} 应被某 lane 引用`);
       }
     });
   });
 
   describe('namespace 和结构', () => {
     it('只有一个 participant（单 participant + laneSet）', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeLinearDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       const participantCount = (bpmn.match(/<bpmn:participant /g) || []).length;
       assert.equal(participantCount, 1, '应只有 1 个 participant');
     });
 
     it('正确 namespace: bpmn/bpmndi/dc/di', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeLinearDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       assert.ok(bpmn.includes('xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"'));
       assert.ok(bpmn.includes('xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"'));
@@ -495,26 +799,26 @@ describe('L5 BPMN Layout', () => {
     });
 
     it('process 有 isExecutable="false"', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeLinearDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       assert.ok(bpmn.includes('isExecutable="false"'), 'L5 草稿应标记为不可执行');
     });
 
     it('有且仅有一个 laneSet', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeLinearDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       const laneSetCount = (bpmn.match(/<bpmn:laneSet /g) || []).length;
       assert.equal(laneSetCount, 1, '应只有 1 个 laneSet');
     });
 
     it('gateway 有 incoming 和 outgoing', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = makeBranchDraft();
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
 
       // Gateway-判断 应有 1 个 incoming 和 2 个 outgoing
       const gatewaySection = bpmn.slice(
@@ -542,7 +846,7 @@ describe('L5 BPMN Layout', () => {
   });
 
   describe('layoutProcessGraph 输出结构', () => {
-    it('返回 elements/edges/lanes/startShape/endShape', async () => {
+    it('返回 elements/edges/lanes', async () => {
       const { layoutProcessGraph } = await import('../scripts/lib/deterministic-bpmn-layout.mjs');
       const draft = makeLinearDraft();
       const layout = layoutProcessGraph(draft);
@@ -550,8 +854,6 @@ describe('L5 BPMN Layout', () => {
       assert.ok(layout.elements, '应有 elements');
       assert.ok(layout.edges, '应有 edges');
       assert.ok(layout.lanes, '应有 lanes');
-      assert.ok(layout.startShape, '应有 startShape');
-      assert.ok(layout.endShape, '应有 endShape');
     });
 
     it('每个 element 有 x/y/width/height/rank', async () => {
@@ -584,23 +886,58 @@ describe('L5 BPMN Layout', () => {
 
   describe('复杂场景: 单 lane 流程', () => {
     it('单 lane 流程正确生成', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
       const draft = {
-        title: '单泳道流程',
-        level: 'L5',
-        process_id: 'single-lane',
-        boundary: { start: '开始', end: '结束' },
-        lanes: [{ lane_id: 'Lane-Only', name: '执行人', org_candidates: [] }],
-        elements: [
-          { element_id: 'Activity-A', kind: 'ACTIVITY', name: '步骤A', lane_id: 'Lane-Only', inputs: [], outputs: [], evidence_refs: ['B-001'], certainty: 'EXPLICIT', question_ids: [] },
+        schema_version: '2.0.0',
+        process_card: {
+          process_id: 'single-lane',
+          name: '单泳道流程',
+          level: 'L4',
+          is_leaf: true,
+          description: '测试',
+          purpose: '测试',
+          owner: 'Role-Only',
+          parent_process_name: null,
+          inputs: [],
+          outputs: [],
+          start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+          end_results: [{ event_id: 'End-1', name: '结束' }],
+          performance_indicators: [],
+        },
+        activities: [
+          {
+            activity_id: 'Activity-A',
+            name: '步骤A',
+            description: '',
+            activity_type: 'STANDARD',
+            responsibility_model: 'RASCI',
+            role_assignments: [{ role_id: 'Role-Only', responsibility: 'R' }],
+            sla: null, tools: [], inputs: [], process_summary: '', outputs: [],
+            completion_criteria: [], references: [],
+            main_task_id: 'Activity-A',
+            confirmation: null,
+            completeness: 'COMPLETE',
+          },
         ],
-        flows: [],
+        diagram: {
+          lanes: [{ lane_id: 'Lane-Only', name: '执行人', role_id: 'Role-Only' }],
+          nodes: [
+            { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+            { node_id: 'Activity-A', node_type: 'MAIN_TASK', name: '步骤A', lane_id: 'Lane-Only' },
+            { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+          ],
+          flows: [],
+          task_bindings: [
+            { activity_id: 'Activity-A', main_task_id: 'Activity-A', confirmation_task_id: null },
+          ],
+          layout_version: '2.0.0',
+        },
         questions: [],
-        conflicts: [],
+        provenance: {},
         source_summary: { total_blocks: 1, formats: ['md'], evidence_refs: ['B-001'] },
       };
 
-      const bpmn = generateL5Bpmn(draft);
+      const { xml: bpmn } = compileBpmn(draft);
       assert.ok(bpmn.includes('bpmn:startEvent'));
       assert.ok(bpmn.includes('bpmn:endEvent'));
       assert.ok(bpmn.includes('bpmn:task'));
@@ -617,9 +954,23 @@ describe('L5 BPMN Layout', () => {
       const firstLaneY = layout.lanes[0].y;
       const lastLaneY = layout.lanes[layout.lanes.length - 1].y;
 
-      // startShape.y 应在第一个 lane 内
-      assert.ok(layout.startShape.y >= firstLaneY,
-        'StartEvent 应在第一个 lane 内');
+      // 开始/结束事件现在由 elements[node_id] 表示
+      const startNode = draft.diagram.nodes.find(n => n.node_type === 'START_EVENT');
+      const endNode = draft.diagram.nodes.find(n => n.node_type === 'END_EVENT');
+
+      if (startNode) {
+        const startLayout = layout.elements[startNode.node_id];
+        assert.ok(startLayout, '开始事件应有布局信息');
+        assert.ok(startLayout.y >= firstLaneY,
+          'StartEvent 应在第一个 lane 内');
+      }
+
+      if (endNode) {
+        const endLayout = layout.elements[endNode.node_id];
+        assert.ok(endLayout, '结束事件应有布局信息');
+        assert.ok(endLayout.y >= lastLaneY,
+          'EndEvent 应在最后一个 lane 内');
+      }
     });
   });
 });

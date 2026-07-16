@@ -1,15 +1,15 @@
 [
   {
-    "id": "Q-001",
+    "question_id": "Q-001",
     "text": "采购申请是否需要经理复核？",
-    "element_ids": ["Task_Review"],
+    "target_paths": ["Task_Review"],
     "status": "OPEN",
     "answer": ""
   },
   {
-    "id": "Q-002",
+    "question_id": "Q-002",
     "text": "超过多少金额需要额外审批？",
-    "element_ids": ["Task_Approve"],
+    "target_paths": ["Task_Approve"],
     "status": "OPEN",
     "answer": ""
   }

@@ -74,16 +74,29 @@ async function readBatches(runDir) {
 }
 
 /**
- * 为 batch 构造一个合法的 semantic fragment
+ * 为 batch 构造一个合法的 V2 semantic fragment
+ * @param {object} batch - 批次对象
+ * @param {string} taskKind - 任务类型 (PROCESS_CARD, ACTIVITY_CATALOG, CONTROL_FLOW)
  */
-function buildTestFragment(batch) {
+function buildTestFragment(batch, taskKind = 'PROCESS_CARD') {
   const blockIds = batch.blocks.map(b => b.block_id);
-  return {
-    schema_version: '1.0.0',
-    batch_id: batch.batch_id,
-    batch_sha256: batch.batch_sha256,
-    facts: [
-      {
+
+  const payloadByKind = {
+    PROCESS_CARD: {
+      facts: [{
+        fact_id: `F-${batch.batch_id}-card`,
+        kind: 'PROCESS_NAME',
+        process_key: 'test-process',
+        subject_key: 'process',
+        label: `流程-${batch.batch_id}`,
+        attributes: {},
+        certainty: 'EXPLICIT',
+        evidence_refs: [blockIds[0]],
+      }],
+      uncertainties: [],
+    },
+    ACTIVITY_CATALOG: {
+      facts: [{
         fact_id: `F-${batch.batch_id}-act`,
         kind: 'ACTIVITY',
         process_key: 'test-process',
@@ -92,19 +105,30 @@ function buildTestFragment(batch) {
         attributes: { role: '测试角色' },
         certainty: 'EXPLICIT',
         evidence_refs: [blockIds[0]],
-      },
-      {
-        fact_id: `F-${batch.batch_id}-role`,
-        kind: 'ROLE',
+      }],
+      uncertainties: [],
+    },
+    CONTROL_FLOW: {
+      facts: [{
+        fact_id: `F-${batch.batch_id}-flow`,
+        kind: 'FLOW',
         process_key: 'test-process',
-        subject_key: 'tester',
-        label: '测试角色',
+        subject_key: 'flow1',
+        label: `流程-${batch.batch_id}`,
         attributes: {},
         certainty: 'EXPLICIT',
         evidence_refs: [blockIds[0]],
-      },
-    ],
-    uncertainties: [],
+      }],
+      uncertainties: [],
+    },
+  };
+
+  return {
+    schema_version: '2.0.0',
+    task_kind: taskKind,
+    batch_id: batch.batch_id,
+    batch_sha256: batch.batch_sha256,
+    payload: payloadByKind[taskKind],
   };
 }
 
@@ -146,17 +170,22 @@ describe('缓存生命周期', () => {
         assert.equal(entry.status, 'PENDING', '第一次 prepare 后所有批次应为 PENDING');
       }
 
-      // ===== accept 每个 batch =====
+      // ===== accept 每个 batch 的 3 个 task_kind =====
       const batches1 = await readBatches(runDir1);
       for (const batch of batches1) {
-        const fragment = buildTestFragment(batch);
-        const result = await acceptFragment({
-          fragment,
-          batch,
-          runDir: runDir1,
-          cacheDir,
-        });
-        assert.ok(result.accepted, `batch ${batch.batch_id} 应验收通过`);
+        for (const taskKind of ['PROCESS_CARD', 'ACTIVITY_CATALOG', 'CONTROL_FLOW']) {
+          const fragment = buildTestFragment(batch, taskKind);
+          const result = await acceptFragment({
+            fragment,
+            batch,
+            runDir: runDir1,
+            cacheDir,
+          });
+          if (!result.accepted) {
+            console.error(`验收失败 batch ${batch.batch_id} task ${taskKind}:`, result.errors);
+          }
+          assert.ok(result.accepted, `batch ${batch.batch_id} task ${taskKind} 应验收通过`);
+        }
       }
 
       // 验证 accept 后 queue 全部 ACCEPTED
@@ -185,19 +214,23 @@ describe('缓存生命周期', () => {
         assert.ok(entry.fragment_sha256, `batch ${entry.batch_id} 应保留 fragment_sha256`);
       }
 
-      // 核心断言：fragment 文件应存在于第二次 runDir
+      // 核心断言：fragment 文件应存在于第二次 runDir（每个 batch 3 个 task）
       for (const batch of batches1) {
-        const fragPath = join(runDir2, 'stages', 'semantic', 'fragments', `${batch.batch_id}.json`);
-        const fragContent = await readFile(fragPath, 'utf8');
-        const frag = JSON.parse(fragContent);
-        assert.equal(frag.batch_id, batch.batch_id, 'fragment batch_id 应匹配');
-        assert.equal(frag.batch_sha256, batch.batch_sha256, 'fragment batch_sha256 应匹配');
+        for (const taskKind of ['PROCESS_CARD', 'ACTIVITY_CATALOG', 'CONTROL_FLOW']) {
+          const taskSuffix = { PROCESS_CARD: 'card', ACTIVITY_CATALOG: 'activity', CONTROL_FLOW: 'flow' }[taskKind];
+          const taskId = `${batch.batch_id}-${taskSuffix}`;
+          const fragPath = join(runDir2, 'stages', 'semantic', 'fragments', `${taskId}.json`);
+          const fragContent = await readFile(fragPath, 'utf8');
+          const frag = JSON.parse(fragContent);
+          assert.equal(frag.batch_id, batch.batch_id, 'fragment batch_id 应匹配');
+          assert.equal(frag.batch_sha256, batch.batch_sha256, 'fragment batch_sha256 应匹配');
 
-        // fragment_sha256 应与 queue 记录一致
-        const actualSha = createHash('sha256').update(fragContent).digest('hex');
-        const queueEntry = queue2.batches.find(b => b.batch_id === batch.batch_id);
-        assert.equal(actualSha, queueEntry.fragment_sha256,
-          `fragment 文件 SHA-256 应与 queue 记录一致`);
+          // fragment_sha256 应与 queue 记录一致
+          const actualSha = createHash('sha256').update(fragContent).digest('hex');
+          const queueEntry = queue2.batches.find(b => b.batch_id === batch.batch_id && b.task_kind === taskKind);
+          assert.equal(actualSha, queueEntry.fragment_sha256,
+            `fragment 文件 SHA-256 应与 queue 记录一致`);
+        }
       }
 
       // 核心断言：批次文件应存在于第二次 runDir（从缓存复制）
@@ -224,8 +257,10 @@ describe('缓存生命周期', () => {
       await runPrepare({ inputs: [inputFile], runDir: runDir1, cacheDir, title: '完整性测试' });
       const batches1 = await readBatches(runDir1);
       for (const batch of batches1) {
-        const fragment = buildTestFragment(batch);
-        await acceptFragment({ fragment, batch, runDir: runDir1, cacheDir });
+        for (const taskKind of ['PROCESS_CARD', 'ACTIVITY_CATALOG', 'CONTROL_FLOW']) {
+          const fragment = buildTestFragment(batch, taskKind);
+          await acceptFragment({ fragment, batch, runDir: runDir1, cacheDir });
+        }
       }
 
       // 第二次 prepare
@@ -267,8 +302,10 @@ describe('缓存生命周期', () => {
       }
 
       for (const batch of batches1) {
-        const fragment = buildTestFragment(batch);
-        await acceptFragment({ fragment, batch, runDir: runDir1, cacheDir });
+        for (const taskKind of ['PROCESS_CARD', 'ACTIVITY_CATALOG', 'CONTROL_FLOW']) {
+          const fragment = buildTestFragment(batch, taskKind);
+          await acceptFragment({ fragment, batch, runDir: runDir1, cacheDir });
+        }
       }
 
       // 篡改缓存中的第一个 batch 的 hash
@@ -284,17 +321,20 @@ describe('缓存生命周期', () => {
       await runPrepare({ inputs: [inputFile], runDir: runDir2, cacheDir, title: '多批次测试' });
 
       const queue2 = await readQueue(runDir2);
-      const tampered = queue2.batches.find(b => b.batch_id === cachedBatches[0].batch_id);
-      const others = queue2.batches.filter(b => b.batch_id !== cachedBatches[0].batch_id);
+      const tamperedBatchId = cachedBatches[0].batch_id;
+      const tamperedEntries = queue2.batches.filter(b => b.batch_id === tamperedBatchId);
+      const others = queue2.batches.filter(b => b.batch_id !== tamperedBatchId);
 
-      // 被篡改的批次应为 PENDING
-      assert.equal(tampered.status, 'PENDING',
-        `被篡改的批次 ${tampered.batch_id} 应回退为 PENDING`);
+      // 被篡改的批次的所有 task entry 应为 PENDING
+      for (const entry of tamperedEntries) {
+        assert.equal(entry.status, 'PENDING',
+          `被篡改的批次 ${entry.batch_id}/${entry.task_kind} 应回退为 PENDING`);
+      }
 
-      // 其他批次应仍为 CACHED
+      // 其他批次的所有 task entry 应仍为 CACHED
       for (const entry of others) {
         assert.equal(entry.status, 'CACHED',
-          `未篡改的批次 ${entry.batch_id} 应仍为 CACHED`);
+          `未篡改的批次 ${entry.batch_id}/${entry.task_kind} 应仍为 CACHED`);
       }
     });
 
@@ -320,32 +360,48 @@ describe('缓存生命周期', () => {
       if (batches1.length < 2) return;
 
       for (const batch of batches1) {
-        const fragment = buildTestFragment(batch);
-        await acceptFragment({ fragment, batch, runDir: runDir1, cacheDir });
+        for (const taskKind of ['PROCESS_CARD', 'ACTIVITY_CATALOG', 'CONTROL_FLOW']) {
+          const fragment = buildTestFragment(batch, taskKind);
+          await acceptFragment({ fragment, batch, runDir: runDir1, cacheDir });
+        }
       }
 
-      // 删除缓存中第一个 batch 的 fragment 文件
+      // 删除缓存中第一个 batch 的一个 fragment 文件
       const cacheKey = JSON.parse(
         await readFile(join(runDir1, 'input', 'cache-key.json'), 'utf8')
       ).cache_key;
       const fragDir = join(cacheDir, cacheKey, 'fragments');
       const targetBatch = batches1[0];
       const { unlink } = await import('node:fs/promises');
-      await unlink(join(fragDir, `${targetBatch.batch_id}.json`));
+      // 删除 PROCESS_CARD 类型的 fragment
+      await unlink(join(fragDir, `${targetBatch.batch_id}-card.json`));
 
       // 第二次 prepare
       await runPrepare({ inputs: [inputFile], runDir: runDir2, cacheDir, title: '缺失 fragment 测试' });
 
       const queue2 = await readQueue(runDir2);
-      const tampered = queue2.batches.find(b => b.batch_id === targetBatch.batch_id);
+      const targetCardEntry = queue2.batches.find(
+        b => b.batch_id === targetBatch.batch_id && b.task_kind === 'PROCESS_CARD'
+      );
+      const otherTargetEntries = queue2.batches.filter(
+        b => b.batch_id === targetBatch.batch_id && b.task_kind !== 'PROCESS_CARD'
+      );
       const others = queue2.batches.filter(b => b.batch_id !== targetBatch.batch_id);
 
-      assert.equal(tampered.status, 'PENDING',
-        'fragment 缺失的批次应回退为 PENDING');
+      // 被删除的 PROCESS_CARD entry 应为 PENDING
+      assert.equal(targetCardEntry.status, 'PENDING',
+        `fragment 缺失的 PROCESS_CARD 应回退为 PENDING`);
 
+      // 同 batch 的其他 task_kind 应仍为 CACHED（逐 task 独立回退）
+      for (const entry of otherTargetEntries) {
+        assert.equal(entry.status, 'CACHED',
+          `同 batch 的其他 task ${entry.task_kind} 应仍为 CACHED`);
+      }
+
+      // 其他批次的所有 task entry 应仍为 CACHED
       for (const entry of others) {
         assert.equal(entry.status, 'CACHED',
-          '其他批次应仍为 CACHED');
+          `其他批次 ${entry.batch_id}/${entry.task_kind} 应仍为 CACHED`);
       }
     });
   });
@@ -401,7 +457,7 @@ describe('缓存生命周期', () => {
 
       const batches = await readBatches(runDir);
       const batch = batches[0];
-      const fragment = buildTestFragment(batch);
+      const fragment = buildTestFragment(batch, 'PROCESS_CARD');
 
       // 验收，但 cacheDir 指向一个不可写的位置（模拟写回失败）
       const badCacheDir = join(testDir, 'nonexistent-deeply-nested', 'cache');
@@ -420,8 +476,8 @@ describe('缓存生命周期', () => {
       const entry = queue.batches.find(b => b.batch_id === batch.batch_id);
       assert.equal(entry.status, 'ACCEPTED', '本地 queue 应仍为 ACCEPTED');
 
-      // fragment 文件应存在
-      const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}.json`);
+      // fragment 文件应存在（task_id 为 batch_id-card）
+      const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}-card.json`);
       await stat(fragPath); // 不应抛出
     });
   });

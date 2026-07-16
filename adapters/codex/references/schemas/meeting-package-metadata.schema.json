@@ -4,7 +4,7 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+      "const": "2.0.0"
     },
     "package_id": {
       "type": "string",
@@ -28,7 +28,7 @@
     },
     "runtime_version": {
       "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+      "const": "2.0.0"
     },
     "content_hash": {
       "type": "string",

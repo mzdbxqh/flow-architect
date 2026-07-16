@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildMeetingPackageHtml, validateProcessId } from './lib/meeting-package-html.mjs';
+import { compileBpmn } from './lib/bpmn-compiler.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,7 +10,7 @@ const __dirname = path.dirname(__filename);
 function parseArgs(args) {
   const result = {};
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--bpmn' && args[i + 1]) result.bpmn = args[++i];
+    if (args[i] === '--draft' && args[i + 1]) result.draft = args[++i];
     else if (args[i] === '--questions' && args[i + 1]) result.questions = args[++i];
     else if (args[i] === '--title' && args[i + 1]) result.title = args[++i];
     else if (args[i] === '--revision' && args[i + 1]) result.revision = args[++i];
@@ -48,13 +49,13 @@ function validatePath(filePath, runDir) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-if (!args.bpmn || !args.questions || !args.title || !args.revision || !args.packageId || !args.runDir || !args.output) {
+if (!args.draft || !args.questions || !args.title || !args.revision || !args.packageId || !args.runDir || !args.output) {
   console.error(JSON.stringify({ status: 'FAILED', error: 'Missing required arguments' }));
   process.exit(1);
 }
 
 try {
-  const bpmnXml = fs.readFileSync(path.resolve(args.bpmn), 'utf8');
+  const draft = JSON.parse(fs.readFileSync(path.resolve(args.draft), 'utf8'));
   const questions = JSON.parse(fs.readFileSync(path.resolve(args.questions), 'utf8'));
 
   const runDir = path.resolve(args.runDir);
@@ -65,19 +66,29 @@ try {
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
-  const processId = validateProcessId(bpmnXml, args.processId || null);
+  const processId = args.processId || draft.process_card?.process_id || 'Process_1';
+
+  // 确保 draft 有 schema_version
+  if (!draft.schema_version) {
+    draft.schema_version = '2.0.0';
+  }
+
+  // 确保 draft 有问题
+  if (!draft.questions) {
+    draft.questions = questions;
+  }
+
+  const { xml: bpmnXml } = compileBpmn(draft);
 
   const html = buildMeetingPackageHtml({
+    draft,
     bpmnXml,
-    questions,
     metadata: {
-      schema_version: '1.0.0',
       package_id: args.packageId,
       process_id: processId,
       title: args.title,
       revision: args.revision,
       based_on_revision: null,
-      runtime_version: '1.0.0',
     },
   });
 

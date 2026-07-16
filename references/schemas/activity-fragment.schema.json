@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "activity-fragment",
+  "title": "Activity Fragment Payload",
+  "description": "L5 活动事实片段 payload，只包含 facts 和 uncertainties，不包含绘图或渲染字段",
+  "type": "object",
+  "required": ["facts", "uncertainties"],
+  "additionalProperties": false,
+  "properties": {
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fact_id", "kind", "process_key", "subject_key", "label", "attributes", "certainty", "evidence_refs"],
+        "additionalProperties": false,
+        "properties": {
+          "fact_id": { "type": "string", "pattern": "^F-[a-zA-Z0-9_-]+$" },
+          "kind": {
+            "type": "string",
+            "enum": ["ACTIVITY", "ROLE", "RESPONSIBILITY", "INPUT", "OUTPUT", "PROCESS", "SLA", "TOOL", "COMPLETION_CRITERIA", "REFERENCE", "CONFIRMATION_CONDITION"],
+            "description": "活动事实类型"
+          },
+          "process_key": { "type": "string", "minLength": 1 },
+          "subject_key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "attributes": { "type": "object" },
+          "certainty": {
+            "type": "string",
+            "enum": ["EXPLICIT", "INFERRED", "MISSING", "CONFLICT", "NOT_APPLICABLE"]
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" },
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "uncertainties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "text", "related_fact_ids", "evidence_refs"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "type": "string", "enum": ["MISSING", "CONFLICT", "AMBIGUOUS", "NEEDS_CONTEXT"] },
+          "text": { "type": "string", "minLength": 1 },
+          "related_fact_ids": { "type": "array", "items": { "type": "string", "pattern": "^F-[a-zA-Z0-9_-]+$" } },
+          "evidence_refs": { "type": "array", "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" } }
+        }
+      }
+    }
+  }
+}

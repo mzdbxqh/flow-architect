@@ -30,9 +30,10 @@ import { normalizeEvidenceToMarkdown } from './lib/markdown-normalizer.mjs';
  * 抽取器版本 — 缓存键的一部分
  */
 const EXTRACTOR_VERSION = '1.0.0';
-const BATCH_PROTOCOL_VERSION = '1.0.0';
+const BATCH_PROTOCOL_VERSION = '2.0.0';
 const NORMALIZER_VERSION = '1.0.0';
 const FORMULA_VERSION = '1.0.0';
+const FRAGMENT_TASK_KINDS = ['PROCESS_CARD', 'ACTIVITY_CATALOG', 'CONTROL_FLOW'];
 
 /**
  * 计算内容寻址缓存键
@@ -43,6 +44,7 @@ function computeCacheKey(inputHashes, batchParams) {
     protocol_version: BATCH_PROTOCOL_VERSION,
     normalizer_version: NORMALIZER_VERSION,
     formula_version: FORMULA_VERSION,
+    task_kinds: FRAGMENT_TASK_KINDS,
     input_hashes: inputHashes.sort(),
     batch_params: batchParams,
   };
@@ -95,14 +97,18 @@ async function checkCache({ cacheDir, cacheKey, batchParams }) {
       return { hit: false };
     }
 
-    // 重验每个批次的 hash 和 fragment 引用
-    const pollutedBatches = [];
+    // 重验每个批次的 hash 和 fragment 引用（逐 task_id 校验）
+    const pollutedTasks = [];
 
     for (const batch of batches) {
       // Schema 验证：确保批次符合 evidence-batch schema
       const schemaResult = await validateEvidenceBatch(batch);
       if (!schemaResult.valid) {
-        pollutedBatches.push({ batch_id: batch.batch_id, reason: 'schema_violation', errors: schemaResult.errors });
+        // batch 级别污染：影响该 batch 的所有 task
+        const relatedEntries = (queue.batches || []).filter(q => q.batch_id === batch.batch_id);
+        for (const entry of relatedEntries) {
+          pollutedTasks.push({ task_id: entry.task_id, batch_id: batch.batch_id, reason: 'schema_violation' });
+        }
         continue;
       }
 
@@ -110,35 +116,41 @@ async function checkCache({ cacheDir, cacheKey, batchParams }) {
       const contentHashes = batch.blocks.map(b => b.content_sha256).sort().join(',');
       const recomputedHash = createHash('sha256').update(contentHashes).digest('hex');
       if (recomputedHash !== batch.batch_sha256) {
-        pollutedBatches.push({ batch_id: batch.batch_id, reason: 'hash_mismatch' });
+        const relatedEntries = (queue.batches || []).filter(q => q.batch_id === batch.batch_id);
+        for (const entry of relatedEntries) {
+          pollutedTasks.push({ task_id: entry.task_id, batch_id: batch.batch_id, reason: 'hash_mismatch' });
+        }
         continue;
       }
 
-      // 验证 fragment 引用（如果队列中有对应 fragment）
-      const queueEntry = queue.batches?.find(q => q.batch_id === batch.batch_id);
-      if (queueEntry && queueEntry.status === 'ACCEPTED') {
-        const fragPath = join(cachePath, 'fragments', `${batch.batch_id}.json`);
+      // 逐 task_id 验证 fragment 引用（V2: 每个 task_kind 有独立 fragment 文件）
+      const taskEntries = (queue.batches || []).filter(q => q.batch_id === batch.batch_id && q.status === 'ACCEPTED');
+      for (const taskEntry of taskEntries) {
+        const fragPath = join(cachePath, 'fragments', `${taskEntry.task_id}.json`);
         try {
           const frag = JSON.parse(await readFile(fragPath, 'utf8'));
-          if (frag.batch_sha256 !== batch.batch_sha256) {
-            pollutedBatches.push({ batch_id: batch.batch_id, reason: 'fragment_hash_mismatch' });
+          const fragBatchId = frag.batch_id;
+          const fragBatchHash = frag.batch_sha256;
+          if (fragBatchId !== batch.batch_id || fragBatchHash !== batch.batch_sha256) {
+            pollutedTasks.push({ task_id: taskEntry.task_id, batch_id: batch.batch_id, reason: 'fragment_hash_mismatch' });
           }
         } catch {
           // Fragment 文件缺失，标记为需要重新处理
-          pollutedBatches.push({ batch_id: batch.batch_id, reason: 'fragment_missing' });
+          pollutedTasks.push({ task_id: taskEntry.task_id, batch_id: batch.batch_id, reason: 'fragment_missing' });
         }
       }
     }
 
-    // 如果有污染的批次，将它们回退到 PENDING
-    if (pollutedBatches.length > 0) {
-      for (const polluted of pollutedBatches) {
-        const queueEntry = queue.batches?.find(q => q.batch_id === polluted.batch_id);
+    // 如果有污染的任务，逐 task 回退到 PENDING（不影响同 batch 的其他 task）
+    if (pollutedTasks.length > 0) {
+      for (const polluted of pollutedTasks) {
+        const queueEntry = queue.batches?.find(q => q.task_id === polluted.task_id);
         if (queueEntry) {
           queueEntry.status = 'PENDING';
+          delete queueEntry.fragment_sha256;
         }
       }
-      console.log(`  缓存污染检测: ${pollutedBatches.length} 个批次回退到 PENDING`);
+      console.log(`  缓存污染检测: ${pollutedTasks.length} 个任务回退到 PENDING`);
     }
 
     return { hit: true, batches, queue };
@@ -510,25 +522,40 @@ async function main() {
   console.log('  ✓ batches/*.json');
   console.log('  ✓ context-budgets/*.json');
 
-  // 11. 生成队列
+  // 11. 生成队列（V2：每个 batch 生成三个 task_kind 任务）
   console.log('\n生成语义处理队列...');
+  const taskSuffixMap = {
+    'PROCESS_CARD': 'card',
+    'ACTIVITY_CATALOG': 'activity',
+    'CONTROL_FLOW': 'flow',
+  };
+  const queueEntries = [];
+  for (const b of batches) {
+    for (const kind of FRAGMENT_TASK_KINDS) {
+      queueEntries.push({
+        batch_id: b.batch_id,
+        task_kind: kind,
+        task_id: `${b.batch_id}-${taskSuffixMap[kind]}`,
+        batch_sha256: b.batch_sha256,
+        total_chars: b.total_chars,
+        modality_mix: b.modality_mix,
+        block_count: b.blocks.length,
+        status: b.context_budget?.split_required ? 'SPLIT_REQUIRED' : 'PENDING',
+        allowed_read_paths: [
+          `evidence/batches/${b.batch_id}.json`,
+          ...b.markdown_refs,
+        ],
+        markdown_refs: b.markdown_refs || [],
+        split_required: b.context_budget?.split_required || false,
+      });
+    }
+  }
+
   const queue = {
-    schema_version: '1.0.0',
-    batches: batches.map(b => ({
-      batch_id: b.batch_id,
-      batch_sha256: b.batch_sha256,
-      total_chars: b.total_chars,
-      modality_mix: b.modality_mix,
-      block_count: b.blocks.length,
-      status: b.context_budget?.split_required ? 'SPLIT_REQUIRED' : 'PENDING',
-      allowed_read_paths: [
-        `evidence/batches/${b.batch_id}.json`,
-        ...b.markdown_refs,
-      ],
-      markdown_refs: b.markdown_refs || [],
-      split_required: b.context_budget?.split_required || false,
-    })),
+    schema_version: '2.0.0',
+    batches: queueEntries,
     total_batches: batches.length,
+    total_tasks: queueEntries.length,
     total_blocks: allBlocks.length,
   };
 
@@ -544,6 +571,8 @@ async function main() {
       cache_key: cacheKey,
       extractor_version: EXTRACTOR_VERSION,
       protocol_version: BATCH_PROTOCOL_VERSION,
+      fragment_protocol_version: '2.0.0',
+      task_kinds: FRAGMENT_TASK_KINDS,
       batch_params: batchParams,
       input_hashes: inputHashes.map(i => i.sha256).sort(),
       created_at: new Date().toISOString(),
@@ -669,9 +698,10 @@ async function restoreRunDirFromCache({
 
   // 验证并复制 fragment，更新 queue 状态
   const updatedQueue = {
-    schema_version: '1.0.0',
+    schema_version: '2.0.0',
     batches: [],
     total_batches: cachedBatches.length,
+    total_tasks: cachedQueue.batches?.length || cachedBatches.length * 3,
     total_blocks: allBlockIds.size,
   };
 
@@ -683,8 +713,8 @@ async function restoreRunDirFromCache({
     const newEntry = { ...queueEntry };
 
     if (queueEntry.status === 'ACCEPTED') {
-      // 验证 fragment 完整性
-      const fragPath = join(cachedFragmentsDir, `${queueEntry.batch_id}.json`);
+      // 验证 fragment 完整性（V2: 使用 task_id 而非 batch_id 作为文件名）
+      const fragPath = join(cachedFragmentsDir, `${queueEntry.task_id}.json`);
       const batch = cachedBatches.find(b => b.batch_id === queueEntry.batch_id);
 
       let fragmentValid = false;
@@ -693,25 +723,36 @@ async function restoreRunDirFromCache({
         const frag = JSON.parse(fragContent);
         const actualSha = createHash('sha256').update(fragContent).digest('hex');
 
-        // 验证 fragment_sha256、batch_id、batch_sha256
+        // 验证 fragment_sha256、batch_id、batch_sha256、task_kind
         if (
           actualSha === queueEntry.fragment_sha256 &&
           frag.batch_id === queueEntry.batch_id &&
           frag.batch_sha256 === queueEntry.batch_sha256 &&
+          frag.task_kind === queueEntry.task_kind &&
           batch
         ) {
           // 验证 evidence_refs 只引用当前 batch 的 blocks
           const batchBlockIds = new Set(batch.blocks.map(b => b.block_id));
+          const facts = frag.payload?.facts || [];
+          const uncertainties = frag.payload?.uncertainties || [];
           let refsValid = true;
-          for (const fact of (frag.facts || [])) {
+          for (const fact of facts) {
             for (const ref of (fact.evidence_refs || [])) {
               if (!batchBlockIds.has(ref)) { refsValid = false; break; }
             }
             if (!refsValid) break;
           }
           if (refsValid) {
-            // 复制 fragment 到 runDir
-            await writeJsonAtomic(join(runDir, 'stages', 'semantic', 'fragments', `${queueEntry.batch_id}.json`), frag);
+            for (const unc of uncertainties) {
+              for (const ref of (unc.evidence_refs || [])) {
+                if (!batchBlockIds.has(ref)) { refsValid = false; break; }
+              }
+              if (!refsValid) break;
+            }
+          }
+          if (refsValid) {
+            // 复制 fragment 到 runDir（使用 task_id 文件名）
+            await writeJsonAtomic(join(runDir, 'stages', 'semantic', 'fragments', `${queueEntry.task_id}.json`), frag);
             newEntry.status = 'CACHED';
             copiedFragments++;
             fragmentValid = true;
@@ -722,11 +763,11 @@ async function restoreRunDirFromCache({
       }
 
       if (!fragmentValid) {
-        // 污染：回退到 PENDING，删除不可信的 fragment_sha256
+        // 污染：逐 task 回退到 PENDING，不影响同 batch 的其他 task
         newEntry.status = 'PENDING';
         delete newEntry.fragment_sha256;
         revertedToPending++;
-        warnings.push(`缓存污染: batch ${queueEntry.batch_id} 回退到 PENDING`);
+        warnings.push(`缓存污染: task ${queueEntry.task_id} 回退到 PENDING`);
       }
     }
     // PENDING 状态保持不变

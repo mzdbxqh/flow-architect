@@ -30,14 +30,21 @@ export async function mergeProcessFragments({ manifest, evidence, fragments, foc
     }
   }
 
-  // 1. 收集所有事实
+  // 1. 收集所有事实（支持 V1 和 V2 格式）
   const allFacts = [];
   const allUncertainties = [];
   const fragmentRefs = [];
 
   for (const fragment of fragments) {
-    allFacts.push(...fragment.facts);
-    allUncertainties.push(...fragment.uncertainties);
+    // V2 格式：task_kind + payload
+    if (fragment.task_kind && fragment.payload) {
+      allFacts.push(...(fragment.payload.facts || []));
+      allUncertainties.push(...(fragment.payload.uncertainties || []));
+    } else {
+      // V1 格式：直接 facts 和 uncertainties
+      allFacts.push(...(fragment.facts || []));
+      allUncertainties.push(...(fragment.uncertainties || []));
+    }
     fragmentRefs.push({
       batch_id: fragment.batch_id,
       batch_sha256: fragment.batch_sha256,
@@ -121,20 +128,154 @@ export async function mergeProcessFragments({ manifest, evidence, fragments, foc
     evidence_refs: f.evidence_refs,
   }));
 
-  // 13. 构建流程草稿
+  // 13. 构建 V2 流程草稿
+  const endEvents = findAllEndEvents(normalFacts);
+
+  // 预计算 process_card（供 diagram.nodes 引用 start/end IDs）
+  const startEventId = `Start-${stableHash('start').slice(0, 8)}`;
+  const startEventName = findBoundaryStart(elements, normalFacts);
+  const endResults = endEvents.length > 0 ? endEvents.map(event => ({
+    event_id: `End-${stableHash(event.fact_id).slice(0, 8)}`,
+    name: event.label,
+  })) : [{
+    event_id: `End-${stableHash('end').slice(0, 8)}`,
+    name: findBoundaryEnd(elements, normalFacts),
+  }];
+
+  // 计算首尾活动的 task_id（用于生成 start/end 流转）
+  const firstTaskId = elements.length > 0 ? `Task-${stableHash(elements[0].fact_id || elements[0].element_id).slice(0, 8)}` : null;
+  const lastTaskId = elements.length > 0 ? `Task-${stableHash(elements[elements.length - 1].fact_id || elements[elements.length - 1].element_id).slice(0, 8)}` : null;
+
+  const processCardRef = {
+    start: { event_id: startEventId, name: startEventName, event_type: 'NONE' },
+    end_results: endResults,
+  };
+
   const processDraft = {
-    title: manifest.title,
-    level: 'L5',
-    process_id: targetProcessKey,
-    boundary: {
-      start: findBoundaryStart(elements, normalFacts),
-      end: findBoundaryEnd(elements, normalFacts),
+    schema_version: '2.0.0',
+    process_card: {
+      process_id: targetProcessKey,
+      name: manifest.title,
+      level: 'L4',
+      is_leaf: true,
+      description: manifest.title,
+      purpose: '自动生成',
+      owner: 'Role-owner',
+      parent_process_name: null,
+      inputs: [],
+      outputs: [],
+      start: processCardRef.start,
+      end_results: processCardRef.end_results,
+      performance_indicators: [],
     },
-    lanes,
-    elements,
-    flows,
-    questions,
-    conflicts,
+    activities: elements.map(element => {
+      // 从原始事实中查找活动属性（通过 name 匹配）
+      const originalFact = normalFacts.find(f => f.kind === 'ACTIVITY' && f.label === element.name);
+      const activityType = originalFact?.attributes?.activity_type || 'STANDARD';
+      const responsibilityModel = originalFact?.attributes?.responsibility_model || 'RASCI';
+      const roleAssignments = originalFact?.attributes?.role_assignments || [];
+
+      // 生成稳定的活动ID和主任务ID（使用相同的哈希）
+      const stableId = stableHash(element.fact_id || element.element_id).slice(0, 8);
+      const activityId = `Activity-${stableId}`;
+      const mainTaskId = `Task-${stableId}`;
+
+      return {
+        activity_id: activityId,
+        name: element.name,
+        description: element.name,
+        activity_type: activityType,
+        responsibility_model: responsibilityModel,
+        role_assignments: roleAssignments.length > 0 ? roleAssignments : (element.lane_id ? [{
+          role_id: element.lane_id,
+          responsibility: responsibilityModel === 'RASCI' ? 'R' : 'O',
+        }] : []),
+        sla: originalFact?.attributes?.sla || null,
+        tools: originalFact?.attributes?.tools || [],
+        inputs: element.inputs || [],
+        process_summary: originalFact?.attributes?.process_summary || '',
+        outputs: element.outputs || [],
+        completion_criteria: originalFact?.attributes?.completion_criteria || [],
+        references: originalFact?.attributes?.references || [],
+        main_task_id: mainTaskId,
+        confirmation: originalFact?.attributes?.confirmation || null,
+        completeness: 'COMPLETE',
+      };
+    }),
+    diagram: {
+      lanes: lanes.map(lane => ({
+        lane_id: lane.lane_id,
+        name: lane.name,
+        role_id: lane.lane_id,
+      })),
+      nodes: [
+        // 开始事件节点
+        {
+          node_id: processCardRef.start.event_id,
+          node_type: 'START_EVENT',
+          name: processCardRef.start.name,
+          lane_id: null,
+        },
+        // 活动主任务节点
+        ...elements.map(element => {
+          const stableId = stableHash(element.fact_id || element.element_id).slice(0, 8);
+          return {
+            node_id: `Task-${stableId}`,
+            node_type: 'MAIN_TASK',
+            name: element.name,
+            lane_id: element.lane_id,
+          };
+        }),
+        // 结束事件节点
+        ...processCardRef.end_results.map(endEvent => ({
+          node_id: endEvent.event_id,
+          node_type: 'END_EVENT',
+          name: endEvent.name,
+          lane_id: null,
+        })),
+      ],
+      flows: [
+        // 开始事件到第一个活动的流转
+        ...firstTaskId ? [{
+          flow_id: `Flow-Start-${stableHash('start-flow').slice(0, 8)}`,
+          source_ref: processCardRef.start.event_id,
+          target_ref: firstTaskId,
+          condition: null,
+        }] : [],
+        // 活动间的流转
+        ...flows.map(flow => ({
+          flow_id: flow.flow_id,
+          source_ref: flow.source_ref,
+          target_ref: flow.target_ref,
+          condition: flow.condition,
+        })),
+        // 最后一个活动到结束事件的流转
+        ...lastTaskId ? [{
+          flow_id: `Flow-End-${stableHash('end-flow').slice(0, 8)}`,
+          source_ref: lastTaskId,
+          target_ref: processCardRef.end_results[0].event_id,
+          condition: null,
+        }] : [],
+      ],
+      task_bindings: elements.map(element => {
+        const stableId = stableHash(element.fact_id || element.element_id).slice(0, 8);
+        return {
+          activity_id: `Activity-${stableId}`,
+          main_task_id: `Task-${stableId}`,
+          confirmation_task_id: null,
+        };
+      }),
+      layout_version: '2.0.0',
+    },
+    questions: questions.map(q => ({
+      question_id: q.question_id,
+      text: q.text,
+      target_paths: q.element_ids || ['process'],
+      status: q.status,
+      answer: q.answer || '',
+      evidence_refs: q.evidence_refs || [],
+    })),
+    provenance: {},
     source_summary: {
       total_blocks: evidence.blocks?.length || 0,
       formats: [...new Set((evidence.blocks || []).map(b => b.source_format))],
@@ -301,11 +442,12 @@ function convertActivitiesToElements(activities, lanes, uncertainties) {
 
     // 角色缺失：不静默塞入第一泳道，生成问题
     if (!laneId && lanes.length > 0) {
-      const questionId = `Q-role-${stableHash(activity.fact_id).slice(0, 8)}`;
+      const stableId = stableHash(activity.fact_id).slice(0, 8);
+      const questionId = `Q-role-${stableId}`;
       questions.push({
         question_id: questionId,
         text: `活动「${activity.label}」缺少责任角色，请指定`,
-        element_ids: [`Activity-${stableHash(activity.fact_id).slice(0, 8)}`],
+        element_ids: [`Task-${stableId}`],
         status: 'OPEN',
         answer: '',
         evidence_refs: activity.evidence_refs,
@@ -316,11 +458,12 @@ function convertActivitiesToElements(activities, lanes, uncertainties) {
 
     // 没有任何泳道时也生成问题
     if (!laneId) {
+      const stableId = stableHash(activity.fact_id).slice(0, 8);
       laneId = 'Lane-unassigned';
       questions.push({
-        question_id: `Q-nolane-${stableHash(activity.fact_id).slice(0, 8)}`,
+        question_id: `Q-nolane-${stableId}`,
         text: `活动「${activity.label}」无法分配泳道，缺少角色信息`,
-        element_ids: [`Activity-${stableHash(activity.fact_id).slice(0, 8)}`],
+        element_ids: [`Task-${stableId}`],
         status: 'OPEN',
         answer: '',
         evidence_refs: activity.evidence_refs,
@@ -341,6 +484,7 @@ function convertActivitiesToElements(activities, lanes, uncertainties) {
 
     elements.push({
       element_id: `Activity-${stableHash(activity.fact_id).slice(0, 8)}`,
+      fact_id: activity.fact_id,
       kind: 'ACTIVITY',
       name: activity.label,
       lane_id: laneId,
@@ -360,7 +504,7 @@ function convertActivitiesToElements(activities, lanes, uncertainties) {
  */
 function generateFlows(facts, elements) {
   const flows = [];
-  const flowFacts = facts.filter(f => f.kind === 'FLOW');
+  const flowFacts = facts.filter(f => f.kind === 'FLOW' || f.kind === 'CONTROL_FLOW');
 
   for (const flowFact of flowFacts) {
     const source = flowFact.attributes?.source;
@@ -371,10 +515,13 @@ function generateFlows(facts, elements) {
       const targetElement = elements.find(e => e.name === target);
 
       if (sourceElement && targetElement) {
+        // V2: 使用 Task-xxx 格式匹配 diagram.nodes
+        const sourceId = `Task-${stableHash(sourceElement.fact_id || sourceElement.element_id).slice(0, 8)}`;
+        const targetId = `Task-${stableHash(targetElement.fact_id || targetElement.element_id).slice(0, 8)}`;
         flows.push({
           flow_id: `Flow-${stableHash(`${source}-${target}`).slice(0, 8)}`,
-          source_ref: sourceElement.element_id,
-          target_ref: targetElement.element_id,
+          source_ref: sourceId,
+          target_ref: targetId,
           condition: flowFact.attributes?.condition || null,
           evidence_refs: flowFact.evidence_refs,
         });
@@ -410,7 +557,7 @@ function generateQuestions(uncertainties, elements, conflictFacts, context) {
     questions.push({
       question_id: `Q-${stableHash(uncertainty.text).slice(0, 8)}`,
       text: uncertainty.text,
-      element_ids: relatedElements.length > 0 ? relatedElements : [elements[0]?.element_id || 'process'],
+      element_ids: relatedElements.length > 0 ? relatedElements : [elements[0]?.fact_id ? `Activity-${stableHash(elements[0].fact_id).slice(0, 8)}` : 'process'],
       status: 'OPEN',
       answer: '',
       evidence_refs: uncertainty.evidence_refs,
@@ -422,7 +569,7 @@ function generateQuestions(uncertainties, elements, conflictFacts, context) {
     questions.push({
       question_id: `Q-${stableHash(conflict.label).slice(0, 8)}`,
       text: `冲突: ${conflict.label}`,
-      element_ids: [elements[0]?.element_id || 'process'],
+      element_ids: [elements[0]?.fact_id ? `Activity-${stableHash(elements[0].fact_id).slice(0, 8)}` : 'process'],
       status: 'OPEN',
       answer: '',
       evidence_refs: conflict.evidence_refs,
@@ -456,14 +603,23 @@ function findBoundaryStart(elements, facts) {
 }
 
 /**
- * 查找流程结束边界
+ * 查找流程结束边界（支持多个终点）
  */
 function findBoundaryEnd(elements, facts) {
-  const endFact = facts.find(f => f.kind === 'EVENT' && f.attributes?.type === 'end');
-  if (endFact) return endFact.label;
+  const endFacts = facts.filter(f => f.kind === 'EVENT' && f.attributes?.type === 'end');
+  if (endFacts.length > 0) {
+    return endFacts[0].label; // 返回第一个作为默认，多个终点在 process_card.end_results 中处理
+  }
 
   if (elements.length > 0) return elements[elements.length - 1].name;
   return '结束';
+}
+
+/**
+ * 查找所有结束事件
+ */
+function findAllEndEvents(facts) {
+  return facts.filter(f => f.kind === 'EVENT' && f.attributes?.type === 'end');
 }
 
 /**

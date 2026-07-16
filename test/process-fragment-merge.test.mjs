@@ -19,7 +19,8 @@ describe('Process Fragment Merge', () => {
 
       const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
       assert.ok(result.process_draft, 'Should produce process draft');
-      assert.equal(result.process_draft.elements.length, 2, 'Should have 2 elements');
+      assert.equal(result.process_draft.schema_version, '2.0.0', 'Should be V2');
+      assert.equal(result.process_draft.activities.length, 2, 'Should have 2 activities');
     });
 
     it('should deduplicate same facts from different fragments', async () => {
@@ -37,7 +38,7 @@ describe('Process Fragment Merge', () => {
       ];
 
       const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
-      assert.equal(result.process_draft.elements.length, 1, 'Should deduplicate');
+      assert.equal(result.process_draft.activities.length, 1, 'Should deduplicate');
     });
 
     it('should handle CONFLICT facts', async () => {
@@ -52,7 +53,8 @@ describe('Process Fragment Merge', () => {
       ];
 
       const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
-      assert.ok(result.process_draft.conflicts.length > 0, 'Should have conflicts');
+      // V2 格式中，冲突事实应该被排除出 activities
+      assert.equal(result.process_draft.activities.length, 0, 'CONFLICT 事实不应成为活动');
     });
 
     it('should generate questions for INFERRED facts', async () => {
@@ -102,7 +104,7 @@ describe('Process Fragment Merge', () => {
       ];
 
       const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
-      const lanes = result.process_draft.lanes;
+      const lanes = result.process_draft.diagram.lanes;
       assert.ok(lanes.length >= 2, 'Should have lanes for roles');
     });
 
@@ -154,11 +156,14 @@ describe('Process Fragment Merge', () => {
 
 function createFragment(batchId, facts, uncertainties = []) {
   return {
-    schema_version: '1.0.0',
+    schema_version: '2.0.0',
     batch_id: batchId,
     batch_sha256: 'a'.repeat(64),
-    facts,
-    uncertainties,
+    task_kind: 'ACTIVITY_CATALOG',
+    payload: {
+      facts,
+      uncertainties,
+    },
   };
 }
 
@@ -279,10 +284,8 @@ describe('Merge 验证增强', () => {
       ];
 
       const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
-      assert.ok(result.process_draft.conflicts.length > 0, 'CONFLICT 应进入冲突记录');
-      // CONFLICT 事实的活动不应出现在 elements 中
-      const conflictElement = result.process_draft.elements.find(e => e.name === '审核');
-      assert.ok(!conflictElement, 'CONFLICT 事实不应直接成为流程元素');
+      // V2 格式中，冲突事实应该被排除出 activities
+      assert.equal(result.process_draft.activities.length, 0, 'CONFLICT 事实不应成为活动');
     });
 
     it('MISSING 不确定性产生 OPEN 问题', async () => {
@@ -344,10 +347,312 @@ describe('Merge 验证增强', () => {
       ];
 
       const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
-      const element = result.process_draft.elements.find(e => e.name === '执行任务');
-      assert.ok(element, '应有元素');
-      assert.deepEqual(element.inputs, ['申请单'], 'inputs 应保留');
-      assert.deepEqual(element.outputs, ['审批结果'], 'outputs 应保留');
+      const activity = result.process_draft.activities.find(a => a.name === '执行任务');
+      assert.ok(activity, '应有活动');
+      assert.deepEqual(activity.inputs, ['申请单'], 'inputs 应保留');
+      assert.deepEqual(activity.outputs, ['审批结果'], 'outputs 应保留');
+    });
+  });
+});
+
+describe('Task 4 V2 合并要求', () => {
+  describe('fragment 输入顺序变化结果不变', () => {
+    it('不同顺序输入应产生相同结果', async () => {
+      const { mergeProcessFragments } = await import('../scripts/lib/process-fragment-merge.mjs');
+      const manifest = { title: 'Test', focus: null };
+      const evidence = { blocks: [] };
+      const facts1 = [
+        createFact('F-001', 'ACTIVITY', 'test', 'activity-1', '审批申请'),
+        createFact('F-002', 'ACTIVITY', 'test', 'activity-2', '提交申请'),
+      ];
+      const facts2 = [
+        createFact('F-002', 'ACTIVITY', 'test', 'activity-2', '提交申请'),
+        createFact('F-001', 'ACTIVITY', 'test', 'activity-1', '审批申请'),
+      ];
+
+      const fragments1 = [createFragment('EB-001', facts1)];
+      const fragments2 = [createFragment('EB-001', facts2)];
+
+      const result1 = await mergeProcessFragments({ manifest, evidence, fragments: fragments1, focus: null });
+      const result2 = await mergeProcessFragments({ manifest, evidence, fragments: fragments2, focus: null });
+
+      // 稳定 ID 应基于 process_key + subject_key，不受输入顺序影响
+      const ids1 = result1.process_draft.activities.map(a => a.activity_id).sort();
+      const ids2 = result2.process_draft.activities.map(a => a.activity_id).sort();
+      assert.deepEqual(ids1, ids2, '稳定 ID 应相同');
+    });
+  });
+
+  describe('OARP 与 RASCI', () => {
+    it('RASCI 活动应有 R 角色', async () => {
+      const { mergeProcessFragments } = await import('../scripts/lib/process-fragment-merge.mjs');
+      const manifest = { title: 'Test', focus: null };
+      const evidence = { blocks: [] };
+      const fragments = [
+        createFragment('EB-001', [
+          createFact('F-001', 'ROLE', 'test', 'manager', '经理'),
+          {
+            ...createFact('F-002', 'ACTIVITY', 'test', 'act', '审核申请'),
+            attributes: {
+              role: '经理',
+              activity_type: 'STANDARD',
+              responsibility_model: 'RASCI',
+              role_assignments: [
+                { role_id: 'Role-manager', responsibility: 'R' },
+                { role_id: 'Role-approver', responsibility: 'A' },
+              ],
+            },
+          },
+        ]),
+      ];
+
+      const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
+      assert.equal(result.process_draft.schema_version, '2.0.0');
+      const activity = result.process_draft.activities.find(a => a.name === '审核申请');
+      assert.ok(activity, '应有活动');
+      assert.equal(activity.responsibility_model, 'RASCI');
+      const rAssignment = activity.role_assignments.find(r => r.responsibility === 'R');
+      assert.ok(rAssignment, '应有 R 角色');
+    });
+
+    it('OARP 活动应有 O 角色', async () => {
+      const { mergeProcessFragments } = await import('../scripts/lib/process-fragment-merge.mjs');
+      const manifest = { title: 'Test', focus: null };
+      const evidence = { blocks: [] };
+      const fragments = [
+        createFragment('EB-001', [
+          createFact('F-001', 'ROLE', 'test', 'owner', '流程负责人'),
+          {
+            ...createFact('F-002', 'ACTIVITY', 'test', 'act', '评审会议'),
+            attributes: {
+              role: '流程负责人',
+              activity_type: 'REVIEW_MEETING',
+              responsibility_model: 'OARP',
+              role_assignments: [
+                { role_id: 'Role-owner', responsibility: 'O' },
+                { role_id: 'Role-approver', responsibility: 'A' },
+                { role_id: 'Role-reviewer', responsibility: 'R' },
+                { role_id: 'Role-participant', responsibility: 'P' },
+              ],
+            },
+          },
+        ]),
+      ];
+
+      const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
+      assert.equal(result.process_draft.schema_version, '2.0.0');
+      const activity = result.process_draft.activities.find(a => a.name === '评审会议');
+      assert.ok(activity, '应有活动');
+      assert.equal(activity.responsibility_model, 'OARP');
+      const oAssignment = activity.role_assignments.find(r => r.responsibility === 'O');
+      assert.ok(oAssignment, '应有 O 角色');
+    });
+  });
+
+  describe('多业务终点', () => {
+    it('应支持多个业务终点', async () => {
+      const { mergeProcessFragments } = await import('../scripts/lib/process-fragment-merge.mjs');
+      const manifest = { title: 'Test', focus: null };
+      const evidence = { blocks: [] };
+      const fragments = [
+        createFragment('EB-001', [
+          { ...createFact('F-001', 'EVENT', 'test', 'start', '收到申请'), attributes: { type: 'start' } },
+          { ...createFact('F-002', 'EVENT', 'test', 'end-approved', '申请已批准'), attributes: { type: 'end' } },
+          { ...createFact('F-003', 'EVENT', 'test', 'end-rejected', '申请已拒绝'), attributes: { type: 'end' } },
+        ]),
+      ];
+
+      const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
+      assert.equal(result.process_draft.schema_version, '2.0.0');
+      assert.ok(result.process_draft.process_card.end_results.length >= 2, '应有多个业务终点');
+    });
+  });
+
+  describe('正式审批独立活动', () => {
+    it('正式审批应为独立 L5 活动', async () => {
+      const { mergeProcessFragments } = await import('../scripts/lib/process-fragment-merge.mjs');
+      const manifest = { title: 'Test', focus: null };
+      const evidence = { blocks: [] };
+      const fragments = [
+        createFragment('EB-001', [
+          createFact('F-001', 'ROLE', 'test', 'applicant', '申请人'),
+          createFact('F-002', 'ROLE', 'test', 'approver', '审批人'),
+          {
+            ...createFact('F-003', 'ACTIVITY', 'test', 'submit', '提交申请'),
+            attributes: { role: '申请人' },
+          },
+          {
+            ...createFact('F-004', 'ACTIVITY', 'test', 'approve', '审批申请'),
+            attributes: {
+              role: '审批人',
+              activity_type: 'DECISION_ACTIVITY',
+              responsibility_model: 'OARP',
+              role_assignments: [
+                { role_id: 'Role-approver', responsibility: 'O' },
+              ],
+            },
+          },
+        ]),
+      ];
+
+      const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
+      assert.equal(result.process_draft.schema_version, '2.0.0');
+      const approval = result.process_draft.activities.find(a => a.name === '审批申请');
+      assert.ok(approval, '应有审批活动');
+      assert.equal(approval.activity_type, 'DECISION_ACTIVITY');
+    });
+  });
+
+  describe('合法 confirmation', () => {
+    it('应支持合法确认从 Task', async () => {
+      const { mergeProcessFragments } = await import('../scripts/lib/process-fragment-merge.mjs');
+      const manifest = { title: 'Test', focus: null };
+      const evidence = { blocks: [] };
+      const fragments = [
+        createFragment('EB-001', [
+          createFact('F-001', 'ROLE', 'test', 'executor', '执行者'),
+          createFact('F-002', 'ROLE', 'test', 'confirmer', '确认者'),
+          {
+            ...createFact('F-003', 'ACTIVITY', 'test', 'act', '执行任务'),
+            attributes: {
+              role: '执行者',
+              confirmation: {
+                co_completes: true,
+                confirm_bears_final_responsibility: true,
+                no_formal_approval_meeting: true,
+                confirm_role_id: 'Role-confirmer',
+              },
+            },
+          },
+        ]),
+      ];
+
+      const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
+      assert.equal(result.process_draft.schema_version, '2.0.0');
+      const activity = result.process_draft.activities.find(a => a.name === '执行任务');
+      assert.ok(activity, '应有活动');
+      assert.ok(activity.confirmation, '应有 confirmation');
+      assert.ok(activity.confirmation.co_completes, '应有 co_completes');
+      assert.ok(activity.confirmation.confirm_bears_final_responsibility, '应有 confirm_bears_final_responsibility');
+      assert.ok(activity.confirmation.no_formal_approval_meeting, '应有 no_formal_approval_meeting');
+    });
+  });
+
+  describe('缺 SLA/KPI', () => {
+    it('应生成缺失信息问题', async () => {
+      const { mergeProcessFragments } = await import('../scripts/lib/process-fragment-merge.mjs');
+      const manifest = { title: 'Test', focus: null };
+      const evidence = { blocks: [] };
+      const fragments = [
+        createFragment('EB-001', [
+          createFact('F-001', 'ROLE', 'test', 'staff', '职员'),
+          {
+            ...createFact('F-002', 'ACTIVITY', 'test', 'act', '执行任务'),
+            attributes: { role: '职员' },
+          },
+        ], [
+          { kind: 'MISSING', text: '缺少 SLA 信息', related_fact_ids: ['F-002'], evidence_refs: ['B-001'] },
+          { kind: 'MISSING', text: '缺少 KPI 指标', related_fact_ids: [], evidence_refs: ['B-001'] },
+        ]),
+      ];
+
+      const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
+      assert.equal(result.process_draft.schema_version, '2.0.0');
+      const slaQ = result.process_draft.questions.find(q => q.text.includes('SLA'));
+      const kpiQ = result.process_draft.questions.find(q => q.text.includes('KPI'));
+      assert.ok(slaQ, '应生成 SLA 缺失问题');
+      assert.ok(kpiQ, '应生成 KPI 缺失问题');
+    });
+  });
+
+  describe('缺责任角色不猜泳道', () => {
+    it('角色缺失时不应分配泳道', async () => {
+      const { mergeProcessFragments } = await import('../scripts/lib/process-fragment-merge.mjs');
+      const manifest = { title: 'Test', focus: null };
+      const evidence = { blocks: [] };
+      const fragments = [
+        createFragment('EB-001', [
+          // 没有角色事实
+          {
+            ...createFact('F-001', 'ACTIVITY', 'test', 'act', '执行任务'),
+            attributes: {}, // 没有 role 属性
+          },
+        ]),
+      ];
+
+      const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
+      assert.equal(result.process_draft.schema_version, '2.0.0');
+      // 应该生成角色缺失问题，但不应该分配泳道
+      const roleQ = result.process_draft.questions.find(q => q.text.includes('角色'));
+      assert.ok(roleQ, '应生成角色缺失问题');
+    });
+  });
+
+  describe('结构化网关条件', () => {
+    it('应支持结构化网关条件', async () => {
+      const { mergeProcessFragments } = await import('../scripts/lib/process-fragment-merge.mjs');
+      const manifest = { title: 'Test', focus: null };
+      const evidence = { blocks: [] };
+      const fragments = [
+        createFragment('EB-001', [
+          createFact('F-001', 'ROLE', 'test', 'staff', '职员'),
+          {
+            ...createFact('F-002', 'ACTIVITY', 'test', 'submit', '提交申请'),
+            attributes: { role: '职员' },
+          },
+          {
+            ...createFact('F-003', 'ACTIVITY', 'test', 'approve', '审批申请'),
+            attributes: { role: '职员' },
+          },
+          {
+            ...createFact('F-004', 'CONTROL_FLOW', 'test', 'flow-condition', '条件流转'),
+            attributes: {
+              source: '提交申请',
+              target: '审批申请',
+              condition: {
+                label: '审批结论为通过',
+                source_subject_key: 'approve-request',
+                source_output: '审批结论',
+                operator: 'EQUALS',
+                value: '通过',
+              },
+            },
+          },
+        ]),
+      ];
+
+      const result = await mergeProcessFragments({ manifest, evidence, fragments, focus: null });
+      assert.equal(result.process_draft.schema_version, '2.0.0');
+      const flow = result.process_draft.diagram.flows.find(f => f.condition);
+      assert.ok(flow, '应有条件流转');
+      assert.ok(flow.condition, '应有条件对象');
+      assert.equal(flow.condition.operator, 'EQUALS');
+    });
+  });
+
+  describe('稳定 ID 不受显示名称变化影响', () => {
+    it('显示名称变化应保持稳定 ID', async () => {
+      const { mergeProcessFragments } = await import('../scripts/lib/process-fragment-merge.mjs');
+      const manifest = { title: 'Test', focus: null };
+      const evidence = { blocks: [] };
+      const fragments1 = [
+        createFragment('EB-001', [
+          createFact('F-001', 'ACTIVITY', 'test', 'activity-1', '审批申请'),
+        ]),
+      ];
+      const fragments2 = [
+        createFragment('EB-001', [
+          { ...createFact('F-001', 'ACTIVITY', 'test', 'activity-1', '审核申请') }, // 名称变化
+        ]),
+      ];
+
+      const result1 = await mergeProcessFragments({ manifest, evidence, fragments: fragments1, focus: null });
+      const result2 = await mergeProcessFragments({ manifest, evidence, fragments: fragments2, focus: null });
+
+      const id1 = result1.process_draft.activities[0].activity_id;
+      const id2 = result2.process_draft.activities[0].activity_id;
+      assert.equal(id1, id2, '稳定 ID 应相同');
+      assert.ok(result1.process_draft.activities[0].name !== result2.process_draft.activities[0].name, '名称应不同');
     });
   });
 });

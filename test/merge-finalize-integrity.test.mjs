@@ -49,29 +49,32 @@ describe('Merge/Finalize Integrity', () => {
 
       // 创建 fragment
       const fragment = {
-        schema_version: '1.0.0',
+        schema_version: '2.0.0',
         batch_id: 'EB-001',
         batch_sha256: 'a'.repeat(64),
-        facts: [{
-          fact_id: 'F-001',
-          kind: 'ACTIVITY',
-          process_key: 'test',
-          subject_key: 'submit',
-          label: '提交申请',
-          attributes: { role: '申请人' },
-          certainty: 'EXPLICIT',
-          evidence_refs: ['B-001'],
-        }, {
-          fact_id: 'F-002',
-          kind: 'ROLE',
-          process_key: 'test',
-          subject_key: 'applicant',
-          label: '申请人',
-          attributes: {},
-          certainty: 'EXPLICIT',
-          evidence_refs: ['B-001'],
-        }],
-        uncertainties: [],
+        task_kind: 'ACTIVITY_CATALOG',
+        payload: {
+          facts: [{
+            fact_id: 'F-001',
+            kind: 'ACTIVITY',
+            process_key: 'test',
+            subject_key: 'submit',
+            label: '提交申请',
+            attributes: { role: '申请人' },
+            certainty: 'EXPLICIT',
+            evidence_refs: ['B-001'],
+          }, {
+            fact_id: 'F-002',
+            kind: 'ROLE',
+            process_key: 'test',
+            subject_key: 'applicant',
+            label: '申请人',
+            attributes: {},
+            certainty: 'EXPLICIT',
+            evidence_refs: ['B-001'],
+          }],
+          uncertainties: [],
+        },
       };
 
       // 计算 fragment 内容哈希
@@ -83,6 +86,8 @@ describe('Merge/Finalize Integrity', () => {
         schema_version: '1.0.0',
         batches: [{
           batch_id: 'EB-001',
+          task_id: 'EB-001-activity',
+          task_kind: 'ACTIVITY_CATALOG',
           batch_sha256: 'a'.repeat(64),
           status: 'ACCEPTED',
           fragment_sha256: fragmentSha256,
@@ -95,42 +100,71 @@ describe('Merge/Finalize Integrity', () => {
         JSON.stringify(queue)
       );
 
-      // 写入 fragment 文件
+      // 写入 fragment 文件（V2: 使用 task_id 而非 batch_id）
       await writeFile(
-        join(runDir, 'stages', 'semantic', 'fragments', 'EB-001.json'),
+        join(runDir, 'stages', 'semantic', 'fragments', 'EB-001-activity.json'),
         fragmentContent
       );
 
       // 创建 process-draft
       await writeFile(join(runDir, 'stages', 'merge', 'process-draft.json'), JSON.stringify({
-        title: '测试流程',
-        level: 'L5',
-        process_id: 'test',
-        boundary: { start: '开始', end: '结束' },
-        lanes: [
-          { lane_id: 'Lane-001', name: '申请人', org_candidates: [] },
-        ],
-        elements: [{
-          element_id: 'Activity-001',
-          kind: 'ACTIVITY',
-          name: '提交申请',
-          lane_id: 'Lane-001',
+        schema_version: '2.0.0',
+        process_card: {
+          process_id: 'test',
+          name: '测试流程',
+          level: 'L4',
+          is_leaf: true,
+          description: '测试流程',
+          purpose: '测试',
+          owner: 'Role-owner',
+          parent_process_name: null,
           inputs: [],
+          outputs: [],
+          start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+          end_results: [{ event_id: 'End-1', name: '结束' }],
+          performance_indicators: [],
+        },
+        activities: [{
+          activity_id: 'Activity-001',
+          name: '提交申请',
+          description: '提交申请',
+          activity_type: 'STANDARD',
+          responsibility_model: 'RASCI',
+          role_assignments: [{ role_id: 'Role-001', responsibility: 'R' }],
+          sla: null,
+          tools: [],
+          inputs: [],
+          process_summary: '',
           outputs: ['申请单'],
-          evidence_refs: ['B-001'],
-          certainty: 'EXPLICIT',
-          question_ids: [],
+          completion_criteria: [],
+          references: [],
+          main_task_id: 'Task-001',
+          confirmation: null,
+          completeness: 'COMPLETE',
         }],
-        flows: [],
+        diagram: {
+          lanes: [{ lane_id: 'Lane-001', name: '申请人', role_id: 'Role-001' }],
+          nodes: [
+            { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: 'Lane-001' },
+            { node_id: 'Task-001', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-001' },
+            { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: 'Lane-001' },
+          ],
+          flows: [
+            { flow_id: 'Flow-1', source_ref: 'Start-1', target_ref: 'Task-001', condition: null },
+            { flow_id: 'Flow-2', source_ref: 'Task-001', target_ref: 'End-1', condition: null },
+          ],
+          task_bindings: [{ activity_id: 'Activity-001', main_task_id: 'Task-001', confirmation_task_id: null }],
+          layout_version: '2.0.0',
+        },
         questions: [{
           question_id: 'Q-001',
           text: '测试问题',
-          element_ids: ['Activity-001'],
+          target_paths: ['Task-001'],
           status: 'OPEN',
           answer: '',
           evidence_refs: ['B-001'],
         }],
-        conflicts: [],
+        provenance: {},
         source_summary: { total_blocks: 1, formats: ['md'], evidence_refs: ['B-001'] },
       }));
 
@@ -217,7 +251,7 @@ describe('Merge/Finalize Integrity', () => {
       // 写入篡改后的 fragment 文件
       const tamperedContent = JSON.stringify(tamperedFragment, null, 2) + '\n';
       await writeFile(
-        join(runDir, 'stages', 'semantic', 'fragments', 'EB-001.json'),
+        join(runDir, 'stages', 'semantic', 'fragments', 'EB-001-activity.json'),
         tamperedContent
       );
 
@@ -226,6 +260,8 @@ describe('Merge/Finalize Integrity', () => {
         schema_version: '1.0.0',
         batches: [{
           batch_id: 'EB-001',
+          task_id: 'EB-001-activity',
+          task_kind: 'ACTIVITY_CATALOG',
           batch_sha256: 'a'.repeat(64),
           status: 'ACCEPTED',
           fragment_sha256: originalSha256, // 使用原始哈希
@@ -240,34 +276,63 @@ describe('Merge/Finalize Integrity', () => {
 
       // 创建 process-draft
       await writeFile(join(runDir, 'stages', 'merge', 'process-draft.json'), JSON.stringify({
-        title: '测试流程',
-        level: 'L5',
-        process_id: 'test',
-        boundary: { start: '开始', end: '结束' },
-        lanes: [
-          { lane_id: 'Lane-001', name: '申请人', org_candidates: [] },
-        ],
-        elements: [{
-          element_id: 'Activity-001',
-          kind: 'ACTIVITY',
-          name: '提交申请',
-          lane_id: 'Lane-001',
+        schema_version: '2.0.0',
+        process_card: {
+          process_id: 'test',
+          name: '测试流程',
+          level: 'L4',
+          is_leaf: true,
+          description: '测试流程',
+          purpose: '测试',
+          owner: 'Role-owner',
+          parent_process_name: null,
           inputs: [],
+          outputs: [],
+          start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+          end_results: [{ event_id: 'End-1', name: '结束' }],
+          performance_indicators: [],
+        },
+        activities: [{
+          activity_id: 'Activity-001',
+          name: '提交申请',
+          description: '提交申请',
+          activity_type: 'STANDARD',
+          responsibility_model: 'RASCI',
+          role_assignments: [{ role_id: 'Role-001', responsibility: 'R' }],
+          sla: null,
+          tools: [],
+          inputs: [],
+          process_summary: '',
           outputs: ['申请单'],
-          evidence_refs: ['B-001'],
-          certainty: 'EXPLICIT',
-          question_ids: [],
+          completion_criteria: [],
+          references: [],
+          main_task_id: 'Task-001',
+          confirmation: null,
+          completeness: 'COMPLETE',
         }],
-        flows: [],
+        diagram: {
+          lanes: [{ lane_id: 'Lane-001', name: '申请人', role_id: 'Role-001' }],
+          nodes: [
+            { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: 'Lane-001' },
+            { node_id: 'Task-001', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-001' },
+            { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: 'Lane-001' },
+          ],
+          flows: [
+            { flow_id: 'Flow-1', source_ref: 'Start-1', target_ref: 'Task-001', condition: null },
+            { flow_id: 'Flow-2', source_ref: 'Task-001', target_ref: 'End-1', condition: null },
+          ],
+          task_bindings: [{ activity_id: 'Activity-001', main_task_id: 'Task-001', confirmation_task_id: null }],
+          layout_version: '2.0.0',
+        },
         questions: [{
           question_id: 'Q-001',
           text: '测试问题',
-          element_ids: ['Activity-001'],
+          target_paths: ['Task-001'],
           status: 'OPEN',
           answer: '',
           evidence_refs: ['B-001'],
         }],
-        conflicts: [],
+        provenance: {},
         source_summary: { total_blocks: 1, formats: ['md'], evidence_refs: ['B-001'] },
       }));
 
@@ -321,29 +386,32 @@ describe('Merge/Finalize Integrity', () => {
 
       // 创建 fragment
       const fragment = {
-        schema_version: '1.0.0',
+        schema_version: '2.0.0',
         batch_id: 'EB-001',
         batch_sha256: 'a'.repeat(64),
-        facts: [{
-          fact_id: 'F-001',
-          kind: 'ACTIVITY',
-          process_key: 'test',
-          subject_key: 'submit',
-          label: '提交申请',
-          attributes: { role: '申请人' },
-          certainty: 'EXPLICIT',
-          evidence_refs: ['B-001'],
-        }, {
-          fact_id: 'F-002',
-          kind: 'ROLE',
-          process_key: 'test',
-          subject_key: 'applicant',
-          label: '申请人',
-          attributes: {},
-          certainty: 'EXPLICIT',
-          evidence_refs: ['B-001'],
-        }],
-        uncertainties: [],
+        task_kind: 'ACTIVITY_CATALOG',
+        payload: {
+          facts: [{
+            fact_id: 'F-001',
+            kind: 'ACTIVITY',
+            process_key: 'test',
+            subject_key: 'submit',
+            label: '提交申请',
+            attributes: { role: '申请人' },
+            certainty: 'EXPLICIT',
+            evidence_refs: ['B-001'],
+          }, {
+            fact_id: 'F-002',
+            kind: 'ROLE',
+            process_key: 'test',
+            subject_key: 'applicant',
+            label: '申请人',
+            attributes: {},
+            certainty: 'EXPLICIT',
+            evidence_refs: ['B-001'],
+          }],
+          uncertainties: [],
+        },
       };
 
       await writeFile(
@@ -356,6 +424,8 @@ describe('Merge/Finalize Integrity', () => {
         schema_version: '1.0.0',
         batches: [{
           batch_id: 'EB-001',
+          task_id: 'EB-001-activity',
+          task_kind: 'ACTIVITY_CATALOG',
           batch_sha256: 'a'.repeat(64),
           status: 'ACCEPTED',
           // 缺少 fragment_sha256
@@ -370,34 +440,63 @@ describe('Merge/Finalize Integrity', () => {
 
       // 创建 process-draft
       await writeFile(join(runDir, 'stages', 'merge', 'process-draft.json'), JSON.stringify({
-        title: '测试流程',
-        level: 'L5',
-        process_id: 'test',
-        boundary: { start: '开始', end: '结束' },
-        lanes: [
-          { lane_id: 'Lane-001', name: '申请人', org_candidates: [] },
-        ],
-        elements: [{
-          element_id: 'Activity-001',
-          kind: 'ACTIVITY',
-          name: '提交申请',
-          lane_id: 'Lane-001',
+        schema_version: '2.0.0',
+        process_card: {
+          process_id: 'test',
+          name: '测试流程',
+          level: 'L4',
+          is_leaf: true,
+          description: '测试流程',
+          purpose: '测试',
+          owner: 'Role-owner',
+          parent_process_name: null,
           inputs: [],
+          outputs: [],
+          start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+          end_results: [{ event_id: 'End-1', name: '结束' }],
+          performance_indicators: [],
+        },
+        activities: [{
+          activity_id: 'Activity-001',
+          name: '提交申请',
+          description: '提交申请',
+          activity_type: 'STANDARD',
+          responsibility_model: 'RASCI',
+          role_assignments: [{ role_id: 'Role-001', responsibility: 'R' }],
+          sla: null,
+          tools: [],
+          inputs: [],
+          process_summary: '',
           outputs: ['申请单'],
-          evidence_refs: ['B-001'],
-          certainty: 'EXPLICIT',
-          question_ids: [],
+          completion_criteria: [],
+          references: [],
+          main_task_id: 'Task-001',
+          confirmation: null,
+          completeness: 'COMPLETE',
         }],
-        flows: [],
+        diagram: {
+          lanes: [{ lane_id: 'Lane-001', name: '申请人', role_id: 'Role-001' }],
+          nodes: [
+            { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: 'Lane-001' },
+            { node_id: 'Task-001', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-001' },
+            { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: 'Lane-001' },
+          ],
+          flows: [
+            { flow_id: 'Flow-1', source_ref: 'Start-1', target_ref: 'Task-001', condition: null },
+            { flow_id: 'Flow-2', source_ref: 'Task-001', target_ref: 'End-1', condition: null },
+          ],
+          task_bindings: [{ activity_id: 'Activity-001', main_task_id: 'Task-001', confirmation_task_id: null }],
+          layout_version: '2.0.0',
+        },
         questions: [{
           question_id: 'Q-001',
           text: '测试问题',
-          element_ids: ['Activity-001'],
+          target_paths: ['Task-001'],
           status: 'OPEN',
           answer: '',
           evidence_refs: ['B-001'],
         }],
-        conflicts: [],
+        provenance: {},
         source_summary: { total_blocks: 1, formats: ['md'], evidence_refs: ['B-001'] },
       }));
 
@@ -478,7 +577,7 @@ describe('Merge/Finalize Integrity', () => {
 
       const fragmentContent = JSON.stringify(fragment, null, 2) + '\n';
       await writeFile(
-        join(runDir, 'stages', 'semantic', 'fragments', 'EB-001.json'),
+        join(runDir, 'stages', 'semantic', 'fragments', 'EB-001-activity.json'),
         fragmentContent
       );
 
@@ -490,6 +589,8 @@ describe('Merge/Finalize Integrity', () => {
         schema_version: '1.0.0',
         batches: [{
           batch_id: 'EB-001',
+          task_id: 'EB-001-activity',
+          task_kind: 'ACTIVITY_CATALOG',
           batch_sha256: 'a'.repeat(64),
           status: 'ACCEPTED',
           fragment_sha256: fragmentSha256,
@@ -504,34 +605,63 @@ describe('Merge/Finalize Integrity', () => {
 
       // 创建 process-draft
       await writeFile(join(runDir, 'stages', 'merge', 'process-draft.json'), JSON.stringify({
-        title: '测试流程',
-        level: 'L5',
-        process_id: 'test',
-        boundary: { start: '开始', end: '结束' },
-        lanes: [
-          { lane_id: 'Lane-001', name: '申请人', org_candidates: [] },
-        ],
-        elements: [{
-          element_id: 'Activity-001',
-          kind: 'ACTIVITY',
-          name: '提交申请',
-          lane_id: 'Lane-001',
+        schema_version: '2.0.0',
+        process_card: {
+          process_id: 'test',
+          name: '测试流程',
+          level: 'L4',
+          is_leaf: true,
+          description: '测试流程',
+          purpose: '测试',
+          owner: 'Role-owner',
+          parent_process_name: null,
           inputs: [],
+          outputs: [],
+          start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+          end_results: [{ event_id: 'End-1', name: '结束' }],
+          performance_indicators: [],
+        },
+        activities: [{
+          activity_id: 'Activity-001',
+          name: '提交申请',
+          description: '提交申请',
+          activity_type: 'STANDARD',
+          responsibility_model: 'RASCI',
+          role_assignments: [{ role_id: 'Role-001', responsibility: 'R' }],
+          sla: null,
+          tools: [],
+          inputs: [],
+          process_summary: '',
           outputs: ['申请单'],
-          evidence_refs: ['B-001'],
-          certainty: 'EXPLICIT',
-          question_ids: [],
+          completion_criteria: [],
+          references: [],
+          main_task_id: 'Task-001',
+          confirmation: null,
+          completeness: 'COMPLETE',
         }],
-        flows: [],
+        diagram: {
+          lanes: [{ lane_id: 'Lane-001', name: '申请人', role_id: 'Role-001' }],
+          nodes: [
+            { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: 'Lane-001' },
+            { node_id: 'Task-001', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-001' },
+            { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: 'Lane-001' },
+          ],
+          flows: [
+            { flow_id: 'Flow-1', source_ref: 'Start-1', target_ref: 'Task-001', condition: null },
+            { flow_id: 'Flow-2', source_ref: 'Task-001', target_ref: 'End-1', condition: null },
+          ],
+          task_bindings: [{ activity_id: 'Activity-001', main_task_id: 'Task-001', confirmation_task_id: null }],
+          layout_version: '2.0.0',
+        },
         questions: [{
           question_id: 'Q-001',
           text: '测试问题',
-          element_ids: ['Activity-001'],
+          target_paths: ['Task-001'],
           status: 'OPEN',
           answer: '',
           evidence_refs: ['B-001'],
         }],
-        conflicts: [],
+        provenance: {},
         source_summary: { total_blocks: 1, formats: ['md'], evidence_refs: ['B-001'] },
       }));
 

@@ -1,0 +1,110 @@
+{
+  "schema_version": "2.0.0",
+  "process_card": {
+    "process_id": "Process-review-meeting",
+    "name": "采购评审会",
+    "level": "L4",
+    "is_leaf": true,
+    "description": "通过评审会议决定采购方案",
+    "purpose": "形成可执行的采购决定",
+    "owner": "Role-chair",
+    "parent_process_name": null,
+    "inputs": ["采购方案"],
+    "outputs": ["评审决议"],
+    "start": {
+      "event_id": "Start-meeting",
+      "name": "召开评审会议",
+      "event_type": "NONE"
+    },
+    "end_results": [
+      {
+        "event_id": "End-decision",
+        "name": "评审决议形成"
+      }
+    ],
+    "performance_indicators": []
+  },
+  "activities": [
+    {
+      "activity_id": "Activity-decide",
+      "name": "评审采购方案",
+      "description": "评审会议讨论并形成决议",
+      "activity_type": "REVIEW_MEETING",
+      "responsibility_model": "OARP",
+      "role_assignments": [
+        { "role_id": "Role-chair", "responsibility": "O" },
+        { "role_id": "Role-reviewer", "responsibility": "R" },
+        { "role_id": "Role-approver", "responsibility": "A" },
+        { "role_id": "Role-participant", "responsibility": "P" }
+      ],
+      "sla": null,
+      "tools": [],
+      "inputs": ["采购方案"],
+      "process_summary": "评审并形成决议",
+      "outputs": ["评审决议"],
+      "completion_criteria": [],
+      "references": [],
+      "main_task_id": "Task-decide",
+      "confirmation": null,
+      "completeness": "COMPLETE"
+    },
+    {
+      "activity_id": "Activity-confirm-decision",
+      "name": "确认评审决议",
+      "description": "确认者与执行者共同确认决议内容",
+      "activity_type": "STANDARD",
+      "responsibility_model": "RASCI",
+      "role_assignments": [
+        { "role_id": "Role-chair", "responsibility": "R" },
+        { "role_id": "Role-reviewer", "responsibility": "A" }
+      ],
+      "sla": null,
+      "tools": [],
+      "inputs": ["评审决议草案"],
+      "process_summary": "确认并签署决议",
+      "outputs": ["已确认的决议"],
+      "completion_criteria": [],
+      "references": [],
+      "main_task_id": "Task-confirm-main",
+      "confirmation": {
+        "confirmation_task_id": "Task-confirm-exec",
+        "confirm_role_id": "Role-reviewer",
+        "co_completes": true,
+        "confirm_bears_final_responsibility": true,
+        "no_formal_approval_meeting": true
+      },
+      "completeness": "COMPLETE"
+    }
+  ],
+  "diagram": {
+    "lanes": [
+      { "lane_id": "Lane-chair", "name": "主持人", "role_id": "Role-chair" },
+      { "lane_id": "Lane-reviewer", "name": "评审人", "role_id": "Role-reviewer" }
+    ],
+    "nodes": [
+      { "node_id": "Start-meeting", "node_type": "START_EVENT", "name": "召开评审会议", "lane_id": null },
+      { "node_id": "Task-decide", "node_type": "MAIN_TASK", "name": "评审采购方案", "lane_id": "Lane-chair" },
+      { "node_id": "Task-confirm-main", "node_type": "MAIN_TASK", "name": "确认评审决议", "lane_id": "Lane-chair" },
+      { "node_id": "Task-confirm-exec", "node_type": "CONFIRMATION_TASK", "name": "确认决议", "lane_id": "Lane-reviewer" },
+      { "node_id": "End-decision", "node_type": "END_EVENT", "name": "评审决议形成", "lane_id": null }
+    ],
+    "flows": [
+      { "flow_id": "Flow-1", "source_ref": "Start-meeting", "target_ref": "Task-decide", "condition": null },
+      { "flow_id": "Flow-2", "source_ref": "Task-decide", "target_ref": "Task-confirm-main", "condition": null },
+      { "flow_id": "Flow-3", "source_ref": "Task-confirm-main", "target_ref": "Task-confirm-exec", "condition": null },
+      { "flow_id": "Flow-4", "source_ref": "Task-confirm-exec", "target_ref": "End-decision", "condition": null }
+    ],
+    "task_bindings": [
+      { "activity_id": "Activity-decide", "main_task_id": "Task-decide", "confirmation_task_id": null },
+      { "activity_id": "Activity-confirm-decision", "main_task_id": "Task-confirm-main", "confirmation_task_id": "Task-confirm-exec" }
+    ],
+    "layout_version": "2.0.0"
+  },
+  "questions": [],
+  "provenance": {},
+  "source_summary": {
+    "total_blocks": 0,
+    "formats": [],
+    "evidence_refs": []
+  }
+}

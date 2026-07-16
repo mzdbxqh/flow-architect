@@ -16,22 +16,61 @@ describe('Accept Fragment Atomicity', () => {
       await rm(tempDir, { recursive: true, force: true });
     });
 
-    function validFragment(batchId = 'EB-001') {
+    function validFragment(batchId = 'EB-001', taskKind = 'PROCESS_CARD') {
+      const taskIdSuffix = {
+        PROCESS_CARD: 'card',
+        ACTIVITY_CATALOG: 'activity',
+        CONTROL_FLOW: 'flow',
+      }[taskKind];
+
+      const payload = {
+        PROCESS_CARD: {
+          facts: [{
+            fact_id: 'F-001',
+            kind: 'PROCESS_NAME',
+            process_key: 'test',
+            subject_key: 'test',
+            label: '测试流程',
+            attributes: {},
+            certainty: 'EXPLICIT',
+            evidence_refs: ['B-001'],
+          }],
+          uncertainties: [],
+        },
+        ACTIVITY_CATALOG: {
+          facts: [{
+            fact_id: 'F-001',
+            kind: 'ACTIVITY',
+            process_key: 'test',
+            subject_key: 'test',
+            label: '测试活动',
+            attributes: {},
+            certainty: 'EXPLICIT',
+            evidence_refs: ['B-001'],
+          }],
+          uncertainties: [],
+        },
+        CONTROL_FLOW: {
+          facts: [{
+            fact_id: 'F-001',
+            kind: 'FLOW',
+            process_key: 'test',
+            subject_key: 'test',
+            label: '测试流程',
+            attributes: {},
+            certainty: 'EXPLICIT',
+            evidence_refs: ['B-001'],
+          }],
+          uncertainties: [],
+        },
+      }[taskKind];
+
       return {
-        schema_version: '1.0.0',
+        schema_version: '2.0.0',
+        task_kind: taskKind,
         batch_id: batchId,
         batch_sha256: 'a'.repeat(64),
-        facts: [{
-          fact_id: 'F-001',
-          kind: 'ACTIVITY',
-          process_key: 'test',
-          subject_key: 'test',
-          label: '测试活动',
-          attributes: {},
-          certainty: 'EXPLICIT',
-          evidence_refs: ['B-001'],
-        }],
-        uncertainties: [],
+        payload,
       };
     }
 
@@ -52,11 +91,14 @@ describe('Accept Fragment Atomicity', () => {
       // 设置初始状态
       await mkdir(join(runDir, 'stages', 'semantic', 'fragments'), { recursive: true });
       const initialQueue = {
-        schema_version: '1.0.0',
+        schema_version: '2.0.0',
         batches: [{
           batch_id: 'EB-001',
+          task_kind: 'PROCESS_CARD',
+          task_id: 'EB-001-card',
           batch_sha256: 'a'.repeat(64),
           status: 'PENDING',
+          fragment_sha256: null,
         }],
         total_batches: 1,
         total_blocks: 1,
@@ -69,19 +111,23 @@ describe('Accept Fragment Atomicity', () => {
       // 模拟 queue 写入失败（通过权限限制）
       // 注意：这个测试需要在实际实现中模拟失败
       // 这里我们先测试成功路径，然后在实现中添加失败注入
+      const fragment = validFragment('EB-001', 'PROCESS_CARD');
       const result = await acceptSemanticFragment({
-        fragment: validFragment(),
+        fragment,
         batch: validBatch(),
         runDir,
       });
 
       // 成功路径应正常工作
+      if (!result.accepted) {
+        console.error('验收失败:', result.errors);
+      }
       assert.equal(result.accepted, true, '应验收通过');
 
-      // 验证 fragment 文件已写入
+      // 验证 fragment 文件已写入（文件名使用 task_id）
       const fragDir = join(runDir, 'stages', 'semantic', 'fragments');
       const fragFiles = await readdir(fragDir);
-      assert.ok(fragFiles.includes('EB-001.json'), 'fragment 文件应已写入');
+      assert.ok(fragFiles.includes('EB-001-card.json'), 'fragment 文件应已写入');
 
       // 验证 queue 状态已更新
       const queueAfter = JSON.parse(
@@ -97,11 +143,14 @@ describe('Accept Fragment Atomicity', () => {
       // 设置初始状态
       await mkdir(join(runDir, 'stages', 'semantic', 'fragments'), { recursive: true });
       const initialQueue = {
-        schema_version: '1.0.0',
+        schema_version: '2.0.0',
         batches: [{
           batch_id: 'EB-001',
+          task_kind: 'PROCESS_CARD',
+          task_id: 'EB-001-card',
           batch_sha256: 'a'.repeat(64),
           status: 'PENDING',
+          fragment_sha256: null,
         }],
         total_batches: 1,
         total_blocks: 1,
@@ -111,7 +160,7 @@ describe('Accept Fragment Atomicity', () => {
         JSON.stringify(initialQueue)
       );
 
-      const fragment = validFragment();
+      const fragment = validFragment('EB-001', 'PROCESS_CARD');
       const result = await acceptSemanticFragment({
         fragment,
         batch: validBatch(),
@@ -138,11 +187,14 @@ describe('Accept Fragment Atomicity', () => {
       // 设置初始状态
       await mkdir(join(runDir, 'stages', 'semantic', 'fragments'), { recursive: true });
       const initialQueue = {
-        schema_version: '1.0.0',
+        schema_version: '2.0.0',
         batches: [{
           batch_id: 'EB-001',
+          task_kind: 'PROCESS_CARD',
+          task_id: 'EB-001-card',
           batch_sha256: 'a'.repeat(64),
           status: 'PENDING',
+          fragment_sha256: null,
         }],
         total_batches: 1,
         total_blocks: 1,
@@ -154,7 +206,7 @@ describe('Accept Fragment Atomicity', () => {
 
       // 创建一个无效 fragment（batch_id 不匹配）
       const invalidFragment = {
-        ...validFragment(),
+        ...validFragment('EB-001', 'PROCESS_CARD'),
         batch_id: 'EB-WRONG',
       };
 
@@ -185,30 +237,36 @@ describe('Accept Fragment Atomicity', () => {
       // 设置初始状态，包含已存在的 fragment
       await mkdir(join(runDir, 'stages', 'semantic', 'fragments'), { recursive: true });
       const existingFragment = {
-        schema_version: '1.0.0',
+        schema_version: '2.0.0',
+        task_kind: 'PROCESS_CARD',
         batch_id: 'EB-001',
         batch_sha256: 'a'.repeat(64),
-        facts: [{
-          fact_id: 'F-EXISTING',
-          kind: 'ACTIVITY',
-          process_key: 'test',
-          subject_key: 'existing',
-          label: '已有活动',
-          attributes: {},
-          certainty: 'EXPLICIT',
-          evidence_refs: ['B-001'],
-        }],
-        uncertainties: [],
+        task_id: 'EB-001-card',
+        payload: {
+          facts: [{
+            fact_id: 'F-EXISTING',
+            kind: 'PROCESS_NAME',
+            process_key: 'test',
+            subject_key: 'existing',
+            label: '已有流程',
+            attributes: {},
+            certainty: 'EXPLICIT',
+            evidence_refs: ['B-001'],
+          }],
+          uncertainties: [],
+        },
       };
       await writeFile(
-        join(runDir, 'stages', 'semantic', 'fragments', 'EB-001.json'),
+        join(runDir, 'stages', 'semantic', 'fragments', 'EB-001-card.json'),
         JSON.stringify(existingFragment)
       );
 
       const initialQueue = {
-        schema_version: '1.0.0',
+        schema_version: '2.0.0',
         batches: [{
           batch_id: 'EB-001',
+          task_kind: 'PROCESS_CARD',
+          task_id: 'EB-001-card',
           batch_sha256: 'a'.repeat(64),
           status: 'ACCEPTED',
         }],
@@ -220,19 +278,22 @@ describe('Accept Fragment Atomicity', () => {
         JSON.stringify(initialQueue)
       );
 
-      // 尝试验收一个无效 fragment
+      // 尝试验收一个无效 fragment（evidence_ref 不存在）
       const invalidFragment = {
-        ...validFragment(),
-        facts: [{
-          fact_id: 'F-INVALID',
-          kind: 'ACTIVITY',
-          process_key: 'test',
-          subject_key: 'invalid',
-          label: '无效活动',
-          attributes: {},
-          certainty: 'EXPLICIT',
-          evidence_refs: ['B-999'], // 不存在的引用
-        }],
+        ...validFragment('EB-001', 'PROCESS_CARD'),
+        payload: {
+          facts: [{
+            fact_id: 'F-INVALID',
+            kind: 'PROCESS_NAME',
+            process_key: 'test',
+            subject_key: 'invalid',
+            label: '无效流程',
+            attributes: {},
+            certainty: 'EXPLICIT',
+            evidence_refs: ['B-999'], // 不存在的引用
+          }],
+          uncertainties: [],
+        },
       };
 
       const result = await acceptSemanticFragment({
@@ -245,7 +306,7 @@ describe('Accept Fragment Atomicity', () => {
 
       // 验证已存在的 fragment 内容不变
       const fragmentAfter = JSON.parse(
-        await readFile(join(runDir, 'stages', 'semantic', 'fragments', 'EB-001.json'), 'utf8')
+        await readFile(join(runDir, 'stages', 'semantic', 'fragments', 'EB-001-card.json'), 'utf8')
       );
       assert.deepEqual(fragmentAfter, existingFragment, '已有 fragment 内容应不变');
 

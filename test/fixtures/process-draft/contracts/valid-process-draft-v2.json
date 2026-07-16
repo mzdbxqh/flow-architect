@@ -1,0 +1,76 @@
+{
+  "schema_version": "2.0.0",
+  "process_card": {
+    "process_id": "Process-purchase",
+    "name": "采购审批",
+    "level": "L4",
+    "is_leaf": true,
+    "description": "完成采购申请的审查与决策",
+    "purpose": "形成可执行的采购决定",
+    "owner": "Role-process-owner",
+    "parent_process_name": "采购管理",
+    "inputs": ["采购申请"],
+    "outputs": ["审批结果"],
+    "start": {
+      "event_id": "Start-request",
+      "name": "收到采购申请",
+      "event_type": "NONE"
+    },
+    "end_results": [
+      {
+        "event_id": "End-approved",
+        "name": "采购申请已批准"
+      }
+    ],
+    "performance_indicators": []
+  },
+  "activities": [
+    {
+      "activity_id": "Activity-review",
+      "name": "审核采购申请",
+      "description": "对采购需求、材料完整性和权限进行业务审核",
+      "activity_type": "STANDARD",
+      "responsibility_model": "RASCI",
+      "role_assignments": [
+        { "role_id": "Role-applicant", "responsibility": "R" },
+        { "role_id": "Role-manager", "responsibility": "A" }
+      ],
+      "sla": null,
+      "tools": [],
+      "inputs": ["采购申请单"],
+      "process_summary": "核对采购需求和材料完整性",
+      "outputs": ["审核结论"],
+      "completion_criteria": [],
+      "references": [],
+      "main_task_id": "Task-review",
+      "confirmation": null,
+      "completeness": "COMPLETE"
+    }
+  ],
+  "diagram": {
+    "lanes": [
+      { "lane_id": "Lane-applicant", "name": "申请人", "role_id": "Role-applicant" },
+      { "lane_id": "Lane-manager", "name": "经理", "role_id": "Role-manager" }
+    ],
+    "nodes": [
+      { "node_id": "Start-request", "node_type": "START_EVENT", "name": "收到采购申请", "lane_id": null },
+      { "node_id": "Task-review", "node_type": "MAIN_TASK", "name": "审核采购申请", "lane_id": "Lane-applicant" },
+      { "node_id": "End-approved", "node_type": "END_EVENT", "name": "采购申请已批准", "lane_id": null }
+    ],
+    "flows": [
+      { "flow_id": "Flow-1", "source_ref": "Start-request", "target_ref": "Task-review", "condition": null },
+      { "flow_id": "Flow-2", "source_ref": "Task-review", "target_ref": "End-approved", "condition": null }
+    ],
+    "task_bindings": [
+      { "activity_id": "Activity-review", "main_task_id": "Task-review", "confirmation_task_id": null }
+    ],
+    "layout_version": "2.0.0"
+  },
+  "questions": [],
+  "provenance": {},
+  "source_summary": {
+    "total_blocks": 0,
+    "formats": [],
+    "evidence_refs": []
+  }
+}

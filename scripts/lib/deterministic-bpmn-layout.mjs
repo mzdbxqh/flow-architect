@@ -8,7 +8,7 @@
  * 1. 拓扑排序（BFS）确定每个元素的 rank
  * 2. 按 rank 列、lane 行网格排列元素
  * 3. 为每条 flow 生成 waypoints（含循环回边的绕行路径）
- * 4. 为 start/end 事件生成位置
+ * 4. 将开始、结束等显式事件与其他节点统一布局
  */
 
 const TASK_WIDTH = 120;
@@ -26,43 +26,42 @@ const BACK_EDGE_OFFSET_Y = 40;
  * 计算流程图的确定性布局
  *
  * @param {object} draft - 流程草稿
- * @returns {object} 布局结果，包含 elements/edges/lanes/startShape/endShape
+ * @returns {object} 布局结果，包含 elements/edges/lanes
  */
 export function layoutProcessGraph(draft) {
-  const { elements, flows, lanes } = draft;
+  // 只支持 V2 格式
+  if (!draft.diagram || !draft.diagram.nodes || !draft.diagram.flows || !draft.diagram.lanes) {
+    throw new Error('布局器只支持 V2 格式输入，需要 draft.diagram 包含 nodes/flows/lanes');
+  }
+
+  // 节点必须满足 V2 的最小结构要求
+  for (const node of draft.diagram.nodes) {
+    if (typeof node.node_id !== 'string' || typeof node.node_type !== 'string') {
+      throw new Error('布局器只支持具有 node_id/node_type 的 V2 节点');
+    }
+  }
+
+  const nodes = draft.diagram.nodes;
+  const flows = draft.diagram.flows;
+  const lanes = draft.diagram.lanes;
 
   // 1. 拓扑排序（含回边检测）
-  const { ranks, backEdgeIds } = computeTopologicalRanks(elements, flows);
+  const { ranks, backEdgeIds } = computeTopologicalRanks(nodes, flows);
 
-  // 2. 构建反向索引
-  const incomingMap = buildIncomingMap(flows);
-  const outgoingMap = buildOutgoingMap(flows);
-  const backEdges = backEdgeIds;
+  // 2. 计算自适应泳道高度
+  const laneRankRequirements = computeLaneRankRequirements(nodes, ranks);
+  const laneLayout = computeLanePositions(lanes, START_Y, laneRankRequirements);
 
-  // 3. 计算 lane 位置
-  const laneLayout = computeLanePositions(lanes, START_Y, LANE_HEIGHT);
+  // 3. 按 rank 计算元素位置
+  const elementLayout = computeElementPositions(nodes, ranks, laneLayout);
 
-  // 4. 按 rank 计算元素位置
-  const elementLayout = computeElementPositions(
-    elements, lanes, ranks, laneLayout, incomingMap, outgoingMap
-  );
-
-  // 5. 计算 start/end 事件位置
-  const startShape = computeStartShape(elements, ranks, laneLayout);
-  const endShape = computeEndShape(elements, ranks, laneLayout);
-
-  // 6. 为所有 flow 生成 edge waypoints（含 start→first、last→end）
-  const allEdges = computeAllEdges(
-    elements, flows, ranks, elementLayout, laneLayout,
-    incomingMap, outgoingMap, backEdges, startShape, endShape
-  );
+  // 4. 为所有 flow 生成 edge waypoints
+  const allEdges = computeAllEdges(flows, elementLayout, laneLayout, backEdgeIds);
 
   return {
     elements: elementLayout,
     edges: allEdges,
     lanes: laneLayout,
-    startShape,
-    endShape,
   };
 }
 
@@ -70,15 +69,18 @@ export function layoutProcessGraph(draft) {
  * 拓扑排序：先 DFS 识别回边，再对正向 DAG 执行 Kahn 算法
  * 回边（循环）在 detectBackEdges 中单独识别
  */
-function computeTopologicalRanks(elements, flows) {
+function computeTopologicalRanks(nodes, flows) {
   const ranks = {};
-  const elementIds = new Set(elements.map(e => e.element_id));
+  const nodeIds = new Set(nodes.map(n => n.node_id));
 
-  // 构建邻接表（只含双向都存在的元素）
+  // 构建邻接表（只含双向都存在的节点）
   const adjacency = new Map();
-  for (const el of elements) adjacency.set(el.element_id, []);
+  for (const node of nodes) {
+    const id = node.node_id;
+    adjacency.set(id, []);
+  }
   for (const flow of flows) {
-    if (elementIds.has(flow.source_ref) && elementIds.has(flow.target_ref)) {
+    if (nodeIds.has(flow.source_ref) && nodeIds.has(flow.target_ref)) {
       adjacency.get(flow.source_ref).push({ target: flow.target_ref, flowId: flow.flow_id });
     }
   }
@@ -102,22 +104,24 @@ function computeTopologicalRanks(elements, flows) {
     visitState.set(node, 2); // 出栈
   }
 
-  for (const el of elements) {
-    if ((visitState.get(el.element_id) ?? 0) === 0) {
-      dfs(el.element_id);
+  for (const node of nodes) {
+    const id = node.node_id;
+    if ((visitState.get(id) ?? 0) === 0) {
+      dfs(id);
     }
   }
 
   // 构建正向邻接表和入度（排除回边）
   const forwardAdj = new Map();
   const inDegree = new Map();
-  for (const el of elements) {
-    forwardAdj.set(el.element_id, []);
-    inDegree.set(el.element_id, 0);
+  for (const node of nodes) {
+    const id = node.node_id;
+    forwardAdj.set(id, []);
+    inDegree.set(id, 0);
   }
   for (const flow of flows) {
     if (backEdgeIds.has(flow.flow_id)) continue;
-    if (elementIds.has(flow.source_ref) && elementIds.has(flow.target_ref)) {
+    if (nodeIds.has(flow.source_ref) && nodeIds.has(flow.target_ref)) {
       forwardAdj.get(flow.source_ref).push(flow.target_ref);
       inDegree.set(flow.target_ref, inDegree.get(flow.target_ref) + 1);
     }
@@ -149,49 +153,98 @@ function computeTopologicalRanks(elements, flows) {
   }
 
   // 未排名节点（理论上正向 DAG 不应有剩余）
-  for (const el of elements) {
-    if (ranks[el.element_id] === undefined) {
-      ranks[el.element_id] = 0;
+  for (const node of nodes) {
+    const id = node.node_id;
+    if (ranks[id] === undefined) {
+      ranks[id] = 0;
     }
   }
 
   return { ranks, backEdgeIds };
 }
 
-function buildIncomingMap(flows) {
-  const map = new Map();
-  for (const flow of flows) {
-    if (!map.has(flow.target_ref)) map.set(flow.target_ref, []);
-    map.get(flow.target_ref).push(flow);
+/**
+ * 计算节点尺寸
+ */
+function getNodeDimensions(node) {
+  const nodeType = node.node_type;
+  if (nodeType.startsWith('GATEWAY_')) {
+    return { width: GATEWAY_SIZE, height: GATEWAY_SIZE };
+  } else if (nodeType.includes('EVENT') || nodeType.includes('CATCH') || nodeType.includes('THROW')) {
+    return { width: EVENT_SIZE, height: EVENT_SIZE };
+  } else {
+    return { width: TASK_WIDTH, height: TASK_HEIGHT };
   }
-  return map;
-}
-
-function buildOutgoingMap(flows) {
-  const map = new Map();
-  for (const flow of flows) {
-    if (!map.has(flow.source_ref)) map.set(flow.source_ref, []);
-    map.get(flow.source_ref).push(flow);
-  }
-  return map;
 }
 
 /**
- * 计算 lane 水平带位置
+ * 计算每个泳道每个 rank 的节点堆叠需求
+ * 返回 Map<lane_id, Map<rank, { count, totalNodeHeight }>>
  */
-function computeLanePositions(lanes, baseY, laneHeight) {
+function computeLaneRankRequirements(nodes, ranks) {
+  const requirements = new Map();
+
+  for (const node of nodes) {
+    const id = node.node_id;
+    const laneId = node.lane_id || null;
+    const rank = ranks[id] ?? 0;
+    const { height } = getNodeDimensions(node);
+
+    if (!requirements.has(laneId)) {
+      requirements.set(laneId, new Map());
+    }
+    const laneReqs = requirements.get(laneId);
+
+    if (!laneReqs.has(rank)) {
+      laneReqs.set(rank, { count: 0, totalNodeHeight: 0 });
+    }
+    const rankReq = laneReqs.get(rank);
+    rankReq.count++;
+    rankReq.totalNodeHeight += height;
+  }
+
+  return requirements;
+}
+
+/**
+ * 计算自适应泳道高度
+ * 基于每个泳道每个 rank 的最大堆叠需求
+ */
+function computeAdaptiveLaneHeight(laneId, laneRankRequirements) {
+  const laneReqs = laneRankRequirements.get(laneId);
+  if (!laneReqs || laneReqs.size === 0) {
+    return LANE_HEIGHT; // 默认高度
+  }
+
+  // 计算该泳道内所有 rank 的最大堆叠需求
+  let maxRankHeight = 0;
+  for (const req of laneReqs.values()) {
+    const gapsHeight = Math.max(0, req.count - 1) * 10;
+    const rankHeight = req.totalNodeHeight + gapsHeight + 2 * LANE_PADDING_TOP;
+    maxRankHeight = Math.max(maxRankHeight, rankHeight);
+  }
+
+  // 确保最小高度
+  return Math.max(maxRankHeight, LANE_HEIGHT);
+}
+
+/**
+ * 计算 lane 水平带位置（自适应高度）
+ */
+function computeLanePositions(lanes, baseY, laneRankRequirements) {
   const result = [];
   let currentY = baseY;
   for (const lane of lanes) {
+    const adaptiveHeight = computeAdaptiveLaneHeight(lane.lane_id, laneRankRequirements);
     result.push({
       id: lane.lane_id,
       name: lane.name,
       x: START_X,
       y: currentY,
       width: 0, // 后续根据元素列数计算
-      height: laneHeight,
+      height: adaptiveHeight,
     });
-    currentY += laneHeight;
+    currentY += adaptiveHeight;
   }
   return result;
 }
@@ -201,53 +254,68 @@ function computeLanePositions(lanes, baseY, laneHeight) {
  * x = 基于 rank 的列
  * y = 基于 lane 的行内居中
  */
-function computeElementPositions(elements, lanes, ranks, laneLayout, incomingMap, outgoingMap) {
+function computeElementPositions(nodes, ranks, laneLayout) {
   // 找出最大 rank
   let maxRank = 0;
-  for (const el of elements) {
-    const r = ranks[el.element_id] ?? 0;
+  for (const node of nodes) {
+    const id = node.node_id;
+    const r = ranks[id] ?? 0;
     if (r > maxRank) maxRank = r;
   }
 
-  // 按 rank 分组，每组按 lane 排序
+  // 按 rank 分组，每组按 lane 和稳定 ID 排序
   const rankGroups = new Map();
-  for (const el of elements) {
-    const r = ranks[el.element_id] ?? 0;
+  for (const node of nodes) {
+    const id = node.node_id;
+    const r = ranks[id] ?? 0;
     if (!rankGroups.has(r)) rankGroups.set(r, []);
-    rankGroups.get(r).push(el);
+    rankGroups.get(r).push(node);
   }
 
-  // 计算每列中每 lane 的元素计数（用于偏移）
+  // 同 rank 按 lane 和稳定 ID 排序
+  for (const [rank, group] of rankGroups) {
+    group.sort((a, b) => {
+      const lidA = a.lane_id || '';
+      const lidB = b.lane_id || '';
+      if (lidA !== lidB) return lidA.localeCompare(lidB);
+      const idA = a.node_id;
+      const idB = b.node_id;
+      return idA.localeCompare(idB);
+    });
+  }
+
   const layout = {};
 
   for (let rank = 0; rank <= maxRank; rank++) {
     const group = rankGroups.get(rank) || [];
-    const laneCounts = new Map();
-    for (const el of group) {
-      const lid = el.lane_id;
-      laneCounts.set(lid, (laneCounts.get(lid) || 0) + 1);
+    const laneGroups = new Map();
+    for (const node of group) {
+      const lid = node.lane_id;
+      if (!laneGroups.has(lid)) laneGroups.set(lid, []);
+      laneGroups.get(lid).push(node);
     }
 
-    // 每个 lane 内的索引
-    const laneIndices = new Map();
-    for (const el of group) {
-      const lid = el.lane_id;
-      const idx = laneIndices.get(lid) || 0;
-      laneIndices.set(lid, idx + 1);
-
+    for (const [lid, laneNodes] of laneGroups) {
       const lane = laneLayout.find(l => l.id === lid);
       const laneY = lane ? lane.y : START_Y;
+      const laneHeight = lane ? lane.height : LANE_HEIGHT;
+      const dimensions = laneNodes.map(getNodeDimensions);
+      const stackHeight = dimensions.reduce((sum, item) => sum + item.height, 0)
+        + Math.max(0, laneNodes.length - 1) * 10;
+      let currentY = laneY + (laneHeight - stackHeight) / 2;
 
-      const width = el.kind === 'DECISION' ? GATEWAY_SIZE : TASK_WIDTH;
-      const height = el.kind === 'DECISION' ? GATEWAY_SIZE : TASK_HEIGHT;
-
-      layout[el.element_id] = {
-        x: START_X + 100 + rank * RANK_GAP_X,
-        y: laneY + LANE_PADDING_TOP + (LANE_HEIGHT - LANE_PADDING_TOP - height) / 2,
-        width,
-        height,
-        rank,
-      };
+      for (let index = 0; index < laneNodes.length; index++) {
+        const node = laneNodes[index];
+        const { width, height } = dimensions[index];
+        layout[node.node_id] = {
+          x: START_X + 100 + rank * RANK_GAP_X,
+          y: currentY,
+          width,
+          height,
+          rank,
+        };
+        currentY += height + 10;
+      }
     }
   }
 
@@ -261,70 +329,14 @@ function computeElementPositions(elements, lanes, ranks, laneLayout, incomingMap
 }
 
 /**
- * 计算 StartEvent 位置（在第一个 rank 的第一个 lane 内）
- */
-function computeStartShape(elements, ranks, laneLayout) {
-  const firstLane = laneLayout[0];
-  return {
-    x: START_X,
-    y: firstLane ? firstLane.y + LANE_HEIGHT / 2 - EVENT_SIZE / 2 : START_Y,
-    width: EVENT_SIZE,
-    height: EVENT_SIZE,
-  };
-}
-
-/**
- * 计算 EndEvent 位置（在最后一个 rank 的最后一个 lane 内）
- */
-function computeEndShape(elements, ranks, laneLayout) {
-  let maxRank = 0;
-  for (const el of elements) {
-    const r = ranks[el.element_id] ?? 0;
-    if (r > maxRank) maxRank = r;
-  }
-  const lastLane = laneLayout[laneLayout.length - 1] || laneLayout[0];
-  return {
-    x: START_X + 100 + (maxRank + 1) * RANK_GAP_X,
-    y: lastLane ? lastLane.y + LANE_HEIGHT / 2 - EVENT_SIZE / 2 : START_Y,
-    width: EVENT_SIZE,
-    height: EVENT_SIZE,
-  };
-}
-
-/**
  * 为所有 flow 生成 edge waypoints
- * 包括：draft flows、start→根节点、叶子节点→end
+ * 只处理 draft 中的 flows，不生成虚拟的 start/end 连线
  * 循环回边使用绕行路径
  */
-function computeAllEdges(
-  elements, flows, ranks, elementLayout, laneLayout,
-  incomingMap, outgoingMap, backEdges, startShape, endShape
-) {
+function computeAllEdges(flows, elementLayout, laneLayout, backEdges) {
   const edges = [];
 
-  // 找到所有根节点（入度为零）
-  const rootElements = findRootElements(elements, incomingMap);
-  // 找到所有叶子节点（出度为零）
-  const leafElements = findLeafElements(elements, outgoingMap);
-
-  // Start → 根节点
-  for (const root of rootElements) {
-    const targetCenter = getElementCenter(root.element_id, elementLayout);
-    const rootEl = elementLayout[root.element_id];
-    if (targetCenter && rootEl) {
-      edges.push({
-        id: `Flow_start_${root.element_id}`,
-        sourceRef: 'StartEvent_1',
-        targetRef: root.element_id,
-        waypoints: [
-          { x: startShape.x + startShape.width, y: startShape.y + startShape.height / 2 },
-          { x: rootEl.x, y: rootEl.y + rootEl.height / 2 },
-        ],
-      });
-    }
-  }
-
-  // Draft flows
+  // 只处理 draft 中的 flows
   for (const flow of flows) {
     const isBackEdge = backEdges.has(flow.flow_id);
     const waypoints = computeFlowWaypoints(
@@ -336,23 +348,6 @@ function computeAllEdges(
       targetRef: flow.target_ref,
       waypoints,
     });
-  }
-
-  // 叶子节点 → End
-  for (const leaf of leafElements) {
-    const sourceCenter = getElementCenter(leaf.element_id, elementLayout);
-    const leafEl = elementLayout[leaf.element_id];
-    if (sourceCenter && leafEl) {
-      edges.push({
-        id: `Flow_end_${leaf.element_id}`,
-        sourceRef: leaf.element_id,
-        targetRef: 'EndEvent_1',
-        waypoints: [
-          { x: leafEl.x + leafEl.width, y: leafEl.y + leafEl.height / 2 },
-          { x: endShape.x, y: endShape.y + endShape.height / 2 },
-        ],
-      });
-    }
   }
 
   return edges;
@@ -368,11 +363,8 @@ function computeFlowWaypoints(flow, elementLayout, laneLayout, isBackEdge) {
   const tgt = elementLayout[flow.target_ref];
 
   if (!src || !tgt) {
-    // fallback: 直线
-    return [
-      { x: 0, y: 0 },
-      { x: 100, y: 0 },
-    ];
+    // 对悬空引用抛出明确错误
+    throw new Error(`流程 ${flow.flow_id} 引用了不存在的节点: ${!src ? flow.source_ref : ''} ${!tgt ? flow.target_ref : ''}`.trim());
   }
 
   const srcCenterY = src.y + src.height / 2;
@@ -383,8 +375,6 @@ function computeFlowWaypoints(flow, elementLayout, laneLayout, isBackEdge) {
   if (isBackEdge) {
     // 回边绕行路径: 右出 → 下方 → 左转 → 上行 → 入口
     const bottomY = computeMaxBottomY(laneLayout);
-    const midX = (srcRightX + tgtLeftX) / 2;
-
     return [
       { x: srcRightX, y: srcCenterY },
       { x: srcRightX + 30, y: srcCenterY },
@@ -395,76 +385,16 @@ function computeFlowWaypoints(flow, elementLayout, laneLayout, isBackEdge) {
     ];
   }
 
-  // 正向流: source 右侧中点 → target 左侧中点
+  // 正交流: source 右侧中点 → target 左侧中点
+  // 使用正交路径：水平→垂直→水平
+  const midX = (srcRightX + tgtLeftX) / 2;
+
   return [
     { x: srcRightX, y: srcCenterY },
+    { x: midX, y: srcCenterY },
+    { x: midX, y: tgtCenterY },
     { x: tgtLeftX, y: tgtCenterY },
   ];
-}
-
-function getElementCenter(elementId, elementLayout) {
-  const el = elementLayout[elementId];
-  if (!el) return null;
-  return { x: el.x + el.width / 2, y: el.y + el.height / 2 };
-}
-
-function findFirstElement(elements, ranks) {
-  let minRank = Infinity;
-  let first = null;
-  for (const el of elements) {
-    const r = ranks[el.element_id] ?? 0;
-    if (r < minRank) {
-      minRank = r;
-      first = el;
-    }
-  }
-  return first;
-}
-
-/**
- * 找到所有入度为零的元素（根节点）
- */
-function findRootElements(elements, incomingMap) {
-  return elements.filter(el => {
-    const incoming = incomingMap.get(el.element_id);
-    return !incoming || incoming.length === 0;
-  });
-}
-
-/**
- * 找到所有出度为零的元素（叶子节点）
- * 对于纯循环图（没有出度为零的节点），采用确定性的单一锚点策略
- */
-function findLeafElements(elements, outgoingMap) {
-  const leaves = elements.filter(el => {
-    const outgoing = outgoingMap.get(el.element_id);
-    return !outgoing || outgoing.length === 0;
-  });
-
-  // 如果有叶子节点，直接返回
-  if (leaves.length > 0) {
-    return leaves;
-  }
-
-  // 纯循环图：选择最后一个元素（按数组顺序）作为确定性锚点
-  if (elements.length > 0) {
-    return [elements[elements.length - 1]];
-  }
-
-  return [];
-}
-
-function findLastElement(elements, ranks, incomingMap) {
-  let maxRank = -1;
-  let last = null;
-  for (const el of elements) {
-    const r = ranks[el.element_id] ?? 0;
-    if (r > maxRank) {
-      maxRank = r;
-      last = el;
-    }
-  }
-  return last;
 }
 
 function computeMaxBottomY(laneLayout) {

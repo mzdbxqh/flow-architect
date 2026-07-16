@@ -25,11 +25,28 @@
         <button type="button" id="fa-export-bpmn" aria-label="导出 BPMN">导出 BPMN</button>
         <button type="button" id="fa-export-svg" aria-label="导出 SVG">导出 SVG</button>
         <button type="button" id="fa-export-questions" aria-label="导出问题">导出问题</button>
+        <button type="button" id="fa-export-full-json" aria-label="导出完整 JSON">导出完整 JSON</button>
       </nav>
+      <span id="fa-dirty-indicator" hidden>存在未导出修改</span>
     </header>
+    <nav id="fa-tabs" role="tablist">
+      <button type="button" role="tab" id="fa-tab-diagram" aria-selected="true" aria-controls="fa-diagram-panel" tabindex="0">流程图</button>
+      <button type="button" role="tab" id="fa-tab-card" aria-selected="false" aria-controls="fa-card-panel" tabindex="-1">流程卡片</button>
+      <button type="button" role="tab" id="fa-tab-activities" aria-selected="false" aria-controls="fa-activity-panel" tabindex="-1">活动一览表</button>
+      <button type="button" role="tab" id="fa-tab-questions" aria-selected="false" aria-controls="fa-questions-panel" tabindex="-1">待确认问题</button>
+    </nav>
     <main id="fa-main">
-      <div id="fa-canvas"></div>
-      <aside id="fa-questions"></aside>
+      <div id="fa-diagram-panel" role="tabpanel" aria-labelledby="fa-tab-diagram">
+        <div id="fa-canvas"></div>
+      </div>
+      <div id="fa-card-panel" role="tabpanel" aria-labelledby="fa-tab-card" hidden></div>
+      <div id="fa-activity-panel" role="tabpanel" aria-labelledby="fa-tab-activities" hidden></div>
+      <div id="fa-questions-panel" role="tabpanel" aria-labelledby="fa-tab-questions" hidden>
+        <aside id="fa-questions"></aside>
+      </div>
+      <div id="fa-not-applicable" class="fa-not-applicable" hidden>
+        <p>当前流程非末端 L4，流程图和活动一览表不适用。</p>
+      </div>
     </main>
     <dialog id="fa-rename-dialog">
       <form method="dialog">
@@ -49,6 +66,15 @@
         <label>是分支活动<input type="text" id="fa-gateway-yes" aria-label="是分支活动" required></label>
         <label>否分支活动<input type="text" id="fa-gateway-no" aria-label="否分支活动" required></label>
         <menu><button type="button" id="fa-gateway-cancel">取消</button><button type="submit" id="fa-gateway-confirm">确认新增判断</button></menu>
+      </form>
+    </dialog>
+    <dialog id="fa-delete-confirm-dialog">
+      <form method="dialog">
+        <p id="fa-delete-confirm-message">确定删除所选元素？</p>
+        <menu>
+          <button type="button" id="fa-delete-cancel">取消</button>
+          <button type="submit" id="fa-delete-confirm">确认删除</button>
+        </menu>
       </form>
     </dialog>
   </div>

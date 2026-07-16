@@ -1,8 +1,8 @@
 [
   {
-    "id": "Q-XSS",
+    "question_id": "Q-XSS",
     "text": "</script><img src=x onerror=\"globalThis.pwned=1\">",
-    "element_ids": ["Task_Review"],
+    "target_paths": ["Task_Review"],
     "status": "OPEN",
     "answer": ""
   }

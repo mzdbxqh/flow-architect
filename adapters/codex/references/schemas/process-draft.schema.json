@@ -1,127 +1,43 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "process-draft",
-  "title": "Process Draft",
-  "description": "L5 流程草稿，包含泳道、元素、流转和问题",
+  "title": "Process Draft V2",
+  "description": "L5 流程草稿 V2，包含流程卡片、活动一览表、业务图模型、问题、字段证据和来源摘要",
   "type": "object",
-  "required": ["title", "level", "process_id", "boundary", "lanes", "elements", "flows", "questions", "conflicts", "source_summary"],
+  "required": ["schema_version", "process_card", "activities", "diagram", "questions", "provenance", "source_summary"],
   "additionalProperties": false,
   "properties": {
-    "title": {
+    "schema_version": {
       "type": "string",
-      "minLength": 1,
-      "description": "流程标题"
+      "const": "2.0.0",
+      "description": "Schema 版本号，固定为 2.0.0"
     },
-    "level": {
-      "type": "string",
-      "const": "L5",
-      "description": "流程层级，固定为 L5"
+    "process_card": {
+      "$ref": "process-card",
+      "description": "流程卡片"
     },
-    "process_id": {
-      "type": "string",
-      "pattern": "^[a-z0-9-]+$",
-      "description": "流程唯一标识"
+    "activities": {
+      "$ref": "activity-catalog",
+      "description": "L5 活动一览表"
     },
-    "boundary": {
-      "type": "object",
-      "required": ["start", "end"],
-      "additionalProperties": false,
-      "properties": {
-        "start": { "type": "string", "minLength": 1 },
-        "end": { "type": "string", "minLength": 1 }
-      },
-      "description": "流程边界"
-    },
-    "lanes": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["lane_id", "name", "org_candidates"],
-        "additionalProperties": false,
-        "properties": {
-          "lane_id": { "type": "string", "pattern": "^Lane-[a-zA-Z0-9_-]+$" },
-          "name": { "type": "string", "minLength": 1 },
-          "org_candidates": {
-            "type": "array",
-            "items": { "type": "string" }
-          }
-        }
-      },
-      "description": "泳道数组"
-    },
-    "elements": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["element_id", "kind", "name", "lane_id", "inputs", "outputs", "evidence_refs", "certainty", "question_ids"],
-        "additionalProperties": false,
-        "properties": {
-          "element_id": { "type": "string", "pattern": "^(Activity|Event|Gateway)-[a-zA-Z0-9_-]+$" },
-          "kind": {
-            "type": "string",
-            "enum": ["ACTIVITY", "EVENT", "DECISION"]
-          },
-          "name": { "type": "string", "minLength": 1 },
-          "lane_id": {
-            "type": ["string", "null"],
-            "pattern": "^Lane-[a-zA-Z0-9_-]+$"
-          },
-          "inputs": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "outputs": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "evidence_refs": {
-            "type": "array",
-            "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" }
-          },
-          "certainty": {
-            "type": "string",
-            "enum": ["EXPLICIT", "INFERRED", "CONFLICT", "MISSING", "NOT_APPLICABLE"]
-          },
-          "question_ids": {
-            "type": "array",
-            "items": { "type": "string", "pattern": "^Q-[a-zA-Z0-9_-]+$" }
-          }
-        }
-      },
-      "description": "流程元素数组"
-    },
-    "flows": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["flow_id", "source_ref", "target_ref", "condition", "evidence_refs"],
-        "additionalProperties": false,
-        "properties": {
-          "flow_id": { "type": "string", "pattern": "^Flow-[a-zA-Z0-9_-]+$" },
-          "source_ref": { "type": "string" },
-          "target_ref": { "type": "string" },
-          "condition": { "type": ["string", "null"] },
-          "evidence_refs": {
-            "type": "array",
-            "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" }
-          }
-        }
-      },
-      "description": "流转关系数组"
+    "diagram": {
+      "$ref": "diagram-draft",
+      "description": "V2 业务图模型"
     },
     "questions": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["question_id", "text", "element_ids", "status", "evidence_refs"],
+        "required": ["question_id", "text", "target_paths", "status"],
         "additionalProperties": false,
         "properties": {
           "question_id": { "type": "string", "pattern": "^Q-[a-zA-Z0-9_-]+$" },
           "text": { "type": "string", "minLength": 1 },
-          "element_ids": {
+          "target_paths": {
             "type": "array",
             "items": { "type": "string" },
-            "minItems": 1
+            "minItems": 1,
+            "description": "指向 process-draft 中的 JSON Pointer 路径"
           },
           "status": {
             "type": "string",
@@ -136,26 +52,9 @@
       },
       "description": "待确认问题数组"
     },
-    "conflicts": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["conflict_id", "description", "fact_ids", "evidence_refs"],
-        "additionalProperties": false,
-        "properties": {
-          "conflict_id": { "type": "string", "pattern": "^C-[a-zA-Z0-9_-]+$" },
-          "description": { "type": "string", "minLength": 1 },
-          "fact_ids": {
-            "type": "array",
-            "items": { "type": "string", "pattern": "^F-[a-zA-Z0-9_-]+$" }
-          },
-          "evidence_refs": {
-            "type": "array",
-            "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" }
-          }
-        }
-      },
-      "description": "冲突数组"
+    "provenance": {
+      "$ref": "field-provenance",
+      "description": "字段级证据"
     },
     "source_summary": {
       "type": "object",

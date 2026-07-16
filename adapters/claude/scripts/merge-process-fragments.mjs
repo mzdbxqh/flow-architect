@@ -92,15 +92,15 @@ async function main() {
   }
   console.log(`  ✓ 完整性验证通过 (${integrityResult.checked} 个批次)`);
 
-  // 读取所有片段
+  // 读取所有片段（V2: 使用 task_id 而非 batch_id）
   const fragments = [];
   const fragmentsDir = join(runDir, 'stages', 'semantic', 'fragments');
 
   for (const batch of queue.batches) {
-    const fragmentPath = join(fragmentsDir, `${batch.batch_id}.json`);
+    const fragmentPath = join(fragmentsDir, `${batch.task_id}.json`);
     const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'));
     fragments.push(fragment);
-    console.log(`  ✓ ${batch.batch_id}`);
+    console.log(`  ✓ ${batch.task_id}`);
   }
 
   if (fragments.length === 0) {
@@ -143,12 +143,11 @@ async function main() {
 
   // 8. 报告摘要
   console.log('\n=== 合并完成 ===');
-  console.log(`流程: ${result.process_draft.title}`);
-  console.log(`元素: ${result.process_draft.elements.length}`);
-  console.log(`泳道: ${result.process_draft.lanes.length}`);
-  console.log(`流转: ${result.process_draft.flows.length}`);
+  console.log(`流程: ${result.process_draft.process_card.name}`);
+  console.log(`活动: ${result.process_draft.activities.length}`);
+  console.log(`泳道: ${result.process_draft.diagram.lanes.length}`);
+  console.log(`流转: ${result.process_draft.diagram.flows.length}`);
   console.log(`问题: ${result.process_draft.questions.length}`);
-  console.log(`冲突: ${result.process_draft.conflicts.length}`);
 
   if (result.process_draft.questions.length > 0) {
     console.log('\n待确认问题:');

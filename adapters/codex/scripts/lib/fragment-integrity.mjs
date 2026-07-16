@@ -68,8 +68,8 @@ export async function verifyFragmentIntegrity({ runDir, batchId = null, queue = 
       continue;
     }
 
-    // 3. 读取 fragment 文件
-    const fragPath = join(fragmentsDir, `${batchEntry.batch_id}.json`);
+    // 3. 读取 fragment 文件（V2: 使用 task_id 而非 batch_id）
+    const fragPath = join(fragmentsDir, `${batchEntry.task_id}.json`);
     let fragContent;
     try {
       fragContent = await readFile(fragPath, 'utf8');
@@ -123,7 +123,11 @@ export async function verifyFragmentIntegrity({ runDir, batchId = null, queue = 
 
     const batchBlockIds = new Set((batchData.blocks || []).map(b => b.block_id));
 
-    for (const fact of (fragment.facts || [])) {
+    // 支持 V1 和 V2 格式
+    const facts = fragment.payload?.facts || fragment.facts || [];
+    const uncertainties = fragment.payload?.uncertainties || fragment.uncertainties || [];
+
+    for (const fact of facts) {
       for (const ref of (fact.evidence_refs || [])) {
         if (!batchBlockIds.has(ref)) {
           errors.push(
@@ -133,7 +137,7 @@ export async function verifyFragmentIntegrity({ runDir, batchId = null, queue = 
       }
     }
 
-    for (const uncertainty of (fragment.uncertainties || [])) {
+    for (const uncertainty of uncertainties) {
       for (const ref of (uncertainty.evidence_refs || [])) {
         if (!batchBlockIds.has(ref)) {
           errors.push(

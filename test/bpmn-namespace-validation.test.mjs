@@ -4,74 +4,93 @@ import assert from 'node:assert/strict';
 describe('BPMN Namespace Validation', () => {
   describe('条件表达式命名空间', () => {
     it('应声明 xsi 命名空间当存在 xsi:type 属性时', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
 
       // 创建一个带条件流的草稿
       const draft = {
-        title: '测试流程',
-        level: 'L5',
-        process_id: 'test-condition',
-        boundary: { start: '开始', end: '结束' },
-        lanes: [
-          { lane_id: 'Lane-001', name: '申请人', org_candidates: [] },
-        ],
-        elements: [
+        schema_version: '2.0.0',
+        process_card: {
+          process_id: 'test-condition',
+          name: '测试流程',
+          level: 'L4',
+          is_leaf: true,
+          description: '',
+          purpose: '',
+          owner: '',
+          parent_process_name: null,
+          inputs: [],
+          outputs: [],
+          start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+          end_results: [{ event_id: 'End-1', name: '结束' }],
+          performance_indicators: [],
+        },
+        activities: [
           {
-            element_id: 'Activity-001',
-            kind: 'ACTIVITY',
+            activity_id: 'Act-001',
             name: '提交申请',
-            lane_id: 'Lane-001',
+            description: '',
+            activity_type: 'STANDARD',
+            responsibility_model: 'RASCI',
+            role_assignments: [{ role_id: 'Role-001', responsibility: 'R' }],
+            sla: null,
+            tools: [],
             inputs: [],
-            outputs: ['申请单'],
-            evidence_refs: ['B-001'],
-            certainty: 'EXPLICIT',
-            question_ids: [],
-          },
-          {
-            element_id: 'Gateway-001',
-            kind: 'DECISION',
-            name: '金额判断',
-            lane_id: 'Lane-001',
-            inputs: ['申请单'],
+            process_summary: '',
             outputs: [],
-            evidence_refs: ['B-002'],
-            certainty: 'EXPLICIT',
-            question_ids: [],
+            completion_criteria: [],
+            references: [],
+            main_task_id: 'Activity-001',
+            confirmation: null,
+            completeness: 'COMPLETE',
           },
           {
-            element_id: 'Activity-002',
-            kind: 'ACTIVITY',
+            activity_id: 'Act-002',
             name: '小额审批',
-            lane_id: 'Lane-001',
+            description: '',
+            activity_type: 'STANDARD',
+            responsibility_model: 'RASCI',
+            role_assignments: [{ role_id: 'Role-001', responsibility: 'R' }],
+            sla: null,
+            tools: [],
             inputs: [],
-            outputs: ['审批结果'],
-            evidence_refs: ['B-003'],
-            certainty: 'EXPLICIT',
-            question_ids: [],
+            process_summary: '',
+            outputs: [],
+            completion_criteria: [],
+            references: [],
+            main_task_id: 'Activity-002',
+            confirmation: null,
+            completeness: 'COMPLETE',
           },
         ],
-        flows: [
-          {
-            flow_id: 'Flow-001',
-            source_ref: 'Activity-001',
-            target_ref: 'Gateway-001',
-            condition: null,
-            evidence_refs: ['B-001'],
-          },
-          {
-            flow_id: 'Flow-002',
-            source_ref: 'Gateway-001',
-            target_ref: 'Activity-002',
-            condition: '${amount < 1000}', // 带条件表达式
-            evidence_refs: ['B-002'],
-          },
-        ],
+        diagram: {
+          lanes: [
+            { lane_id: 'Lane-001', name: '申请人', role_id: 'Role-001' },
+          ],
+          nodes: [
+            { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+            { node_id: 'Activity-001', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-001' },
+            { node_id: 'Gateway-001', node_type: 'GATEWAY_XOR', name: '金额判断', lane_id: 'Lane-001' },
+            { node_id: 'Activity-002', node_type: 'MAIN_TASK', name: '小额审批', lane_id: 'Lane-001' },
+            { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+          ],
+          flows: [
+            { flow_id: 'Flow-001', source_ref: 'Start-1', target_ref: 'Activity-001', condition: null },
+            { flow_id: 'Flow-002', source_ref: 'Activity-001', target_ref: 'Gateway-001', condition: null },
+            { flow_id: 'Flow-003', source_ref: 'Gateway-001', target_ref: 'Activity-002', condition: '${amount < 1000}' },
+            { flow_id: 'Flow-004', source_ref: 'Activity-002', target_ref: 'End-1', condition: null },
+          ],
+          task_bindings: [
+            { activity_id: 'Act-001', main_task_id: 'Activity-001', confirmation_task_id: null },
+            { activity_id: 'Act-002', main_task_id: 'Activity-002', confirmation_task_id: null },
+          ],
+          layout_version: '2.0.0',
+        },
         questions: [],
-        conflicts: [],
+        provenance: {},
         source_summary: { total_blocks: 3, formats: ['md'], evidence_refs: ['B-001', 'B-002', 'B-003'] },
       };
 
-      const bpmn = generateL5Bpmn(draft);
+      const bpmn = compileBpmn(draft).xml;
 
       // 验证存在 xsi:type 属性
       assert.ok(bpmn.includes('xsi:type="bpmn:tFormalExpression"'),
@@ -83,45 +102,70 @@ describe('BPMN Namespace Validation', () => {
     });
 
     it('不应声明 xsi 命名空间当不存在 xsi:type 属性时', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
 
       // 创建一个无条件流的草稿
       const draft = {
-        title: '测试流程',
-        level: 'L5',
-        process_id: 'test-no-condition',
-        boundary: { start: '开始', end: '结束' },
-        lanes: [
-          { lane_id: 'Lane-001', name: '申请人', org_candidates: [] },
-        ],
-        elements: [
+        schema_version: '2.0.0',
+        process_card: {
+          process_id: 'test-no-condition',
+          name: '测试流程',
+          level: 'L4',
+          is_leaf: true,
+          description: '',
+          purpose: '',
+          owner: '',
+          parent_process_name: null,
+          inputs: [],
+          outputs: [],
+          start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+          end_results: [{ event_id: 'End-1', name: '结束' }],
+          performance_indicators: [],
+        },
+        activities: [
           {
-            element_id: 'Activity-001',
-            kind: 'ACTIVITY',
+            activity_id: 'Act-001',
             name: '提交申请',
-            lane_id: 'Lane-001',
+            description: '',
+            activity_type: 'STANDARD',
+            responsibility_model: 'RASCI',
+            role_assignments: [{ role_id: 'Role-001', responsibility: 'R' }],
+            sla: null,
+            tools: [],
             inputs: [],
-            outputs: ['申请单'],
-            evidence_refs: ['B-001'],
-            certainty: 'EXPLICIT',
-            question_ids: [],
+            process_summary: '',
+            outputs: [],
+            completion_criteria: [],
+            references: [],
+            main_task_id: 'Activity-001',
+            confirmation: null,
+            completeness: 'COMPLETE',
           },
         ],
-        flows: [
-          {
-            flow_id: 'Flow-001',
-            source_ref: 'Activity-001',
-            target_ref: 'EndEvent_1',
-            condition: null,
-            evidence_refs: ['B-001'],
-          },
-        ],
+        diagram: {
+          lanes: [
+            { lane_id: 'Lane-001', name: '申请人', role_id: 'Role-001' },
+          ],
+          nodes: [
+            { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+            { node_id: 'Activity-001', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-001' },
+            { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+          ],
+          flows: [
+            { flow_id: 'Flow-001', source_ref: 'Start-1', target_ref: 'Activity-001', condition: null },
+            { flow_id: 'Flow-002', source_ref: 'Activity-001', target_ref: 'End-1', condition: null },
+          ],
+          task_bindings: [
+            { activity_id: 'Act-001', main_task_id: 'Activity-001', confirmation_task_id: null },
+          ],
+          layout_version: '2.0.0',
+        },
         questions: [],
-        conflicts: [],
+        provenance: {},
         source_summary: { total_blocks: 1, formats: ['md'], evidence_refs: ['B-001'] },
       };
 
-      const bpmn = generateL5Bpmn(draft);
+      const bpmn = compileBpmn(draft).xml;
 
       // 无条件流时不应声明 xsi 命名空间
       assert.ok(!bpmn.includes('xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'),
@@ -129,74 +173,93 @@ describe('BPMN Namespace Validation', () => {
     });
 
     it('生成的 BPMN 应能被 BPMN 读取器解析且无未绑定前缀', async () => {
-      const { generateL5Bpmn } = await import('../scripts/lib/l5-bpmn-generator.mjs');
+      const { compileBpmn } = await import('../scripts/lib/bpmn-compiler.mjs');
 
       // 创建带条件流的草稿
       const draft = {
-        title: '测试流程',
-        level: 'L5',
-        process_id: 'test-parse',
-        boundary: { start: '开始', end: '结束' },
-        lanes: [
-          { lane_id: 'Lane-001', name: '申请人', org_candidates: [] },
-        ],
-        elements: [
+        schema_version: '2.0.0',
+        process_card: {
+          process_id: 'test-parse',
+          name: '测试流程',
+          level: 'L4',
+          is_leaf: true,
+          description: '',
+          purpose: '',
+          owner: '',
+          parent_process_name: null,
+          inputs: [],
+          outputs: [],
+          start: { event_id: 'Start-1', name: '开始', event_type: 'NONE' },
+          end_results: [{ event_id: 'End-1', name: '结束' }],
+          performance_indicators: [],
+        },
+        activities: [
           {
-            element_id: 'Activity-001',
-            kind: 'ACTIVITY',
+            activity_id: 'Act-001',
             name: '提交申请',
-            lane_id: 'Lane-001',
+            description: '',
+            activity_type: 'STANDARD',
+            responsibility_model: 'RASCI',
+            role_assignments: [{ role_id: 'Role-001', responsibility: 'R' }],
+            sla: null,
+            tools: [],
             inputs: [],
-            outputs: ['申请单'],
-            evidence_refs: ['B-001'],
-            certainty: 'EXPLICIT',
-            question_ids: [],
-          },
-          {
-            element_id: 'Gateway-001',
-            kind: 'DECISION',
-            name: '判断',
-            lane_id: 'Lane-001',
-            inputs: ['申请单'],
+            process_summary: '',
             outputs: [],
-            evidence_refs: ['B-002'],
-            certainty: 'EXPLICIT',
-            question_ids: [],
+            completion_criteria: [],
+            references: [],
+            main_task_id: 'Activity-001',
+            confirmation: null,
+            completeness: 'COMPLETE',
           },
           {
-            element_id: 'Activity-002',
-            kind: 'ACTIVITY',
+            activity_id: 'Act-002',
             name: '处理',
-            lane_id: 'Lane-001',
+            description: '',
+            activity_type: 'STANDARD',
+            responsibility_model: 'RASCI',
+            role_assignments: [{ role_id: 'Role-001', responsibility: 'R' }],
+            sla: null,
+            tools: [],
             inputs: [],
+            process_summary: '',
             outputs: [],
-            evidence_refs: ['B-003'],
-            certainty: 'EXPLICIT',
-            question_ids: [],
+            completion_criteria: [],
+            references: [],
+            main_task_id: 'Activity-002',
+            confirmation: null,
+            completeness: 'COMPLETE',
           },
         ],
-        flows: [
-          {
-            flow_id: 'Flow-001',
-            source_ref: 'Activity-001',
-            target_ref: 'Gateway-001',
-            condition: null,
-            evidence_refs: ['B-001'],
-          },
-          {
-            flow_id: 'Flow-002',
-            source_ref: 'Gateway-001',
-            target_ref: 'Activity-002',
-            condition: '${amount > 0}',
-            evidence_refs: ['B-002'],
-          },
-        ],
+        diagram: {
+          lanes: [
+            { lane_id: 'Lane-001', name: '申请人', role_id: 'Role-001' },
+          ],
+          nodes: [
+            { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+            { node_id: 'Activity-001', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-001' },
+            { node_id: 'Gateway-001', node_type: 'GATEWAY_XOR', name: '判断', lane_id: 'Lane-001' },
+            { node_id: 'Activity-002', node_type: 'MAIN_TASK', name: '处理', lane_id: 'Lane-001' },
+            { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+          ],
+          flows: [
+            { flow_id: 'Flow-001', source_ref: 'Start-1', target_ref: 'Activity-001', condition: null },
+            { flow_id: 'Flow-002', source_ref: 'Activity-001', target_ref: 'Gateway-001', condition: null },
+            { flow_id: 'Flow-003', source_ref: 'Gateway-001', target_ref: 'Activity-002', condition: '${amount > 0}' },
+            { flow_id: 'Flow-004', source_ref: 'Activity-002', target_ref: 'End-1', condition: null },
+          ],
+          task_bindings: [
+            { activity_id: 'Act-001', main_task_id: 'Activity-001', confirmation_task_id: null },
+            { activity_id: 'Act-002', main_task_id: 'Activity-002', confirmation_task_id: null },
+          ],
+          layout_version: '2.0.0',
+        },
         questions: [],
-        conflicts: [],
+        provenance: {},
         source_summary: { total_blocks: 3, formats: ['md'], evidence_refs: ['B-001', 'B-002', 'B-003'] },
       };
 
-      const bpmn = generateL5Bpmn(draft);
+      const bpmn = compileBpmn(draft).xml;
 
       // 基本 XML 格式验证
       assert.ok(bpmn.startsWith('<?xml'), '应是有效的 XML');

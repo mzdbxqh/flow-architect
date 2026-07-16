@@ -56,14 +56,14 @@ test('canonical and generated Codex manifests declare exact Read and Write capab
   }
 });
 
-test('runtime 1.0.0 remains compatible with v0.1.2 caches and v0.2.0 plugin', () => {
+test('runtime 2.0.0 remains compatible with v0.1.2 caches and v0.2.0 plugin', () => {
   for (const file of [
     'runtime/manifest.json',
     'adapters/codex/runtime/manifest.json',
     'adapters/claude/runtime/manifest.json',
   ]) {
     const manifest = json(file);
-    assert.equal(manifest.runtime_version, '1.0.0', file);
+    assert.equal(manifest.runtime_version, '2.0.0', file);
     assert.equal(manifest.plugin_compatibility, '>=0.1.2 <0.3.0', file);
   }
 
@@ -75,7 +75,7 @@ test('runtime 1.0.0 remains compatible with v0.1.2 caches and v0.2.0 plugin', ()
 test('process draft meeting package records runtime version rather than plugin version', () => {
   const pipeline = read('scripts/lib/process-draft-pipeline.mjs');
   assert.doesNotMatch(pipeline, /runtime_version:\s*['"]0\.1\.2['"]/);
-  assert.match(pipeline, /runtime_version:\s*['"]1\.0\.0['"]/);
+  assert.match(pipeline, /runtime_version:\s*['"]2\.0\.0['"]/);
 });
 
 test('help distinguishes read-only review from creation without contradicting itself', () => {

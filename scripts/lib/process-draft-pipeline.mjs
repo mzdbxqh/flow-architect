@@ -94,9 +94,9 @@ export async function finalizeProcessDraft({ runDir, revision = 'r01', onPublish
 
     // 6. 映射问题为第一阶段格式
     const questions = draft.questions.map(q => ({
-      id: q.question_id,
+      question_id: q.question_id,
       text: q.text,
-      element_ids: q.element_ids,
+      target_paths: q.target_paths,
       status: q.status,
       answer: q.answer || '',
     }));
@@ -111,16 +111,20 @@ export async function finalizeProcessDraft({ runDir, revision = 'r01', onPublish
 
     // 9. 生成 HTML — 直接复用第一阶段 buildMeetingPackageHtml
     const metadata = {
-      schema_version: '1.0.0',
-      package_id: `pkg-${draft.process_id}`,
-      process_id: `Process_${draft.process_id}`,
-      title: draft.title,
+      schema_version: '2.0.0',
+      package_id: `pkg-${draft.process_card.process_id}`,
+      process_id: `Process_${draft.process_card.process_id}`,
+      title: draft.process_card.name,
       revision,
       based_on_revision: null,
-      runtime_version: '1.0.0',
+      runtime_version: '2.0.0',
     };
-    const html = buildMeetingPackageHtml({ bpmnXml: bpmn, questions, metadata });
-    const safeTitle = draft.title.replace(/[^a-zA-Z0-9一-龥_-]/g, '_');
+    const html = buildMeetingPackageHtml({
+      draft,
+      bpmnXml: bpmn,
+      metadata,
+    });
+    const safeTitle = draft.process_card.name.replace(/[^a-zA-Z0-9一-龥_-]/g, '_');
     const htmlFilename = `${safeTitle}-${revision}.html`;
     await writeFile(join(tempDir, htmlFilename), html, 'utf8');
 
@@ -147,12 +151,12 @@ export async function finalizeProcessDraft({ runDir, revision = 'r01', onPublish
 
     // 11. question↔element 双向引用验证
     // 11a. question→element 前向引用：已在 buildMeetingPackageHtml 中验证
-    // 11b. element→question 反向引用：draft 元素的 question_ids 必须在 questions 中存在
+    // 11b. element→question 反向引用：draft 活动的 question_ids 必须在 questions 中存在
     const questionIdSet = new Set(draft.questions.map(q => q.question_id));
-    for (const element of draft.elements) {
-      for (const qid of (element.question_ids || [])) {
+    for (const activity of draft.activities) {
+      for (const qid of (activity.question_ids || [])) {
         if (!questionIdSet.has(qid)) {
-          throw new Error(`元素 ${element.element_id} 引用了不存在的问题 ${qid}`);
+          throw new Error(`活动 ${activity.activity_id} 引用了不存在的问题 ${qid}`);
         }
       }
     }

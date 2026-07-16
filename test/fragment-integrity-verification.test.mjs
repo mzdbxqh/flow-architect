@@ -41,13 +41,16 @@ function makeBatch(batchId, blockIds = ['B-001']) {
   };
 }
 
-function makeFragment(batch, facts, uncertainties = []) {
+function makeFragment(batch, facts, uncertainties = [], taskKind = 'ACTIVITY_CATALOG') {
   return {
-    schema_version: '1.0.0',
+    schema_version: '2.0.0',
+    task_kind: taskKind,
     batch_id: batch.batch_id,
     batch_sha256: batch.batch_sha256,
-    facts,
-    uncertainties,
+    payload: {
+      facts,
+      uncertainties,
+    },
   };
 }
 
@@ -80,19 +83,40 @@ function fragmentSha256(fragment) {
  */
 async function createRunDir(runDir, opts = {}) {
   const batch = opts.batch || makeBatch('EB-001');
-  const fragment = opts.fragment || makeFragment(batch, [makeFact('F-001', 'ACTIVITY', '提交申请')]);
-  const fragSha = fragmentSha256(fragment);
+
+  // 创建3个 fragment（每种 task_kind 一个）
+  const fragments = {};
+  const fragShas = {};
+
+  const taskKinds = ['PROCESS_CARD', 'ACTIVITY_CATALOG', 'CONTROL_FLOW'];
+  const taskSuffixes = { PROCESS_CARD: 'card', ACTIVITY_CATALOG: 'activity', CONTROL_FLOW: 'flow' };
+
+  for (const taskKind of taskKinds) {
+    let fragment;
+    if (taskKind === 'ACTIVITY_CATALOG') {
+      fragment = opts.fragment || makeFragment(batch, [makeFact('F-001', 'ACTIVITY', '提交申请')], [], taskKind);
+    } else if (taskKind === 'PROCESS_CARD') {
+      fragment = makeFragment(batch, [makeFact('F-001', 'PROCESS_NAME', '测试流程')], [], taskKind);
+    } else {
+      fragment = makeFragment(batch, [makeFact('F-001', 'FLOW', '流程')], [], taskKind);
+    }
+    fragments[taskKind] = fragment;
+    fragShas[taskKind] = fragmentSha256(fragment);
+  }
 
   await mkdir(join(runDir, 'stages', 'semantic', 'fragments'), { recursive: true });
   await mkdir(join(runDir, 'stages', 'merge'), { recursive: true });
   await mkdir(join(runDir, 'evidence', 'batches'), { recursive: true });
   await mkdir(join(runDir, 'input'), { recursive: true });
 
-  // 写 fragment
-  await writeFile(
-    join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}.json`),
-    JSON.stringify(fragment, null, 2) + '\n'
-  );
+  // 写 fragment 文件（每个 task_kind 一个）
+  for (const taskKind of taskKinds) {
+    const taskSuffix = taskSuffixes[taskKind];
+    await writeFile(
+      join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}-${taskSuffix}.json`),
+      JSON.stringify(fragments[taskKind], null, 2) + '\n'
+    );
+  }
 
   // 写 batch 文件（供 finalize 重验 evidence refs）
   await writeFile(
@@ -100,18 +124,20 @@ async function createRunDir(runDir, opts = {}) {
     JSON.stringify(batch, null, 2)
   );
 
-  // 写 queue
+  // 写 queue（V2: 每个 task_kind 一个 entry）
   const queue = opts.queue || {
-    schema_version: '1.0.0',
-    batches: [{
+    schema_version: '2.0.0',
+    batches: taskKinds.map(taskKind => ({
       batch_id: batch.batch_id,
+      task_kind: taskKind,
+      task_id: `${batch.batch_id}-${taskSuffixes[taskKind]}`,
       batch_sha256: batch.batch_sha256,
       total_chars: batch.total_chars,
       modality_mix: batch.modality_mix,
       block_count: batch.blocks.length,
       status: 'ACCEPTED',
-      fragment_sha256: fragSha,
-    }],
+      fragment_sha256: fragShas[taskKind],
+    })),
     total_batches: 1,
     total_blocks: batch.blocks.length,
   };
@@ -124,7 +150,7 @@ async function createRunDir(runDir, opts = {}) {
   await writeFile(
     join(runDir, 'input', 'input-manifest.json'),
     JSON.stringify({
-      schema_version: '1.0.0',
+      schema_version: '2.0.0',
       title: '测试流程',
       focus: null,
       artifacts: [],
@@ -133,7 +159,7 @@ async function createRunDir(runDir, opts = {}) {
     })
   );
 
-  return { batch, fragment, fragSha, queue };
+  return { batch, fragment: fragments['ACTIVITY_CATALOG'], fragSha: fragShas['ACTIVITY_CATALOG'], queue };
 }
 
 // ──────────────────────────────────────────────
@@ -159,14 +185,17 @@ describe('acceptSemanticFragment 原子性 (依赖注入)', () => {
     // queue 中有该 batch，状态 PENDING
     await mkdir(join(runDir, 'stages', 'semantic', 'fragments'), { recursive: true });
     const queue = {
-      schema_version: '1.0.0',
+      schema_version: '2.0.0',
       batches: [{
         batch_id: 'EB-NEW',
+        task_kind: 'ACTIVITY_CATALOG',
+        task_id: 'EB-NEW-activity',
         batch_sha256: batch.batch_sha256,
         total_chars: 100,
         modality_mix: ['TEXT'],
         block_count: 1,
         status: 'PENDING',
+        fragment_sha256: null,
       }],
       total_batches: 1,
       total_blocks: 1,
@@ -174,7 +203,7 @@ describe('acceptSemanticFragment 原子性 (依赖注入)', () => {
     const queuePath = join(runDir, 'stages', 'semantic', 'queue.json');
     await writeFile(queuePath, JSON.stringify(queue, null, 2));
 
-    const fragment = makeFragment(batch, [makeFact('F-001')]);
+    const fragment = makeFragment(batch, [makeFact('F-001')], [], 'ACTIVITY_CATALOG');
 
     // 故障注入：queue 写入时抛出错误
     const failingWriteQueue = async () => {
@@ -216,17 +245,19 @@ describe('acceptSemanticFragment 原子性 (依赖注入)', () => {
     const batch = makeBatch('EB-EXIST');
 
     // 先创建旧 fragment
-    const oldFragment = makeFragment(batch, [makeFact('F-OLD', 'ACTIVITY', '旧活动')]);
+    const oldFragment = makeFragment(batch, [makeFact('F-OLD', 'ACTIVITY', '旧活动')], [], 'ACTIVITY_CATALOG');
     const oldContent = JSON.stringify(oldFragment, null, 2) + '\n';
 
     await mkdir(join(runDir, 'stages', 'semantic', 'fragments'), { recursive: true });
-    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', 'EB-EXIST.json');
+    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', 'EB-EXIST-activity.json');
     await writeFile(fragPath, oldContent);
 
     const queue = {
-      schema_version: '1.0.0',
+      schema_version: '2.0.0',
       batches: [{
         batch_id: 'EB-EXIST',
+        task_kind: 'ACTIVITY_CATALOG',
+        task_id: 'EB-EXIST-activity',
         batch_sha256: batch.batch_sha256,
         total_chars: 100,
         modality_mix: ['TEXT'],
@@ -241,7 +272,7 @@ describe('acceptSemanticFragment 原子性 (依赖注入)', () => {
     await writeFile(queuePath, JSON.stringify(queue, null, 2));
 
     // 新 fragment（不同内容）
-    const newFragment = makeFragment(batch, [makeFact('F-NEW', 'ACTIVITY', '新活动')]);
+    const newFragment = makeFragment(batch, [makeFact('F-NEW', 'ACTIVITY', '新活动')], [], 'ACTIVITY_CATALOG');
 
     // 故障注入：queue 写入失败
     const failingWriteQueue = async () => {
@@ -278,14 +309,17 @@ describe('acceptSemanticFragment 原子性 (依赖注入)', () => {
 
     await mkdir(join(runDir, 'stages', 'semantic', 'fragments'), { recursive: true });
     const queue = {
-      schema_version: '1.0.0',
+      schema_version: '2.0.0',
       batches: [{
         batch_id: 'EB-SHA',
+        task_kind: 'ACTIVITY_CATALOG',
+        task_id: 'EB-SHA-activity',
         batch_sha256: batch.batch_sha256,
         total_chars: 100,
         modality_mix: ['TEXT'],
         block_count: 1,
         status: 'PENDING',
+        fragment_sha256: null,
       }],
       total_batches: 1,
       total_blocks: 1,
@@ -293,14 +327,14 @@ describe('acceptSemanticFragment 原子性 (依赖注入)', () => {
     const queuePath = join(runDir, 'stages', 'semantic', 'queue.json');
     await writeFile(queuePath, JSON.stringify(queue, null, 2));
 
-    const fragment = makeFragment(batch, [makeFact('F-001')]);
+    const fragment = makeFragment(batch, [makeFact('F-001')], [], 'ACTIVITY_CATALOG');
 
     // 不注入故障，正常执行
     const result = await acceptSemanticFragment({ fragment, batch, runDir });
     assert.equal(result.accepted, true, '应成功验收');
 
     // 读取落盘 fragment
-    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', 'EB-SHA.json');
+    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', 'EB-SHA-activity.json');
     const fragContent = await readFile(fragPath, 'utf8');
     const expectedSha = sha256hex(fragContent);
 
@@ -374,9 +408,15 @@ describe('共享 fragment 完整性验证函数 (verifyFragmentIntegrity)', () =
     const runDir = join(tempDir, 'frag-missing');
     const { batch } = await createRunDir(runDir);
 
-    // 删除 fragment 文件
+    // 删除 fragment 文件（V2: 每个 task_kind 一个文件）
     const { unlink } = await import('node:fs/promises');
-    await unlink(join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}.json`));
+    const fragDir = join(runDir, 'stages', 'semantic', 'fragments');
+    const files = await readdir(fragDir);
+    for (const f of files) {
+      if (f.startsWith(batch.batch_id)) {
+        await unlink(join(fragDir, f));
+      }
+    }
 
     const result = await verifyFragmentIntegrity({ runDir, batchId: batch.batch_id });
     assert.equal(result.valid, false, 'fragment 缺失应失败');
@@ -389,10 +429,10 @@ describe('共享 fragment 完整性验证函数 (verifyFragmentIntegrity)', () =
     const runDir = join(tempDir, 'tampered-frag');
     const { batch } = await createRunDir(runDir);
 
-    // 篡改 fragment 内容
-    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}.json`);
+    // 篡改 fragment 内容（V2: activity fragment 文件）
+    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}-activity.json`);
     const frag = JSON.parse(await readFile(fragPath, 'utf8'));
-    frag.facts[0].label = '篡改后的标签';
+    frag.payload.facts[0].label = '篡改后的标签';
     await writeFile(fragPath, JSON.stringify(frag, null, 2));
 
     const result = await verifyFragmentIntegrity({ runDir, batchId: batch.batch_id });
@@ -406,8 +446,8 @@ describe('共享 fragment 完整性验证函数 (verifyFragmentIntegrity)', () =
     const runDir = join(tempDir, 'batch-id-mismatch');
     const { batch } = await createRunDir(runDir);
 
-    // 修改 fragment 的 batch_id
-    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}.json`);
+    // 修改 fragment 的 batch_id（V2: activity fragment 文件）
+    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}-activity.json`);
     const frag = JSON.parse(await readFile(fragPath, 'utf8'));
     frag.batch_id = 'EB-FAKE';
     await writeFile(fragPath, JSON.stringify(frag, null, 2));
@@ -421,7 +461,7 @@ describe('共享 fragment 完整性验证函数 (verifyFragmentIntegrity)', () =
     const runDir = join(tempDir, 'batch-sha-mismatch');
     const { batch } = await createRunDir(runDir);
 
-    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}.json`);
+    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}-activity.json`);
     const frag = JSON.parse(await readFile(fragPath, 'utf8'));
     frag.batch_sha256 = 'x'.repeat(64);
     await writeFile(fragPath, JSON.stringify(frag, null, 2));
@@ -511,7 +551,8 @@ describe('共享 fragment 完整性验证函数 (verifyFragmentIntegrity)', () =
 
     const result = await verifyFragmentIntegrity({ runDir });
     assert.equal(result.valid, true, '合法 queue 应全部通过');
-    assert.equal(result.checked, 1, '应检查 1 个批次');
+    // V2: 每个 batch 有 3 个 task entry，所以 checked 应为 3
+    assert.equal(result.checked, 3, '应检查 3 个 task 条目（每个 batch 3 种 task_kind）');
   });
 });
 
@@ -535,10 +576,10 @@ describe('merge 入口完整性验证 (mergeProcessFragments)', () => {
     const runDir = join(tempDir, 'merge-tampered');
     const { batch } = await createRunDir(runDir);
 
-    // 篡改 fragment 但不改 batch hash（queue 中的 batch_sha256 不变）
-    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}.json`);
+    // 篡改 fragment 但不改 batch hash（V2: activity fragment 文件）
+    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}-activity.json`);
     const frag = JSON.parse(await readFile(fragPath, 'utf8'));
-    frag.facts[0].label = '篡改后的活动';
+    frag.payload.facts[0].label = '篡改后的活动';
     await writeFile(fragPath, JSON.stringify(frag, null, 2));
 
     // merge 应调用共享验证并检测到篡改
@@ -634,7 +675,8 @@ describe('merge 入口完整性验证 (mergeProcessFragments)', () => {
     });
 
     assert.ok(result.process_draft, '应生成流程草稿');
-    assert.ok(result.process_draft.elements.length > 0, '应有元素');
+    // V2: 检查 activities 而不是 elements
+    assert.ok(result.process_draft.activities.length > 0, '应有活动');
   });
 
   it('RED: 合法 CACHED 应通过 merge', async () => {
@@ -678,38 +720,71 @@ describe('finalize 入口完整性验证 (finalizeProcessDraft)', () => {
   async function setupFinalizeRunDir(runDir, opts = {}) {
     const { batch, fragment } = await createRunDir(runDir, opts);
 
-    // 创建 process-draft
+    // 创建 V2 process-draft (符合 process-card.schema.json)
     const draft = {
-      title: '测试流程',
-      level: 'L5',
-      process_id: 'test',
-      boundary: { start: '提交申请', end: '提交申请' },
-      lanes: [
-        { lane_id: 'Lane-001', name: '申请人', org_candidates: [] },
-      ],
-      elements: [
-        {
-          element_id: 'Activity-001',
-          kind: 'ACTIVITY',
+      schema_version: '2.0.0',
+      process_card: {
+        process_id: 'test',
+        name: '测试流程',
+        level: 'L4',
+        is_leaf: true,
+        description: '测试流程描述',
+        purpose: '测试用途',
+        owner: '测试负责人',
+        parent_process_name: null,
+        inputs: [],
+        outputs: [],
+        start: {
+          event_id: 'Start-001',
           name: '提交申请',
-          lane_id: 'Lane-001',
+          event_type: 'NONE',
+        },
+        end_results: [{ event_id: 'End-001', name: '提交申请' }],
+        performance_indicators: [],
+      },
+      activities: [
+        {
+          activity_id: 'Activity-001',
+          name: '提交申请',
+          description: '提交申请',
+          activity_type: 'STANDARD',
+          responsibility_model: 'RASCI',
+          role_assignments: [{ role_id: 'Lane-001', responsibility: 'R' }],
+          sla: null,
+          tools: [],
           inputs: [],
           outputs: [],
-          evidence_refs: ['B-001'],
-          certainty: 'EXPLICIT',
-          question_ids: [],
+          process_summary: '提交申请流程',
+          completion_criteria: [],
+          references: [],
+          main_task_id: 'Task-001',
+          confirmation: null,
+          completeness: 'COMPLETE',
         },
       ],
-      flows: [],
+      diagram: {
+        lanes: [{ lane_id: 'Lane-001', name: '申请人', role_id: 'Lane-001' }],
+        nodes: [
+          { node_id: 'Start-001', node_type: 'START_EVENT', name: '开始', lane_id: 'Lane-001' },
+          { node_id: 'Task-001', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-001' },
+          { node_id: 'End-001', node_type: 'END_EVENT', name: '结束', lane_id: 'Lane-001' },
+        ],
+        flows: [
+          { flow_id: 'Flow-001', source_ref: 'Start-001', target_ref: 'Task-001', condition: null },
+          { flow_id: 'Flow-002', source_ref: 'Task-001', target_ref: 'End-001', condition: null },
+        ],
+        task_bindings: [{ activity_id: 'Activity-001', main_task_id: 'Task-001', confirmation_task_id: null }],
+        layout_version: '2.0.0',
+      },
       questions: [{
         question_id: 'Q-001',
         text: '流程待确认',
-        element_ids: ['Activity-001'],
+        target_paths: ['Task-001'],
         status: 'OPEN',
         answer: '',
         evidence_refs: ['B-001'],
       }],
-      conflicts: [],
+      provenance: {},
       source_summary: { total_blocks: 1, formats: ['md'], evidence_refs: ['B-001'] },
     };
     await writeFile(
@@ -725,10 +800,10 @@ describe('finalize 入口完整性验证 (finalizeProcessDraft)', () => {
     const runDir = join(tempDir, 'finalize-tampered');
     await setupFinalizeRunDir(runDir);
 
-    // 篡改 fragment
-    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', 'EB-001.json');
+    // 篡改 fragment（V2: activity fragment 文件）
+    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', 'EB-001-activity.json');
     const frag = JSON.parse(await readFile(fragPath, 'utf8'));
-    frag.facts[0].label = '篡改后的活动';
+    frag.payload.facts[0].label = '篡改后的活动';
     await writeFile(fragPath, JSON.stringify(frag, null, 2));
 
     try {
@@ -806,7 +881,10 @@ describe('finalize 入口完整性验证 (finalizeProcessDraft)', () => {
 
     const queuePath = join(runDir, 'stages', 'semantic', 'queue.json');
     const queue = JSON.parse(await readFile(queuePath, 'utf8'));
-    queue.batches[0].status = 'CACHED';
+    // 修改所有 task entry 为 CACHED
+    for (const batch of queue.batches) {
+      batch.status = 'CACHED';
+    }
     await writeFile(queuePath, JSON.stringify(queue, null, 2));
 
     const result = await finalizeProcessDraft({ runDir, revision: 'r01' });
@@ -852,10 +930,10 @@ describe('prepare-process-draft 缓存恢复一致性', () => {
     const runDir = join(tempDir, 'cache-polluted');
     const { batch } = await createRunDir(runDir);
 
-    // 模拟缓存污染：fragment 内容被修改但 fragment_sha256 未更新
-    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}.json`);
+    // 模拟缓存污染：fragment 内容被修改但 fragment_sha256 未更新（V2: activity fragment 文件）
+    const fragPath = join(runDir, 'stages', 'semantic', 'fragments', `${batch.batch_id}-activity.json`);
     const frag = JSON.parse(await readFile(fragPath, 'utf8'));
-    frag.facts[0].label = '缓存污染后的内容';
+    frag.payload.facts[0].label = '缓存污染后的内容';
     await writeFile(fragPath, JSON.stringify(frag, null, 2));
 
     // fragment_sha256 还是旧的
