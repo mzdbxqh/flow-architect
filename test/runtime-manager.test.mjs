@@ -294,8 +294,7 @@ test('check accepts the real exact plugin-local dependencies', async () => {
   try {
     const mod = await import(LIB_PATH);
     const result = mod.checkRuntime({ pluginRoot: ROOT, cacheDir: path.join(tmp.path, 'cache'), env: {} });
-    // core/pdf/docx/xlsx 在 plugin node_modules 中可用（READY）；
-    // pptx（jszip）作为可选组件，在未通过 runtime manager 安装时状态为 MISSING/DEGRADED
+    // core/pdf/docx/xlsx/pptx 在 plugin node_modules 中可用（READY）
     const componentMap = Object.fromEntries(result.components.map(c => [c.name, c]));
     assert.equal(componentMap['core'].status, 'READY');
     assert.equal(componentMap['core'].source, 'plugin');
@@ -305,10 +304,10 @@ test('check accepts the real exact plugin-local dependencies', async () => {
     assert.equal(componentMap['docx'].source, 'plugin');
     assert.equal(componentMap['xlsx'].status, 'READY');
     assert.equal(componentMap['xlsx'].source, 'plugin');
-    // pptx 可选：plugin node_modules 中没有直接 jszip，所以是 MISSING
-    assert.equal(componentMap['pptx'].status, 'MISSING');
-    // 有可选组件缺失时 overall 应为 DEGRADED
-    assert.equal(result.overall, 'DEGRADED');
+    assert.equal(componentMap['pptx'].status, 'READY');
+    assert.equal(componentMap['pptx'].source, 'plugin');
+    // 所有组件都可用时 overall 应为 READY
+    assert.equal(result.overall, 'READY');
   } finally {
     tmp.cleanup();
   }

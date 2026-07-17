@@ -30,7 +30,8 @@
       "name": "xlsx",
       "required": false,
       "packages": {
-        "exceljs": "4.4.0"
+        "exceljs": "4.4.0",
+        "jszip": "3.10.1"
       }
     },
     {

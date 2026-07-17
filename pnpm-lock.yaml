@@ -33,6 +33,9 @@ importers:
       exceljs:
         specifier: 4.4.0
         version: 4.4.0
+      jszip:
+        specifier: 3.10.1
+        version: 3.10.1
       mammoth:
         specifier: 1.12.0
         version: 1.12.0

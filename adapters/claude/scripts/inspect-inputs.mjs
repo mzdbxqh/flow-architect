@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { formatCapabilities } from './lib/input-classifier.mjs';
+import { formatCapabilities, classifyXlsxContent } from './lib/input-classifier.mjs';
 import { importRuntimePackage } from './lib/runtime-loader.mjs';
+import { inspectDrawingmlPackage } from './lib/drawingml-extractor.mjs';
 
 /**
  * Inspect a set of input files and produce an InputManifest.
@@ -171,6 +172,7 @@ async function classifyDocx(filePath, content, artifact, warnings) {
 
 /**
  * Classify an XLSX file using exceljs (no macro execution).
+ * Now integrates DrawingML inspection for dynamic classification.
  */
 async function classifyXlsx(filePath, content, artifact, warnings) {
   try {
@@ -183,17 +185,52 @@ async function classifyXlsx(filePath, content, artifact, warnings) {
       sheet.eachRow(() => { cellCount++; });
     });
 
-    if (cellCount === 0) {
-      artifact.parse_mode = 'VISUAL_ONLY';
-      artifact.confidence = 0.3;
-      artifact.degradation_reason = 'XLSX contains no data rows';
-    } else {
-      artifact.confidence = 0.85;
-    }
-
     // Warn if workbook has VBA macros (but do not execute)
     if (workbook.vbaProject) {
       warnings.push(`XLSX ${filePath}: contains VBA macros (will not be executed)`);
+    }
+
+    // 检查 DrawingML 内容
+    try {
+      const inspection = await inspectDrawingmlPackage(content);
+      const classification = classifyXlsxContent({
+        cell_count: cellCount,
+        has_editable_shapes: inspection.hasEditableShapes,
+        has_raster_only: inspection.hasRasterOnly,
+      });
+
+      // 根据分类结果更新 artifact
+      artifact.kind = classification.kind;
+      artifact.parse_mode = classification.parse_mode;
+      artifact.capabilities = classification.capabilities;
+
+      // 设置置信度
+      if (inspection.hasEditableShapes) {
+        artifact.confidence = 0.9;
+      } else if (inspection.hasRasterOnly) {
+        artifact.confidence = 0.5;
+        artifact.degradation_reason = 'XLSX contains only raster images, no editable shapes';
+      } else if (cellCount > 0) {
+        artifact.confidence = 0.85;
+      } else {
+        artifact.confidence = 0.3;
+        artifact.degradation_reason = 'XLSX contains no data rows or drawings';
+      }
+
+      // 收集 DrawingML 警告
+      if (inspection.warnings && inspection.warnings.length > 0) {
+        warnings.push(...inspection.warnings.map(w => `XLSX ${filePath}: ${w.message || w}`));
+      }
+    } catch (drawingmlErr) {
+      // DrawingML 检查失败，降级到基本分类
+      warnings.push(`XLSX DrawingML inspection failed for ${filePath}: ${drawingmlErr.message}`);
+      if (cellCount === 0) {
+        artifact.parse_mode = 'VISUAL_ONLY';
+        artifact.confidence = 0.3;
+        artifact.degradation_reason = 'XLSX contains no data rows';
+      } else {
+        artifact.confidence = 0.7;
+      }
     }
   } catch (err) {
     warnings.push(`XLSX analysis failed for ${filePath}: ${err.message}`);

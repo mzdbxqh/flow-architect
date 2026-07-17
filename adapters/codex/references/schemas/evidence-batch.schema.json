@@ -38,7 +38,11 @@
               "sheet": { "type": ["string", "null"] },
               "range": { "type": ["string", "null"] },
               "line_start": { "type": ["integer", "null"], "minimum": 1 },
-              "line_end": { "type": ["integer", "null"], "minimum": 1 }
+              "line_end": { "type": ["integer", "null"], "minimum": 1 },
+              "drawing_part": { "type": ["string", "null"] },
+              "shape_id": { "type": ["string", "null"] },
+              "connector_id": { "type": ["string", "null"] },
+              "anchor_type": { "type": ["string", "null"], "enum": ["twoCellAnchor", "oneCellAnchor", "absoluteAnchor", null] }
             }
           },
           "heading_path": { "type": "array", "items": { "type": "string" } },

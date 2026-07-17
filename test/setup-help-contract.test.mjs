@@ -89,6 +89,7 @@ test('published dependency declaration keeps exact core and test-only optional p
     'bpmn-js': '18.21.0',
     'esbuild': '0.28.1',
     'exceljs': '4.4.0',
+    'jszip': '3.10.1',
     'mammoth': '1.12.0',
     'pdfjs-dist': '4.10.38',
   });

@@ -59,6 +59,23 @@
           "type": ["integer", "null"],
           "minimum": 1,
           "description": "结束行号"
+        },
+        "drawing_part": {
+          "type": ["string", "null"],
+          "description": "DrawingML drawing part 路径（仅 XLSX）"
+        },
+        "shape_id": {
+          "type": ["string", "null"],
+          "description": "DrawingML 形状 ID（仅 XLSX）"
+        },
+        "connector_id": {
+          "type": ["string", "null"],
+          "description": "DrawingML 连接器 ID（仅 XLSX）"
+        },
+        "anchor_type": {
+          "type": ["string", "null"],
+          "enum": ["twoCellAnchor", "oneCellAnchor", "absoluteAnchor", null],
+          "description": "DrawingML 锚点类型（仅 XLSX）"
         }
       }
     },

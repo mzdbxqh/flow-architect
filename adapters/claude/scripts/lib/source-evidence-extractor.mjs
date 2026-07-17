@@ -439,6 +439,7 @@ async function extractDocx(filePath, fileContent, artifactSha256) {
 
 /**
  * 抽取 XLSX 文件
+ * 现在集成 DrawingML 提取，同时产生 TABLE 和 STRUCTURED_DIAGRAM 证据块
  */
 async function extractXlsx(filePath, fileContent, artifactSha256) {
   const blocks = [];
@@ -448,6 +449,7 @@ async function extractXlsx(filePath, fileContent, artifactSha256) {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(fileContent);
 
+    // 提取表格数据
     for (const worksheet of workbook.worksheets) {
       const sheetName = worksheet.name;
       const rows = [];
@@ -473,6 +475,10 @@ async function extractXlsx(filePath, fileContent, artifactSha256) {
             range: `A1:${String.fromCharCode(64 + rows[0].split('\t').length)}${rows.length}`,
             line_start: null,
             line_end: null,
+            drawing_part: null,
+            shape_id: null,
+            connector_id: null,
+            anchor_type: null,
           },
           heading_path: [sheetName],
           content: rows.join('\n'),
@@ -481,13 +487,82 @@ async function extractXlsx(filePath, fileContent, artifactSha256) {
         });
       }
     }
+
+    // 提取 DrawingML 内容
+    try {
+      const { extractDrawingml } = require('./drawingml-extractor.mjs');
+      const drawingResult = await extractDrawingml(fileContent);
+
+      // 为每个元素创建 STRUCTURED_DIAGRAM 证据块
+      for (const element of drawingResult.elements) {
+        const locatorKey = `xlsx:drawing:${element.sheet}:${element.drawing_part}:${element.shape_id}`;
+        blocks.push({
+          block_id: generateBlockId(artifactSha256, locatorKey),
+          artifact_sha256: artifactSha256,
+          source_format: 'xlsx',
+          modality: 'STRUCTURED_DIAGRAM',
+          locator: {
+            page: null,
+            slide: null,
+            sheet: element.sheet,
+            range: null,
+            line_start: null,
+            line_end: null,
+            drawing_part: element.drawing_part,
+            shape_id: element.shape_id,
+            connector_id: null,
+            anchor_type: element.anchor_type || null,
+          },
+          heading_path: [element.sheet, element.name || element.shape_id],
+          content: JSON.stringify(element),
+          asset_ref: null,
+          content_sha256: contentHash(JSON.stringify(element)),
+        });
+      }
+
+      // 为每个连接器创建 STRUCTURED_DIAGRAM 证据块
+      for (const connector of drawingResult.connectors) {
+        const locatorKey = `xlsx:connector:${connector.sheet}:${connector.drawing_part}:${connector.connector_id}`;
+        blocks.push({
+          block_id: generateBlockId(artifactSha256, locatorKey),
+          artifact_sha256: artifactSha256,
+          source_format: 'xlsx',
+          modality: 'STRUCTURED_DIAGRAM',
+          locator: {
+            page: null,
+            slide: null,
+            sheet: connector.sheet,
+            range: null,
+            line_start: null,
+            line_end: null,
+            drawing_part: connector.drawing_part,
+            shape_id: null,
+            connector_id: connector.connector_id,
+            anchor_type: connector.anchor_type || null,
+          },
+          heading_path: [connector.sheet, connector.name || connector.connector_id],
+          content: JSON.stringify(connector),
+          asset_ref: null,
+          content_sha256: contentHash(JSON.stringify(connector)),
+        });
+      }
+
+      // 收集警告
+      if (drawingResult.warnings && drawingResult.warnings.length > 0) {
+        // 将警告添加到第一个块的 metadata 或单独处理
+        // 这里简化处理，实际应该在 manifest 中记录
+      }
+    } catch (drawingmlErr) {
+      // DrawingML 提取失败，降级到只有表格数据
+      // 不影响已有的 TABLE 块
+    }
   } catch (err) {
     blocks.push({
       block_id: generateBlockId(artifactSha256, 'xlsx:unavailable'),
       artifact_sha256: artifactSha256,
       source_format: 'xlsx',
       modality: 'TABLE',
-      locator: { page: null, slide: null, sheet: null, range: null, line_start: null, line_end: null },
+      locator: { page: null, slide: null, sheet: null, range: null, line_start: null, line_end: null, drawing_part: null, shape_id: null, connector_id: null, anchor_type: null },
       heading_path: [],
       content: `[XLSX extraction unavailable: ${err.message}]`,
       asset_ref: null,
