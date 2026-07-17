@@ -676,6 +676,67 @@ describe('reviewActivityBpmn V2 合同', () => {
       ], '多活动残留归属');
       assertValidFindingSet(findings, '多活动残留归属');
     });
+
+    it('残留 CONFIRMATION_TASK 直接入向映射到多个不同 activity 必须以节点 ID 报告，不取第一个 binding', async () => {
+      const draft = makeValidDraft();
+      // 添加第二个活动 Activity-B
+      draft.activities.push({
+        activity_id: 'Activity-B',
+        name: '审核申请',
+        description: '审核采购申请',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [
+          { role_id: 'Role-approver', responsibility: 'R' },
+        ],
+        tools: [],
+        inputs: ['已提交的采购申请'],
+        process_summary: '审核采购申请',
+        outputs: ['审核结果'],
+        completion_criteria: ['审核完成'],
+        references: [],
+        main_task_id: 'Task-B',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      });
+      draft.diagram.nodes.push({
+        node_id: 'Task-B', node_type: 'MAIN_TASK', name: '审核申请', lane_id: 'Lane-approver',
+      });
+      draft.diagram.task_bindings.push({
+        activity_id: 'Activity-B', main_task_id: 'Task-B', confirmation_task_id: null,
+      });
+      // 未绑定 CONFIRMATION_TASK，直接前驱是两个不同 activity 的 MAIN_TASK
+      draft.diagram.nodes.push({
+        node_id: 'Task-confirm-multi', node_type: 'CONFIRMATION_TASK', name: '确认汇聚', lane_id: 'Lane-approver',
+      });
+      // Activity-submit 主 Task -> orphan（直接前驱）
+      draft.diagram.flows.push({
+        flow_id: 'Flow-10', source_ref: 'Task-submit', target_ref: 'Task-confirm-multi', condition: null,
+      });
+      // Activity-B 主 Task -> orphan（直接前驱）
+      draft.diagram.flows.push({
+        flow_id: 'Flow-11', source_ref: 'Task-B', target_ref: 'Task-confirm-multi', condition: null,
+      });
+      // orphan -> End
+      draft.diagram.flows.push({
+        flow_id: 'Flow-12', source_ref: 'Task-confirm-multi', target_ref: 'End-approved', condition: null,
+      });
+      draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+
+      assertSchemaValid(draft, '多活动入向归属');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      // Task-confirm-multi 的直接前驱是 Task-submit（Activity-submit）和 Task-B（Activity-B）
+      // 映射到两个不同 activity → 无法唯一归属 → 以节点 ID 报告 BPMN_ELEMENT（004）
+      // 不得归属到 Activity-submit 或 Activity-B
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-004:Task-confirm-multi',
+      ], '多活动入向归属');
+      assertValidFindingSet(findings, '多活动入向归属');
+    });
   });
 
   // ── FA-ACT-BPMN-005: 正式审批不得作为确认从 Task ──
@@ -1091,7 +1152,8 @@ describe('evaluateActivityBpmnStage', () => {
     });
     assert.equal(result.status, 'SUCCEEDED');
     assert.deepEqual(result.missing, []);
-    assert.ok(Array.isArray(result.findings));
+    assert.deepEqual(result.findings, [], '合法 fixture stage 应零 finding');
+    assertValidFindingSet(result.findings, '合法 fixture stage');
   });
 
   it('缺少 activities -> NEEDS_INPUT', () => {

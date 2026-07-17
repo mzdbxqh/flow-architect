@@ -590,16 +590,20 @@ export function reviewActivityBpmn({
   for (const residual of residualConfNodes) {
     // 查找该节点的直接前驱
     const incomingFlows = flows.filter(f => f.target_ref === residual.node_id);
-    let associatedActivityId = null;
+    const matchingActivityIds = new Set();
 
     for (const flow of incomingFlows) {
       // 直接前驱是否为某 binding 的 main_task_id
       const matchingBinding = bindings.find(b => b.main_task_id === flow.source_ref);
       if (matchingBinding) {
-        associatedActivityId = matchingBinding.activity_id;
-        break;
+        matchingActivityIds.add(matchingBinding.activity_id);
       }
     }
+
+    // 唯一关联时才归属；多个不同 activity 无法唯一归属 → 以节点 ID 报告
+    const associatedActivityId = matchingActivityIds.size === 1
+      ? [...matchingActivityIds][0]
+      : null;
 
     if (associatedActivityId) {
       const activity = activities.find(a => a.activity_id === associatedActivityId);
