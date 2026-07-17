@@ -343,124 +343,257 @@ export function reviewActivityBpmn({
   }
 
   // ── FA-ACT-BPMN-004: 确认从 Task ──
+  // 收集所有活动关联的 CONFIRMATION_TASK binding 节点 ID（用于残留检测）
+  const boundConfirmationNodeIds = new Set();
+  for (const binding of bindings) {
+    if (binding.confirmation_task_id) {
+      boundConfirmationNodeIds.add(binding.confirmation_task_id);
+    }
+  }
+
   for (const activity of activities) {
-    if (!activity.confirmation) continue;
-
-    const conf = activity.confirmation;
-
-    // 三项声明必须全真
-    if (!conf.co_completes || !conf.confirm_bears_final_responsibility || !conf.no_formal_approval_meeting) {
-      findings.push(createReviewFinding({
-        ruleId: 'FA-ACT-BPMN-004',
-        category: 'ACTIVITY_BPMN',
-        severity: 'BLOCKER',
-        artifactId,
-        targetRef: activity.activity_id,
-        observation: `活动 "${activity.name}" 的确认从 Task 三条件不全：co_completes=${conf.co_completes}, confirm_bears_final_responsibility=${conf.confirm_bears_final_responsibility}, no_formal_approval_meeting=${conf.no_formal_approval_meeting}`,
-        expected: '三项声明均为 true',
-        actual: `co_completes=${conf.co_completes}, confirm_bears_final_responsibility=${conf.confirm_bears_final_responsibility}, no_formal_approval_meeting=${conf.no_formal_approval_meeting}`,
-        recommendation: '确认确认从 Task 满足三项条件，或移除确认从 Task',
-        confidence: 1,
-      }));
-    }
-
-    // confirm_role_id 存在于活动角色或泳道角色目录
-    const confirmRoleId = conf.confirm_role_id;
-    const allRoleIds = new Set([
-      ...activity.role_assignments.map(r => r.role_id),
-      ...lanes.map(l => l.role_id),
-    ]);
-    if (!allRoleIds.has(confirmRoleId)) {
-      findings.push(createReviewFinding({
-        ruleId: 'FA-ACT-BPMN-004',
-        category: 'ACTIVITY_BPMN',
-        severity: 'BLOCKER',
-        artifactId,
-        targetRef: activity.activity_id,
-        observation: `活动 "${activity.name}" 的确认角色 "${confirmRoleId}" 不存在于活动角色或泳道角色目录`,
-        expected: 'confirm_role_id 应存在于角色目录',
-        actual: `confirm_role_id="${confirmRoleId}" 未找到`,
-        recommendation: '指定正确的确认角色',
-        confidence: 1,
-      }));
-    }
-
-    // 确认角色必须不同于主责角色
-    const mainResp = activity.responsibility_model === 'RASCI' ? 'R' : 'O';
-    const mainRole = activity.role_assignments.find(r => r.responsibility === mainResp);
-
-    if (mainRole && confirmRoleId === mainRole.role_id) {
-      findings.push(createReviewFinding({
-        ruleId: 'FA-ACT-BPMN-004',
-        category: 'ACTIVITY_BPMN',
-        severity: 'BLOCKER',
-        artifactId,
-        targetRef: activity.activity_id,
-        observation: `活动 "${activity.name}" 的确认角色 "${confirmRoleId}" 与主责角色相同`,
-        expected: '确认角色不同于主责角色',
-        actual: `确认角色和主责角色均为 ${confirmRoleId}`,
-        recommendation: '指定不同于主责角色的确认角色',
-        confidence: 1,
-      }));
-    }
-
-    // confirmation 三方一致性
     const binding = bindingByActivityId.get(activity.activity_id);
+    const conf = activity.confirmation;
     const bindingConfTaskId = binding?.confirmation_task_id;
-    const activityConfTaskId = conf.confirmation_task_id;
 
-    // 检查 activity.confirmation.confirmation_task_id 与 binding.confirmation_task_id 一致性
-    if (activityConfTaskId && bindingConfTaskId && activityConfTaskId !== bindingConfTaskId) {
-      findings.push(createReviewFinding({
-        ruleId: 'FA-ACT-BPMN-004',
-        category: 'ACTIVITY_BPMN',
-        severity: 'BLOCKER',
-        artifactId,
-        targetRef: activity.activity_id,
-        observation: `活动 "${activity.name}" 的 activity.confirmation.confirmation_task_id "${activityConfTaskId}" 与 binding.confirmation_task_id "${bindingConfTaskId}" 不一致`,
-        expected: '三方 ID 一致',
-        actual: `activity: ${activityConfTaskId}, binding: ${bindingConfTaskId}`,
-        recommendation: '统一 activity、binding 和节点的 confirmation_task_id',
-        confidence: 1,
-      }));
-    }
+    if (conf) {
+      // ── 有 confirmation 声明 ──
 
-    if (bindingConfTaskId) {
+      // 三项声明必须全真
+      if (!conf.co_completes || !conf.confirm_bears_final_responsibility || !conf.no_formal_approval_meeting) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `活动 "${activity.name}" 的确认从 Task 三条件不全：co_completes=${conf.co_completes}, confirm_bears_final_responsibility=${conf.confirm_bears_final_responsibility}, no_formal_approval_meeting=${conf.no_formal_approval_meeting}`,
+          expected: '三项声明均为 true',
+          actual: `co_completes=${conf.co_completes}, confirm_bears_final_responsibility=${conf.confirm_bears_final_responsibility}, no_formal_approval_meeting=${conf.no_formal_approval_meeting}`,
+          recommendation: '确认确认从 Task 满足三项条件，或移除确认从 Task',
+          confidence: 1,
+        }));
+      }
+
+      // confirm_role_id 存在于活动角色或泳道角色目录
+      const confirmRoleId = conf.confirm_role_id;
+      const allRoleIds = new Set([
+        ...activity.role_assignments.map(r => r.role_id),
+        ...lanes.map(l => l.role_id),
+      ]);
+      if (!allRoleIds.has(confirmRoleId)) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `活动 "${activity.name}" 的确认角色 "${confirmRoleId}" 不存在于活动角色或泳道角色目录`,
+          expected: 'confirm_role_id 应存在于角色目录',
+          actual: `confirm_role_id="${confirmRoleId}" 未找到`,
+          recommendation: '指定正确的确认角色',
+          confidence: 1,
+        }));
+      }
+
+      // 确认角色必须不同于主责角色
+      const mainResp = activity.responsibility_model === 'RASCI' ? 'R' : 'O';
+      const mainRole = activity.role_assignments.find(r => r.responsibility === mainResp);
+
+      if (mainRole && confirmRoleId === mainRole.role_id) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `活动 "${activity.name}" 的确认角色 "${confirmRoleId}" 与主责角色相同`,
+          expected: '确认角色不同于主责角色',
+          actual: `确认角色和主责角色均为 ${confirmRoleId}`,
+          recommendation: '指定不同于主责角色的确认角色',
+          confidence: 1,
+        }));
+      }
+
+      const activityConfTaskId = conf.confirmation_task_id;
+
+      // confirmation 非空但 binding 为空
+      if (!bindingConfTaskId) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `活动 "${activity.name}" 声明了 confirmation 但 binding.confirmation_task_id 为空`,
+          expected: 'activity.confirmation 与 binding.confirmation_task_id 一致',
+          actual: 'binding.confirmation_task_id 为 null',
+          recommendation: '在 binding 中设置 confirmation_task_id，或移除 activity.confirmation',
+          confidence: 1,
+        }));
+        continue;
+      }
+
+      // binding ID 存在但节点不存在
       const confNode = nodeById.get(bindingConfTaskId);
-      if (confNode) {
-        // 确认 Task 位于确认角色泳道
-        const confirmLane = laneByRoleId.get(confirmRoleId);
-        if (confirmLane && confNode.lane_id !== confirmLane.lane_id) {
-          findings.push(createReviewFinding({
-            ruleId: 'FA-ACT-BPMN-004',
-            category: 'ACTIVITY_BPMN',
-            severity: 'BLOCKER',
-            artifactId,
-            targetRef: activity.activity_id,
-            observation: `确认 Task "${bindingConfTaskId}" 位于 "${confNode.lane_id}" 而非确认角色泳道 "${confirmLane.lane_id}"`,
-            expected: `确认 Task 位于确认角色泳道`,
-            actual: `位于 ${confNode.lane_id}`,
-            recommendation: `将确认 Task 移至 ${confirmLane.name} 泳道`,
-            confidence: 1,
-          }));
-        }
+      if (!confNode) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `活动 "${activity.name}" 的 confirmation_task_id "${bindingConfTaskId}" 对应节点不存在`,
+          expected: 'confirmation_task_id 对应节点应存在于图中',
+          actual: `节点 "${bindingConfTaskId}" 不存在`,
+          recommendation: '创建对应的 CONFIRMATION_TASK 节点',
+          confidence: 1,
+        }));
+        continue;
+      }
 
-        // 确认 Task 泳道不同于主 Task 泳道
-        const mainTaskNode = nodeById.get(binding.main_task_id);
-        if (mainTaskNode && confNode.lane_id === mainTaskNode.lane_id) {
+      // 节点存在但 node_type 不是 CONFIRMATION_TASK
+      if (confNode.node_type !== 'CONFIRMATION_TASK') {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `活动 "${activity.name}" 的 confirmation 节点 "${bindingConfTaskId}" 类型为 "${confNode.node_type}"，应为 CONFIRMATION_TASK`,
+          expected: '节点类型为 CONFIRMATION_TASK',
+          actual: confNode.node_type,
+          recommendation: '修正节点类型为 CONFIRMATION_TASK',
+          confidence: 1,
+        }));
+        continue;
+      }
+
+      // activity.confirmation.confirmation_task_id 与 binding.confirmation_task_id 不一致
+      if (activityConfTaskId && activityConfTaskId !== bindingConfTaskId) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `活动 "${activity.name}" 的 activity.confirmation.confirmation_task_id "${activityConfTaskId}" 与 binding.confirmation_task_id "${bindingConfTaskId}" 不一致`,
+          expected: '三方 ID 一致',
+          actual: `activity: ${activityConfTaskId}, binding: ${bindingConfTaskId}`,
+          recommendation: '统一 activity、binding 和节点的 confirmation_task_id',
+          confidence: 1,
+        }));
+      }
+
+      // 确认 Task 位于确认角色泳道
+      const mainTaskNode = nodeById.get(binding.main_task_id);
+      const confirmLane = laneByRoleId.get(confirmRoleId);
+      if (confirmLane && confNode.lane_id !== confirmLane.lane_id) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `确认 Task "${bindingConfTaskId}" 位于 "${confNode.lane_id}" 而非确认角色泳道 "${confirmLane.lane_id}"`,
+          expected: `确认 Task 位于确认角色泳道`,
+          actual: `位于 ${confNode.lane_id}`,
+          recommendation: `将确认 Task 移至 ${confirmLane.name} 泳道`,
+          confidence: 1,
+        }));
+      }
+
+      // 确认 Task 泳道不同于主 Task 泳道
+      if (mainTaskNode && confNode.lane_id === mainTaskNode.lane_id) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `确认 Task "${bindingConfTaskId}" 与主 Task "${binding.main_task_id}" 位于同一泳道`,
+          expected: '确认 Task 位于不同于主 Task 的泳道',
+          actual: `两者均位于 ${confNode.lane_id}`,
+          recommendation: '将确认 Task 移至确认角色的泳道',
+          confidence: 1,
+        }));
+      }
+
+      // 缺少直接 MAIN_TASK -> CONFIRMATION_TASK flow
+      if (mainTaskNode) {
+        const mainToConfirmFlow = flows.some(f =>
+          f.source_ref === binding.main_task_id && f.target_ref === bindingConfTaskId
+        );
+        if (!mainToConfirmFlow) {
           findings.push(createReviewFinding({
             ruleId: 'FA-ACT-BPMN-004',
             category: 'ACTIVITY_BPMN',
             severity: 'BLOCKER',
             artifactId,
             targetRef: activity.activity_id,
-            observation: `确认 Task "${bindingConfTaskId}" 与主 Task "${binding.main_task_id}" 位于同一泳道`,
-            expected: '确认 Task 位于不同于主 Task 的泳道',
-            actual: `两者均位于 ${confNode.lane_id}`,
-            recommendation: '将确认 Task 移至确认角色的泳道',
+            observation: `活动 "${activity.name}" 缺少从主 Task "${binding.main_task_id}" 到确认 Task "${bindingConfTaskId}" 的直接 flow`,
+            expected: '存在 MAIN_TASK -> CONFIRMATION_TASK 的直接 flow',
+            actual: '无直接 flow',
+            recommendation: '添加 MAIN_TASK -> CONFIRMATION_TASK 的 flow',
             confidence: 1,
           }));
         }
+      }
+
+      // confirmation Task 没有后续 flow
+      const confirmOutFlows = flows.filter(f => f.source_ref === bindingConfTaskId);
+      if (confirmOutFlows.length === 0) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `活动 "${activity.name}" 的确认 Task "${bindingConfTaskId}" 没有后续 flow`,
+          expected: '确认 Task 应有后续 flow 连接到后续节点',
+          actual: '无出向 flow',
+          recommendation: '为确认 Task 添加后续 flow',
+          confidence: 1,
+        }));
+      }
+
+    } else {
+      // ── 无 confirmation 声明 ──
+
+      // activity.confirmation 为 null 但 binding.confirmation_task_id 非空
+      if (bindingConfTaskId) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `活动 "${activity.name}" 的 confirmation 为 null 但 binding.confirmation_task_id 为 "${bindingConfTaskId}"`,
+          expected: 'activity.confirmation 与 binding.confirmation_task_id 一致',
+          actual: `activity.confirmation=null, binding.confirmation_task_id="${bindingConfTaskId}"`,
+          recommendation: '补充 activity.confirmation 或清除 binding.confirmation_task_id',
+          confidence: 1,
+        }));
+      }
+
+      // activity.confirmation 为 null 但存在未绑定的 CONFIRMATION_TASK 节点（残留）
+      const residualConfNodes = nodes.filter(n =>
+        n.node_type === 'CONFIRMATION_TASK' &&
+        !boundConfirmationNodeIds.has(n.node_id)
+      );
+      for (const residual of residualConfNodes) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-004',
+          category: 'ACTIVITY_BPMN',
+          severity: 'BLOCKER',
+          artifactId,
+          targetRef: activity.activity_id,
+          observation: `活动 "${activity.name}" 的 confirmation 为 null 但图中存在未绑定的 CONFIRMATION_TASK 节点 "${residual.node_id}"`,
+          expected: '无 confirmation 声明时不应有残留 CONFIRMATION_TASK',
+          actual: `存在 CONFIRMATION_TASK "${residual.node_id}"`,
+          recommendation: '删除残留的 CONFIRMATION_TASK 节点',
+          confidence: 1,
+        }));
       }
     }
   }
@@ -556,6 +689,25 @@ export function reviewActivityBpmn({
         recommendation: '在流程卡片 end_results 中添加此结束事件，或删除图中多余的结束事件',
         confidence: 1,
       }));
+    } else {
+      // 同一 event_id 下 name 不一致
+      const endResult = endResultById.get(endEvent.node_id);
+      if (endResult.name !== endEvent.name) {
+        findings.push(createReviewFinding({
+          ruleId: 'FA-ACT-BPMN-007',
+          category: 'ACTIVITY_BPMN',
+          severity: 'MAJOR',
+          artifactId,
+          targetRef: endEvent.node_id,
+          locatorType: 'BPMN_ELEMENT',
+          locator: endEvent.node_id,
+          observation: `结束事件 "${endEvent.node_id}" 的图中名称 "${endEvent.name}" 与 end_results 名称 "${endResult.name}" 不一致`,
+          expected: '结束事件名称与 end_results 名称一致',
+          actual: `图: "${endEvent.name}", end_results: "${endResult.name}"`,
+          recommendation: '统一结束事件和 end_results 的名称',
+          confidence: 1,
+        }));
+      }
     }
   }
 
@@ -730,13 +882,20 @@ export function reviewActivityBpmn({
     }
   }
 
-  // ── FA-ACT-BPMN-009: 同一 L5 不得映射并行主 Task ──
+  // ── FA-ACT-BPMN-009: 同一 L5 不得映射并行主 Task / 多确认 Task / AND 并行 ──
   const activityMainTasks = new Map();
+  const activityConfTasks = new Map();
   for (const binding of bindings) {
     if (!activityMainTasks.has(binding.activity_id)) {
       activityMainTasks.set(binding.activity_id, new Set());
     }
     activityMainTasks.get(binding.activity_id).add(binding.main_task_id);
+    if (binding.confirmation_task_id) {
+      if (!activityConfTasks.has(binding.activity_id)) {
+        activityConfTasks.set(binding.activity_id, new Set());
+      }
+      activityConfTasks.get(binding.activity_id).add(binding.confirmation_task_id);
+    }
   }
 
   for (const [activityId, mainTaskIds] of activityMainTasks) {
@@ -754,6 +913,58 @@ export function reviewActivityBpmn({
         recommendation: '将并行主 Task 合并为串行，或拆分为多个活动',
         confidence: 1,
       }));
+    }
+  }
+
+  // 多个 CONFIRMATION_TASK 绑定同一 activity
+  for (const [activityId, confTaskIds] of activityConfTasks) {
+    if (confTaskIds.size > 1) {
+      const activity = activities.find(a => a.activity_id === activityId);
+      findings.push(createReviewFinding({
+        ruleId: 'FA-ACT-BPMN-009',
+        category: 'ACTIVITY_BPMN',
+        severity: 'BLOCKER',
+        artifactId,
+        targetRef: activityId,
+        observation: `活动 "${activity?.name || activityId}" 绑定了 ${confTaskIds.size} 个确认 Task: ${[...confTaskIds].join(', ')}`,
+        expected: '同一 L5 活动最多一个 CONFIRMATION_TASK',
+        actual: `${confTaskIds.size} 个 CONFIRMATION_TASK`,
+        recommendation: '保留一个确认 Task，删除多余的',
+        confidence: 1,
+      }));
+    }
+  }
+
+  // GATEWAY_AND 将同一 activity 的 MAIN_TASK 与 CONFIRMATION_TASK 放入并行分支
+  const andGateways = nodes.filter(n => n.node_type === 'GATEWAY_AND');
+  for (const gw of andGateways) {
+    const outFlows = flows.filter(f => f.source_ref === gw.node_id);
+    if (outFlows.length < 2) continue;
+
+    const targets = new Set(outFlows.map(f => f.target_ref));
+    for (const [activityId, mainTaskIds] of activityMainTasks) {
+      const confTaskIds = activityConfTasks.get(activityId);
+      if (!confTaskIds) continue;
+
+      for (const mainTaskId of mainTaskIds) {
+        for (const confTaskId of confTaskIds) {
+          if (targets.has(mainTaskId) && targets.has(confTaskId)) {
+            const activity = activities.find(a => a.activity_id === activityId);
+            findings.push(createReviewFinding({
+              ruleId: 'FA-ACT-BPMN-009',
+              category: 'ACTIVITY_BPMN',
+              severity: 'BLOCKER',
+              artifactId,
+              targetRef: activityId,
+              observation: `活动 "${activity?.name || activityId}" 的主 Task "${mainTaskId}" 和确认 Task "${confTaskId}" 被 AND 网关 "${gw.node_id}" 并行放置`,
+              expected: '主 Task 与确认 Task 应为串行拓扑',
+              actual: `AND 网关 "${gw.node_id}" 将两者放入并行分支`,
+              recommendation: '将确认 Task 移至主 Task 的串行后续位置',
+              confidence: 1,
+            }));
+          }
+        }
+      }
     }
   }
 

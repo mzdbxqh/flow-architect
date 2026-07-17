@@ -4,15 +4,15 @@ import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
-import { reviewActivityBpmn } from '../scripts/review-activity-bpmn.mjs';
-import { evaluateActivityBpmnStage } from '../scripts/review-activity-bpmn.mjs';
+import { reviewActivityBpmn, evaluateActivityBpmnStage } from '../scripts/review-activity-bpmn.mjs';
 import { validateProcessDraft } from '../scripts/lib/process-draft-contract.mjs';
-import { readFile as readFileAsync } from 'node:fs/promises';
+import { validateContract } from '../scripts/lib/contract-validation.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const schemasDir = join(__dirname, '..', 'references', 'schemas');
 
-// ── finding-set Schema 验证器 ──
+// ── Schema 验证器 ──
+let validateDraftSchema;
 let validateFindingSet;
 before(async () => {
   const ajv = new Ajv2020({ allErrors: true, strict: false });
@@ -20,6 +20,21 @@ before(async () => {
     await readFile(join(schemasDir, 'finding-set.schema.json'), 'utf8')
   );
   validateFindingSet = ajv.compile(findingSetSchema);
+
+  const draftAjv = new Ajv2020({ allErrors: true, strict: false });
+  for (const name of [
+    'process-card.schema.json',
+    'activity-catalog.schema.json',
+    'diagram-draft.schema.json',
+    'field-provenance.schema.json',
+  ]) {
+    const schema = JSON.parse(await readFile(join(schemasDir, name), 'utf8'));
+    draftAjv.addSchema(schema);
+  }
+  const draftSchema = JSON.parse(
+    await readFile(join(schemasDir, 'process-draft.schema.json'), 'utf8')
+  );
+  validateDraftSchema = draftAjv.compile(draftSchema);
 });
 
 // ── V2 合法基线 fixture ──
@@ -111,6 +126,29 @@ function assertNoTargetRef(findings, msg) {
   }
 }
 
+/** 仅 JSON Schema 合法（不含引用一致性） */
+function assertSchemaValid(draft, msg) {
+  const valid = validateDraftSchema(draft);
+  if (!valid) {
+    const errors = validateDraftSchema.errors.map(e => `${e.instancePath} ${e.message}`).join('\n');
+    assert.fail(`${msg} - process-draft Schema 无效:\n${errors}`);
+  }
+}
+
+/** JSON Schema 合法 + 引用一致性 */
+async function assertFullyValid(draft, msg) {
+  assertSchemaValid(draft, msg);
+  const result = await validateProcessDraft(draft);
+  assert.deepEqual(result, { valid: true }, `${msg} - validateProcessDraft 失败: ${JSON.stringify(result)}`);
+}
+
+/** 断言某 findings 中包含指定 rule_id:target 的 finding */
+function assertHasFinding(findings, ruleId, target, msg) {
+  const key = `${ruleId}:${target}`;
+  const found = findings.some(f => f.rule_id === ruleId && f.target_refs[0] === target);
+  assert.ok(found, `${msg} - 缺少 finding ${key}，实际: ${oracle(findings)}`);
+}
+
 // ══════════════════════════════════════════════════════════════
 // 测试
 // ══════════════════════════════════════════════════════════════
@@ -120,10 +158,9 @@ describe('reviewActivityBpmn V2 合同', () => {
   // ── 基础合同验证 ──
 
   describe('基础合同', () => {
-    it('合法 V2 fixture 通过 validateProcessDraft', async () => {
+    it('合法 V2 fixture 通过 assertFullyValid', async () => {
       const draft = makeValidDraft();
-      const result = await validateProcessDraft(draft);
-      assert.deepEqual(result, { valid: true }, `合法 fixture Schema 无效: ${JSON.stringify(result)}`);
+      await assertFullyValid(draft, '合法 fixture');
     });
 
     it('合法 fixture 调用审查器后为精确空数组', async () => {
@@ -161,10 +198,8 @@ describe('reviewActivityBpmn V2 合同', () => {
   describe('FA-ACT-BPMN-001', () => {
     it('含 person_ 前缀的个人标识应触发 001', async () => {
       const draft = makeValidDraft();
-      // 使用 person_ 前缀的个人标识
       draft.diagram.lanes[0].name = '张三';
       draft.diagram.lanes[0].role_id = 'person_zhangsan';
-      // 同步活动 R 角色避免 003 干扰
       draft.activities[0].role_assignments = [
         { role_id: 'person_zhangsan', responsibility: 'R' },
         { role_id: 'Role-approver', responsibility: 'A' },
@@ -180,25 +215,22 @@ describe('reviewActivityBpmn V2 合同', () => {
       assertNoTargetRef(findings, '001');
     });
 
-    it('合法角色名如"经办人、审核人、采购员"不触发 001', async () => {
+    it('合法角色名不触发 001', async () => {
       const draft = makeValidDraft();
-      // 所有泳道都是合法角色名，不应触发
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f001 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-001');
-      assert.equal(f001.length, 0, `合法角色不应误报 001: ${JSON.stringify(oracle(f001))}`);
+      assert.deepEqual(oracle(findings), [], '合法角色不应产生 finding');
     });
 
-    it('含 person_ 前缀的个人标识应触发 001', async () => {
+    it('Role-demand/需求方不应触发 001', async () => {
       const draft = makeValidDraft();
-      draft.diagram.lanes[0].name = '李四';
-      draft.diagram.lanes[0].role_id = 'person_lisi';
-      // 同步活动 R 角色避免 003 干扰
+      draft.diagram.lanes[0].name = '需求方';
+      draft.diagram.lanes[0].role_id = 'Role-demand';
       draft.activities[0].role_assignments = [
-        { role_id: 'person_lisi', responsibility: 'R' },
+        { role_id: 'Role-demand', responsibility: 'R' },
         { role_id: 'Role-approver', responsibility: 'A' },
         { role_id: 'Role-purchaser', responsibility: 'S' },
       ];
@@ -207,31 +239,51 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-001:Lane-requester']);
+      assert.deepEqual(oracle(findings), [], 'Role-demand/需求方不应产生 finding');
+      assertValidFindingSet(findings, 'Role-demand/需求方');
     });
   });
 
   // ── FA-ACT-BPMN-002: 活动—主 Task 三方一致 ──
 
   describe('FA-ACT-BPMN-002', () => {
-    it('活动无主 Task 应触发 002', async () => {
+    it('活动无 binding 应触发 002', async () => {
       const draft = makeValidDraft();
-      // 保留 MAIN_TASK 节点但移除 binding，使活动"无 binding"
       draft.diagram.task_bindings = [];
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      // 活动无 binding + MAIN_TASK 节点未被引用 = 两条 002
       assert.deepEqual(oracle(findings), [
         'FA-ACT-BPMN-002:Activity-submit',
         'FA-ACT-BPMN-002:Task-submit',
       ]);
-      assertValidFindingSet(findings, '002 无主 Task');
+      assertValidFindingSet(findings, '002 无 binding');
     });
 
-    it('两个 binding 应触发 002', async () => {
+    it('缺少 MAIN_TASK node 应触发 002', async () => {
+      const draft = makeValidDraft();
+      draft.activities[0].main_task_id = 'Task';
+      draft.diagram.task_bindings[0].main_task_id = 'Task';
+      draft.diagram.nodes = draft.diagram.nodes.filter(n => n.node_id !== 'Task-submit');
+      draft.diagram.flows = [
+        { flow_id: 'Flow-1', source_ref: 'Start-request', target_ref: 'Task', condition: null },
+        { flow_id: 'Flow-2', source_ref: 'Task', target_ref: 'End-approved', condition: null },
+      ];
+      assertSchemaValid(draft, '缺少 MAIN_TASK node');
+      const pdResult = await validateProcessDraft(draft);
+      assert.equal(pdResult.valid, false, '缺少 MAIN_TASK node 应 validateProcessDraft 失败');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assertHasFinding(findings, 'FA-ACT-BPMN-002', 'Activity-submit', '缺少 MAIN_TASK node');
+      assertValidFindingSet(findings, '缺少 MAIN_TASK node');
+    });
+
+    it('两个 binding 应触发 002 和 009', async () => {
       const draft = makeValidDraft();
       draft.diagram.nodes.push({
         node_id: 'Task-submit2', node_type: 'MAIN_TASK', name: '另一个主任务', lane_id: 'Lane-requester',
@@ -245,15 +297,14 @@ describe('reviewActivityBpmn V2 合同', () => {
       draft.diagram.flows.push({
         flow_id: 'Flow-4', source_ref: 'Task-submit2', target_ref: 'End-approved', condition: null,
       });
-      // Remove original Flow-2
       draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f002 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-002');
-      assert.ok(f002.length >= 1, `Expected 002: ${JSON.stringify(oracle(findings))}`);
+      assertHasFinding(findings, 'FA-ACT-BPMN-009', 'Activity-submit', '两个 binding 应触发 009');
+      assertValidFindingSet(findings, '两个 binding');
     });
 
     it('三方不一致应触发 002', async () => {
@@ -264,8 +315,8 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f002 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-002');
-      assert.ok(f002.length >= 1, `Expected 002: ${JSON.stringify(oracle(findings))}`);
+      assertHasFinding(findings, 'FA-ACT-BPMN-002', 'Activity-submit', '三方不一致');
+      assertValidFindingSet(findings, '三方不一致');
     });
   });
 
@@ -286,14 +337,14 @@ describe('reviewActivityBpmn V2 合同', () => {
 
     it('角色无泳道时应触发 003', async () => {
       const draft = makeValidDraft();
-      draft.diagram.lanes = []; // 删除所有泳道
+      draft.diagram.lanes = [];
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f003 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-003');
-      assert.ok(f003.length >= 1, `Expected 003 for missing lane: ${JSON.stringify(oracle(findings))}`);
+      assertHasFinding(findings, 'FA-ACT-BPMN-003', 'Activity-submit', '角色无泳道');
+      assertValidFindingSet(findings, '角色无泳道');
     });
   });
 
@@ -320,13 +371,13 @@ describe('reviewActivityBpmn V2 合同', () => {
         flow_id: 'Flow-4', source_ref: 'Task-confirm', target_ref: 'End-approved', condition: null,
       });
       draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+      await assertFullyValid(draft, '004 三条件不全');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f004 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-004');
-      assert.ok(f004.length >= 1, `Expected 004: ${JSON.stringify(oracle(findings))}`);
+      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 三条件不全');
       assertValidFindingSet(findings, '004 三条件不全');
     });
 
@@ -350,13 +401,205 @@ describe('reviewActivityBpmn V2 合同', () => {
         flow_id: 'Flow-4', source_ref: 'Task-confirm', target_ref: 'End-approved', condition: null,
       });
       draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+      await assertFullyValid(draft, '004 确认角色等于主责');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f004 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-004');
-      assert.ok(f004.length >= 1, `Expected 004: ${JSON.stringify(oracle(findings))}`);
+      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 确认角色等于主责');
+      assertValidFindingSet(findings, '004 确认角色等于主责');
+    });
+
+    it('activity.confirmation 非空但 binding.confirmation_task_id 为空: 004', async () => {
+      const draft = makeValidDraft();
+      draft.activities[0].confirmation = {
+        confirmation_task_id: 'Task-confirm',
+        confirm_role_id: 'Role-approver',
+        co_completes: true,
+        confirm_bears_final_responsibility: true,
+        no_formal_approval_meeting: true,
+      };
+      // binding.confirmation_task_id 保持 null
+      assertSchemaValid(draft, '004 confirmation 非空但 binding 为空');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 confirmation 非空但 binding 为空');
+      assertValidFindingSet(findings, '004 confirmation 非空但 binding 为空');
+    });
+
+    it('binding ID 存在但节点不存在: 004', async () => {
+      const draft = makeValidDraft();
+      draft.activities[0].confirmation = {
+        confirmation_task_id: 'Task-confirm',
+        confirm_role_id: 'Role-approver',
+        co_completes: true,
+        confirm_bears_final_responsibility: true,
+        no_formal_approval_meeting: true,
+      };
+      draft.diagram.task_bindings[0].confirmation_task_id = 'Task-confirm';
+      // 不添加 Task-confirm 节点
+      assertSchemaValid(draft, '004 binding ID 存在但节点不存在');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 binding ID 存在但节点不存在');
+      assertValidFindingSet(findings, '004 binding ID 存在但节点不存在');
+    });
+
+    it('节点存在但 node_type 不是 CONFIRMATION_TASK: 004', async () => {
+      const draft = makeValidDraft();
+      draft.activities[0].confirmation = {
+        confirmation_task_id: 'Task-confirm',
+        confirm_role_id: 'Role-approver',
+        co_completes: true,
+        confirm_bears_final_responsibility: true,
+        no_formal_approval_meeting: true,
+      };
+      draft.diagram.task_bindings[0].confirmation_task_id = 'Task-confirm';
+      draft.diagram.nodes.push({
+        node_id: 'Task-confirm', node_type: 'MAIN_TASK', name: '确认采购', lane_id: 'Lane-approver',
+      });
+      await assertFullyValid(draft, '004 节点类型错误');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 节点类型错误');
+      assertValidFindingSet(findings, '004 节点类型错误');
+    });
+
+    it('activity/binding/节点三方不一致: 004', async () => {
+      const draft = makeValidDraft();
+      draft.activities[0].confirmation = {
+        confirmation_task_id: 'Conf-A',
+        confirm_role_id: 'Role-approver',
+        co_completes: true,
+        confirm_bears_final_responsibility: true,
+        no_formal_approval_meeting: true,
+      };
+      draft.diagram.task_bindings[0].confirmation_task_id = 'Conf-B';
+      draft.diagram.nodes.push({
+        node_id: 'Conf-B', node_type: 'CONFIRMATION_TASK', name: '确认采购', lane_id: 'Lane-approver',
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Conf-B', condition: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-4', source_ref: 'Conf-B', target_ref: 'End-approved', condition: null,
+      });
+      draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+      await assertFullyValid(draft, '004 三方不一致');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 三方不一致');
+      assertValidFindingSet(findings, '004 三方不一致');
+    });
+
+    it('缺少直接 MAIN_TASK -> CONFIRMATION_TASK flow: 004', async () => {
+      const draft = makeValidDraft();
+      draft.activities[0].confirmation = {
+        confirmation_task_id: 'Task-confirm',
+        confirm_role_id: 'Role-approver',
+        co_completes: true,
+        confirm_bears_final_responsibility: true,
+        no_formal_approval_meeting: true,
+      };
+      draft.diagram.task_bindings[0].confirmation_task_id = 'Task-confirm';
+      draft.diagram.nodes.push({
+        node_id: 'Task-confirm', node_type: 'CONFIRMATION_TASK', name: '确认采购', lane_id: 'Lane-approver',
+      });
+      // flows 从 Task-submit 直接到 End-approved，没有 MAIN_TASK -> CONFIRMATION_TASK
+      await assertFullyValid(draft, '004 缺少 MAIN->CONFIRM flow');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 缺少 MAIN->CONFIRM flow');
+      assertValidFindingSet(findings, '004 缺少 MAIN->CONFIRM flow');
+    });
+
+    it('confirmation Task 没有后续 flow: 004', async () => {
+      const draft = makeValidDraft();
+      draft.activities[0].confirmation = {
+        confirmation_task_id: 'Task-confirm',
+        confirm_role_id: 'Role-approver',
+        co_completes: true,
+        confirm_bears_final_responsibility: true,
+        no_formal_approval_meeting: true,
+      };
+      draft.diagram.task_bindings[0].confirmation_task_id = 'Task-confirm';
+      draft.diagram.nodes.push({
+        node_id: 'Task-confirm', node_type: 'CONFIRMATION_TASK', name: '确认采购', lane_id: 'Lane-approver',
+      });
+      // 有 MAIN_TASK -> CONFIRMATION_TASK flow
+      draft.diagram.flows.push({
+        flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Task-confirm', condition: null,
+      });
+      // 删除直接 Task-submit -> End-approved 的 flow，但不添加 Task-confirm 后续
+      draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+      assertSchemaValid(draft, '004 确认 Task 无后续 flow');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 确认 Task 无后续 flow');
+      assertValidFindingSet(findings, '004 确认 Task 无后续 flow');
+    });
+
+    it('activity.confirmation 为 null 但 binding.confirmation_task_id 非空: 004', async () => {
+      const draft = makeValidDraft();
+      draft.activities[0].confirmation = null;
+      draft.diagram.task_bindings[0].confirmation_task_id = 'Task-confirm';
+      draft.diagram.nodes.push({
+        node_id: 'Task-confirm', node_type: 'CONFIRMATION_TASK', name: '确认采购', lane_id: 'Lane-approver',
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Task-confirm', condition: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-4', source_ref: 'Task-confirm', target_ref: 'End-approved', condition: null,
+      });
+      draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+      assertSchemaValid(draft, '004 confirmation null 但 binding 非空');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 confirmation null 但 binding 非空');
+      assertValidFindingSet(findings, '004 confirmation null 但 binding 非空');
+    });
+
+    it('activity.confirmation 为 null 但存在 CONFIRMATION_TASK 残留: 004', async () => {
+      const draft = makeValidDraft();
+      draft.activities[0].confirmation = null;
+      // 不修改 binding（confirmation_task_id 仍为 null），但图中有 CONFIRMATION_TASK
+      draft.diagram.nodes.push({
+        node_id: 'Task-confirm', node_type: 'CONFIRMATION_TASK', name: '确认采购', lane_id: 'Lane-approver',
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Task-confirm', condition: null,
+      });
+      await assertFullyValid(draft, '004 confirmation null 但节点残留');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 confirmation null 但节点残留');
+      assertValidFindingSet(findings, '004 confirmation null 但节点残留');
     });
   });
 
@@ -390,8 +633,8 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f005 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-005');
-      assert.ok(f005.length >= 1, `Expected 005: ${JSON.stringify(oracle(findings))}`);
+      assertHasFinding(findings, 'FA-ACT-BPMN-005', 'Activity-submit', '005');
+      assertValidFindingSet(findings, '005');
     });
   });
 
@@ -400,18 +643,15 @@ describe('reviewActivityBpmn V2 合同', () => {
   describe('FA-ACT-BPMN-006', () => {
     it('GATEWAY_XOR 无条件出向流应触发 006', async () => {
       const draft = makeValidDraft();
-      // 插入 XOR 网关在 Task-submit 和 End-approved 之间
       draft.diagram.nodes.push({
         node_id: 'Gw-xor', node_type: 'GATEWAY_XOR', name: '审批分支', lane_id: 'Lane-approver',
       });
       draft.diagram.flows = [
         { flow_id: 'Flow-1', source_ref: 'Start-request', target_ref: 'Task-submit', condition: null },
         { flow_id: 'Flow-2', source_ref: 'Task-submit', target_ref: 'Gw-xor', condition: null },
-        // 两条无条件出向流
         { flow_id: 'Flow-3', source_ref: 'Gw-xor', target_ref: 'End-approved', condition: null },
         { flow_id: 'Flow-4', source_ref: 'Gw-xor', target_ref: 'End-approved', condition: null },
       ];
-      // 只保留一条从 Task-submit 出发的流（移除直接到 End 的）
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
@@ -423,6 +663,25 @@ describe('reviewActivityBpmn V2 合同', () => {
 
     it('GATEWAY_XOR 所有出向流有 condition 时不触发 006', async () => {
       const draft = makeValidDraft();
+      draft.activities.push({
+        activity_id: 'Activity-review',
+        name: '审核申请',
+        description: '审核采购申请',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [
+          { role_id: 'Role-approver', responsibility: 'R' },
+        ],
+        tools: [],
+        inputs: ['已提交的采购申请'],
+        process_summary: '审核采购申请',
+        outputs: ['审核结果'],
+        completion_criteria: ['审核完成'],
+        references: [],
+        main_task_id: 'Task-review',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      });
       draft.diagram.nodes.push({
         node_id: 'Gw-xor', node_type: 'GATEWAY_XOR', name: '审批分支', lane_id: 'Lane-approver',
       });
@@ -430,53 +689,22 @@ describe('reviewActivityBpmn V2 合同', () => {
         node_id: 'Task-review', node_type: 'MAIN_TASK', name: '审核申请', lane_id: 'Lane-approver',
       });
       draft.diagram.task_bindings.push({
-        activity_id: 'Activity-submit', main_task_id: 'Task-review', confirmation_task_id: null,
+        activity_id: 'Activity-review', main_task_id: 'Task-review', confirmation_task_id: null,
       });
       draft.diagram.flows = [
         { flow_id: 'Flow-1', source_ref: 'Start-request', target_ref: 'Task-submit', condition: null },
         { flow_id: 'Flow-2', source_ref: 'Task-submit', target_ref: 'Gw-xor', condition: null },
-        { flow_id: 'Flow-3', source_ref: 'Gw-xor', target_ref: 'Task-review', condition: { label: '审批结论为通过', source_output: '审批结论', operator: 'EQUALS', value: '通过' } },
-        { flow_id: 'Flow-4', source_ref: 'Gw-xor', target_ref: 'End-approved', condition: { label: '审批结论为驳回', source_output: '审批结论', operator: 'EQUALS', value: '驳回' } },
+        { flow_id: 'Flow-3', source_ref: 'Gw-xor', target_ref: 'Task-review', condition: { label: '通过', source_output: '结论', operator: 'EQUALS', value: '通过' } },
+        { flow_id: 'Flow-4', source_ref: 'Gw-xor', target_ref: 'End-approved', condition: { label: '驳回', source_output: '结论', operator: 'EQUALS', value: '驳回' } },
         { flow_id: 'Flow-5', source_ref: 'Task-review', target_ref: 'End-approved', condition: null },
       ];
+      await assertFullyValid(draft, '006 XOR 全有条件');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f006 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-006');
-      assert.equal(f006.length, 0, `XOR 全有条件时不应触发 006: ${JSON.stringify(oracle(findings))}`);
-    });
-
-    it('GATEWAY_AND 不检查条件，不触发 006', async () => {
-      const draft = makeValidDraft();
-      draft.diagram.nodes.push({
-        node_id: 'Gw-and', node_type: 'GATEWAY_AND', name: '并行拆分', lane_id: 'Lane-requester',
-      });
-      draft.diagram.nodes.push({
-        node_id: 'Gw-join', node_type: 'GATEWAY_AND', name: '并行汇合', lane_id: 'Lane-requester',
-      });
-      draft.diagram.nodes.push({
-        node_id: 'Task-extra', node_type: 'MAIN_TASK', name: '额外任务', lane_id: 'Lane-requester',
-      });
-      draft.diagram.task_bindings.push({
-        activity_id: 'Activity-submit', main_task_id: 'Task-extra', confirmation_task_id: null,
-      });
-      draft.diagram.flows = [
-        { flow_id: 'Flow-1', source_ref: 'Start-request', target_ref: 'Task-submit', condition: null },
-        { flow_id: 'Flow-2', source_ref: 'Task-submit', target_ref: 'Gw-and', condition: null },
-        { flow_id: 'Flow-3', source_ref: 'Gw-and', target_ref: 'Task-extra', condition: null },
-        { flow_id: 'Flow-4', source_ref: 'Gw-and', target_ref: 'End-approved', condition: null },
-        { flow_id: 'Flow-5', source_ref: 'Task-extra', target_ref: 'Gw-join', condition: null },
-        { flow_id: 'Flow-6', source_ref: 'End-approved', target_ref: 'Gw-join', condition: null },
-      ];
-      const findings = reviewActivityBpmn({
-        processCard: draft.process_card,
-        activities: draft.activities,
-        diagramModel: draft.diagram,
-      });
-      const f006 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-006');
-      assert.equal(f006.length, 0, `AND 不检查条件: ${JSON.stringify(oracle(findings))}`);
+      assert.deepEqual(oracle(findings), [], 'XOR 全有条件时不应触发 006');
     });
   });
 
@@ -491,26 +719,41 @@ describe('reviewActivityBpmn V2 合同', () => {
       draft.diagram.flows.push({
         flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'End-extra', condition: null,
       });
+      await assertFullyValid(draft, '007 结束事件不在 end_results');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f007 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-007');
-      assert.ok(f007.length >= 1, `Expected 007: ${JSON.stringify(oracle(findings))}`);
-      assertValidFindingSet(findings, '007');
+      assertHasFinding(findings, 'FA-ACT-BPMN-007', 'End-extra', '007 结束事件不在 end_results');
+      assertValidFindingSet(findings, '007 结束事件不在 end_results');
     });
 
     it('end_results 有但图中没有结束事件应触发 007', async () => {
       const draft = makeValidDraft();
       draft.process_card.end_results.push({ event_id: 'End-rejected', name: '采购申请被驳回' });
+      await assertFullyValid(draft, '007 图中缺少结束事件');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f007 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-007');
-      assert.ok(f007.length >= 1, `Expected 007 for missing end event: ${JSON.stringify(oracle(findings))}`);
+      assertHasFinding(findings, 'FA-ACT-BPMN-007', 'End-rejected', '007 图中缺少结束事件');
+      assertValidFindingSet(findings, '007 图中缺少结束事件');
+    });
+
+    it('同一 event_id 下 name 不一致应触发 007', async () => {
+      const draft = makeValidDraft();
+      // end_results name 与 END_EVENT name 不同
+      draft.process_card.end_results[0].name = '采购申请审批完成';
+      await assertFullyValid(draft, '007 name 不一致');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-007:End-approved']);
+      assertValidFindingSet(findings, '007 name 不一致');
     });
   });
 
@@ -556,17 +799,41 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f008 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-008');
-      assert.equal(f008.length, 0, `成对 Link 且有正确 flow 不应触发 008: ${JSON.stringify(oracle(findings))}`);
+      assert.deepEqual(oracle(findings), [], '成对 Link 且有正确 flow 不应触发 008');
+    });
+
+    it('Catch -> Throw 应触发 008', async () => {
+      const draft = makeValidDraft();
+      draft.diagram.nodes.push({
+        node_id: 'Link-throw', node_type: 'INTERMEDIATE_LINK_THROW', name: '跳转A', lane_id: 'Lane-requester',
+      });
+      draft.diagram.nodes.push({
+        node_id: 'Link-catch', node_type: 'INTERMEDIATE_LINK_CATCH', name: '跳转A', lane_id: 'Lane-requester',
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-3', source_ref: 'Link-catch', target_ref: 'Link-throw', condition: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-4', source_ref: 'Task-submit', target_ref: 'Link-catch', condition: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-5', source_ref: 'Link-throw', target_ref: 'End-approved', condition: null,
+      });
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      assertHasFinding(findings, 'FA-ACT-BPMN-008', 'Link-throw', 'Catch -> Throw');
+      assertValidFindingSet(findings, 'Catch -> Throw');
     });
   });
 
-  // ── FA-ACT-BPMN-009: 同一 L5 不得映射并行主 Task ──
+  // ── FA-ACT-BPMN-009: 一主一从串行与 AND 并行 ──
 
   describe('FA-ACT-BPMN-009', () => {
-    it('同一 L5 并行 Task 应触发 009', async () => {
+    it('同一 activity 多个主 Task 应触发 009', async () => {
       const draft = makeValidDraft();
-      // 给同一活动增加第二个 binding（模拟并行 Task）
       draft.diagram.nodes.push({
         node_id: 'Task-extra', node_type: 'MAIN_TASK', name: '并行任务', lane_id: 'Lane-requester',
       });
@@ -585,124 +852,84 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      // 应同时触发 002（多个 binding + 反向检查）和 009（多个主 Task）
-      const expected = [
-        'FA-ACT-BPMN-002:Activity-submit',
-        'FA-ACT-BPMN-002:Task-extra',
-        'FA-ACT-BPMN-009:Activity-submit',
-      ];
-      assert.deepEqual(oracle(findings), expected);
-      assertValidFindingSet(findings, '009');
-    });
-  });
-
-  // ── Fresh review 反例（当前提交的四个确定性失败） ──
-
-  describe('Fresh review 反例', () => {
-    it('Role-demand/需求方不应触发 001', async () => {
-      const draft = makeValidDraft();
-      draft.diagram.lanes[0].name = '需求方';
-      draft.diagram.lanes[0].role_id = 'Role-demand';
-      draft.activities[0].role_assignments = [
-        { role_id: 'Role-demand', responsibility: 'R' },
-        { role_id: 'Role-approver', responsibility: 'A' },
-        { role_id: 'Role-purchaser', responsibility: 'S' },
-      ];
-      const findings = reviewActivityBpmn({
-        processCard: draft.process_card,
-        activities: draft.activities,
-        diagramModel: draft.diagram,
-      });
-      const f001 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-001');
-      assert.equal(f001.length, 0, `Role-demand/需求方不应触发 001: ${JSON.stringify(oracle(f001))}`);
-      assertValidFindingSet(findings, 'Role-demand/需求方');
+      assertHasFinding(findings, 'FA-ACT-BPMN-009', 'Activity-submit', '多个主 Task 应触发 009');
+      assertValidFindingSet(findings, '多个主 Task');
     });
 
-    it('缺少 MAIN_TASK node 应触发 002', async () => {
+    it('一个 activity 最多一个 CONFIRMATION_TASK', async () => {
       const draft = makeValidDraft();
-      // activity.main_task_id 与 binding.main_task_id 都为 'Task'，但 nodes 中不存在 'Task'
-      draft.activities[0].main_task_id = 'Task';
-      draft.diagram.task_bindings[0].main_task_id = 'Task';
-      // 删除原有的 Task-submit 节点
-      draft.diagram.nodes = draft.diagram.nodes.filter(n => n.node_id !== 'Task-submit');
-      // 更新 flows 以避免悬空引用
-      draft.diagram.flows = [
-        { flow_id: 'Flow-1', source_ref: 'Start-request', target_ref: 'Task', condition: null },
-        { flow_id: 'Flow-2', source_ref: 'Task', target_ref: 'End-approved', condition: null },
-      ];
-      // 注意：此反例故意破坏基本引用，因此只断言 Schema valid，不调用 validateProcessDraft
-      const findings = reviewActivityBpmn({
-        processCard: draft.process_card,
-        activities: draft.activities,
-        diagramModel: draft.diagram,
-      });
-      const f002 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-002');
-      assert.ok(f002.length >= 1, `缺少 MAIN_TASK node 应触发 002: ${JSON.stringify(oracle(findings))}`);
-      assertValidFindingSet(findings, '缺少 MAIN_TASK node');
-    });
-
-    it('Conf-A vs Conf-B 应触发 004', async () => {
-      const draft = makeValidDraft();
-      // activity.confirmation.confirmation_task_id = 'Conf-A'
-      // binding.confirmation_task_id = 'Conf-B'
-      // 节点为 'Conf-B'
       draft.activities[0].confirmation = {
-        confirmation_task_id: 'Conf-A',
+        confirmation_task_id: 'Task-confirm',
         confirm_role_id: 'Role-approver',
         co_completes: true,
         confirm_bears_final_responsibility: true,
         no_formal_approval_meeting: true,
       };
-      draft.diagram.task_bindings[0].confirmation_task_id = 'Conf-B';
+      draft.diagram.task_bindings[0].confirmation_task_id = 'Task-confirm';
+      // 添加两个 CONFIRMATION_TASK
       draft.diagram.nodes.push({
-        node_id: 'Conf-B', node_type: 'CONFIRMATION_TASK', name: '确认采购', lane_id: 'Lane-approver',
+        node_id: 'Task-confirm', node_type: 'CONFIRMATION_TASK', name: '确认A', lane_id: 'Lane-approver',
+      });
+      draft.diagram.nodes.push({
+        node_id: 'Task-confirm2', node_type: 'CONFIRMATION_TASK', name: '确认B', lane_id: 'Lane-approver',
+      });
+      // 绑定第二个 CONFIRMATION_TASK（通过 activity_id 关联）
+      draft.diagram.task_bindings.push({
+        activity_id: 'Activity-submit', main_task_id: 'Task-submit', confirmation_task_id: 'Task-confirm2',
       });
       draft.diagram.flows.push({
-        flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Conf-B', condition: null,
+        flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Task-confirm', condition: null,
       });
       draft.diagram.flows.push({
-        flow_id: 'Flow-4', source_ref: 'Conf-B', target_ref: 'End-approved', condition: null,
+        flow_id: 'Flow-4', source_ref: 'Task-confirm', target_ref: 'End-approved', condition: null,
       });
       draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+      assertSchemaValid(draft, '009 多个 confirmation');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f004 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-004');
-      assert.ok(f004.length >= 1, `Conf-A vs Conf-B 应触发 004: ${JSON.stringify(oracle(findings))}`);
-      assertValidFindingSet(findings, 'Conf-A vs Conf-B');
+      assertHasFinding(findings, 'FA-ACT-BPMN-009', 'Activity-submit', '多个 confirmation 应触发 009');
+      assertValidFindingSet(findings, '多个 confirmation');
     });
 
-    it('Catch -> Throw 应触发 008', async () => {
+    it('GATEWAY_AND 将主 Task 与确认 Task 并行: 009', async () => {
       const draft = makeValidDraft();
-      // 同名 Link Throw/Catch 存在，但 flow 为 Catch -> Throw
+      draft.activities[0].confirmation = {
+        confirmation_task_id: 'Task-confirm',
+        confirm_role_id: 'Role-approver',
+        co_completes: true,
+        confirm_bears_final_responsibility: true,
+        no_formal_approval_meeting: true,
+      };
+      draft.diagram.task_bindings[0].confirmation_task_id = 'Task-confirm';
       draft.diagram.nodes.push({
-        node_id: 'Link-throw', node_type: 'INTERMEDIATE_LINK_THROW', name: '跳转A', lane_id: 'Lane-requester',
+        node_id: 'Task-confirm', node_type: 'CONFIRMATION_TASK', name: '确认采购', lane_id: 'Lane-approver',
       });
       draft.diagram.nodes.push({
-        node_id: 'Link-catch', node_type: 'INTERMEDIATE_LINK_CATCH', name: '跳转A', lane_id: 'Lane-requester',
+        node_id: 'Gw-and-split', node_type: 'GATEWAY_AND', name: '并行拆分', lane_id: 'Lane-requester',
       });
-      // flow 为 Catch -> Throw（反向）
-      draft.diagram.flows.push({
-        flow_id: 'Flow-3', source_ref: 'Link-catch', target_ref: 'Link-throw', condition: null,
+      draft.diagram.nodes.push({
+        node_id: 'Gw-and-join', node_type: 'GATEWAY_AND', name: '并行汇合', lane_id: 'Lane-requester',
       });
-      // 添加从 Task-submit 到 Link-catch 的流
-      draft.diagram.flows.push({
-        flow_id: 'Flow-4', source_ref: 'Task-submit', target_ref: 'Link-catch', condition: null,
-      });
-      // 添加从 Link-throw 到 End-approved 的流
-      draft.diagram.flows.push({
-        flow_id: 'Flow-5', source_ref: 'Link-throw', target_ref: 'End-approved', condition: null,
-      });
+      // 并行: split -> Task-submit 和 split -> Task-confirm
+      draft.diagram.flows = [
+        { flow_id: 'Flow-1', source_ref: 'Start-request', target_ref: 'Gw-and-split', condition: null },
+        { flow_id: 'Flow-2', source_ref: 'Gw-and-split', target_ref: 'Task-submit', condition: null },
+        { flow_id: 'Flow-3', source_ref: 'Gw-and-split', target_ref: 'Task-confirm', condition: null },
+        { flow_id: 'Flow-4', source_ref: 'Task-submit', target_ref: 'Gw-and-join', condition: null },
+        { flow_id: 'Flow-5', source_ref: 'Task-confirm', target_ref: 'Gw-and-join', condition: null },
+        { flow_id: 'Flow-6', source_ref: 'Gw-and-join', target_ref: 'End-approved', condition: null },
+      ];
+      assertSchemaValid(draft, '009 AND 并行');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      const f008 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-008');
-      assert.ok(f008.length >= 1, `Catch -> Throw 应触发 008: ${JSON.stringify(oracle(findings))}`);
-      assertValidFindingSet(findings, 'Catch -> Throw');
+      assertHasFinding(findings, 'FA-ACT-BPMN-009', 'Activity-submit', 'AND 并行应触发 009');
+      assertValidFindingSet(findings, 'AND 并行');
     });
   });
 });
@@ -780,7 +1007,7 @@ describe('evaluateActivityBpmnStage', () => {
       diagramModel: draft.diagram,
     });
     assert.equal(result.status, 'SUCCEEDED');
-    assert.ok(result.findings.length > 0);
+    assertHasFinding(result.findings, 'FA-ACT-BPMN-003', 'Activity-submit', 'stage with findings');
     assertValidFindingSet(result.findings, 'stage with findings');
   });
 });
@@ -792,30 +1019,29 @@ describe('Skill/Worker 禁词测试', () => {
   const workerPath = join(__dirname, '..', 'agents', 'flow-architect-review-activity-bpmn-worker.md');
 
   it('Skill 文件不应包含 NEEDS_INPUT finding', async () => {
-    const content = await readFileAsync(skillPath, 'utf8');
+    const content = await readFile(skillPath, 'utf8');
     assert.ok(!content.includes('NEEDS_INPUT finding'), 'Skill 文件不应包含 "NEEDS_INPUT finding"');
     assert.ok(!content.includes('NEEDS_INPUT rule_id'), 'Skill 文件不应包含 "NEEDS_INPUT rule_id"');
   });
 
   it('Worker 文件不应包含 NEEDS_INPUT finding', async () => {
-    const content = await readFileAsync(workerPath, 'utf8');
+    const content = await readFile(workerPath, 'utf8');
     assert.ok(!content.includes('NEEDS_INPUT finding'), 'Worker 文件不应包含 "NEEDS_INPUT finding"');
     assert.ok(!content.includes('NEEDS_INPUT rule_id'), 'Worker 文件不应包含 "NEEDS_INPUT rule_id"');
   });
 
   it('Skill 文件不应包含 BPMN_LANE locator_type', async () => {
-    const content = await readFileAsync(skillPath, 'utf8');
+    const content = await readFile(skillPath, 'utf8');
     assert.ok(!content.includes('BPMN_LANE'), 'Skill 文件不应包含 "BPMN_LANE" locator_type');
   });
 
   it('Worker 文件不应包含 BPMN_LANE locator_type', async () => {
-    const content = await readFileAsync(workerPath, 'utf8');
+    const content = await readFile(workerPath, 'utf8');
     assert.ok(!content.includes('BPMN_LANE'), 'Worker 文件不应包含 "BPMN_LANE" locator_type');
   });
 
   it('Skill 文件不应包含单数 target_ref', async () => {
-    const content = await readFileAsync(skillPath, 'utf8');
-    // 检查是否包含 "target_ref" 但不包含 "target_refs"
+    const content = await readFile(skillPath, 'utf8');
     const lines = content.split('\n');
     for (const line of lines) {
       if (line.includes('target_ref') && !line.includes('target_refs')) {
@@ -825,12 +1051,40 @@ describe('Skill/Worker 禁词测试', () => {
   });
 
   it('Worker 文件不应包含单数 target_ref', async () => {
-    const content = await readFileAsync(workerPath, 'utf8');
+    const content = await readFile(workerPath, 'utf8');
     const lines = content.split('\n');
     for (const line of lines) {
       if (line.includes('target_ref') && !line.includes('target_refs')) {
         assert.fail(`Worker 文件包含单数 "target_ref": ${line.trim()}`);
       }
     }
+  });
+});
+
+// ── 静态扫描：测试源码不应包含弱断言 ──
+
+describe('测试源码静态扫描', () => {
+  it('测试源码不应包含弱断言模式', async () => {
+    const testSource = await readFile(
+      join(__dirname, 'activity-bpmn-review.test.mjs'), 'utf8'
+    );
+    const weakPatterns = [
+      /length\s*>=\s*1/,
+      /length\s*>\s*0/,
+      /assert\.ok\(\s*\w+\.length\s*[><=]/,
+    ];
+    // 排除静态扫描 describe 块自身的行（含 "弱断言" 或 "weakPatterns" 关键词）
+    const scanBlockPattern = /弱断言|weakPatterns|弱断言模式/;
+    const violations = [];
+    const lines = testSource.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (scanBlockPattern.test(lines[i])) continue;
+      for (const pattern of weakPatterns) {
+        if (pattern.test(lines[i])) {
+          violations.push(`行 ${i + 1}: ${lines[i].trim()}`);
+        }
+      }
+    }
+    assert.deepEqual(violations, [], `测试源码包含弱断言:\n${violations.join('\n')}`);
   });
 });
