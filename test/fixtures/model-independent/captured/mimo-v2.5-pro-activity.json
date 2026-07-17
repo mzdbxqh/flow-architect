@@ -1,0 +1,409 @@
+{
+  "capture_schema_version": "1.0.0",
+  "model_id": "mimo-v2.5-pro",
+  "task_file": "activity-task.json",
+  "task_sha256": "5d5549437eb705685dbb259999a80bb1039f04db15d5f92f3d0a02c7d936bbd0",
+  "attempt_count": 1,
+  "output": {
+    "schema_version": "2.0.0",
+    "task_kind": "ACTIVITY_CATALOG",
+    "batch_id": "EB-procurement-demo",
+    "batch_sha256": "c9eb4c5318d11343244d1fb869cd2f6d23a6267199a325223577051433739261",
+    "payload": {
+      "facts": [
+        {
+          "fact_id": "F-001",
+          "kind": "PROCESS",
+          "process_key": "P-procurement",
+          "subject_key": "P-procurement",
+          "label": "采购申请流程",
+          "attributes": {
+            "threshold": "5000元",
+            "end_conditions": [
+              "采购已批准",
+              "驳回"
+            ]
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-001"
+          ]
+        },
+        {
+          "fact_id": "F-002",
+          "kind": "ACTIVITY",
+          "process_key": "P-procurement",
+          "subject_key": "A-submit",
+          "label": "提交采购申请",
+          "attributes": {
+            "actor": "申请人",
+            "description": "申请人填写申请单并提交"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-001",
+            "B-003",
+            "B-004"
+          ]
+        },
+        {
+          "fact_id": "F-003",
+          "kind": "ACTIVITY",
+          "process_key": "P-procurement",
+          "subject_key": "A-manager-review",
+          "label": "经理初审",
+          "attributes": {
+            "actor": "直属经理",
+            "description": "审核需求合理性和预算",
+            "sla": "2个工作日"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-001",
+            "B-003",
+            "B-004"
+          ]
+        },
+        {
+          "fact_id": "F-004",
+          "kind": "ACTIVITY",
+          "process_key": "P-procurement",
+          "subject_key": "A-procurement-review",
+          "label": "采购复核",
+          "attributes": {
+            "actor": "采购专员",
+            "description": "复核供应商资质和价格合理性",
+            "sla": "3个工作日"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-001",
+            "B-003",
+            "B-004"
+          ]
+        },
+        {
+          "fact_id": "F-005",
+          "kind": "ACTIVITY",
+          "process_key": "P-procurement",
+          "subject_key": "A-approval",
+          "label": "审批决策",
+          "attributes": {
+            "description": "采购经理最终审批"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003",
+            "B-004"
+          ]
+        },
+        {
+          "fact_id": "F-006",
+          "kind": "ROLE",
+          "process_key": "P-procurement",
+          "subject_key": "Role-applicant",
+          "label": "申请人",
+          "attributes": {},
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-002"
+          ]
+        },
+        {
+          "fact_id": "F-007",
+          "kind": "ROLE",
+          "process_key": "P-procurement",
+          "subject_key": "Role-manager",
+          "label": "直属经理",
+          "attributes": {},
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-002"
+          ]
+        },
+        {
+          "fact_id": "F-008",
+          "kind": "ROLE",
+          "process_key": "P-procurement",
+          "subject_key": "Role-procurement",
+          "label": "采购专员",
+          "attributes": {},
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-002"
+          ]
+        },
+        {
+          "fact_id": "F-009",
+          "kind": "RESPONSIBILITY",
+          "process_key": "P-procurement",
+          "subject_key": "Role-applicant",
+          "label": "填写并提交采购申请",
+          "attributes": {},
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-002"
+          ]
+        },
+        {
+          "fact_id": "F-010",
+          "kind": "RESPONSIBILITY",
+          "process_key": "P-procurement",
+          "subject_key": "Role-manager",
+          "label": "审核需求合理性和预算",
+          "attributes": {},
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-002"
+          ]
+        },
+        {
+          "fact_id": "F-011",
+          "kind": "RESPONSIBILITY",
+          "process_key": "P-procurement",
+          "subject_key": "Role-procurement",
+          "label": "复核供应商资质和价格合理性",
+          "attributes": {},
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-002"
+          ]
+        },
+        {
+          "fact_id": "F-012",
+          "kind": "INPUT",
+          "process_key": "P-procurement",
+          "subject_key": "A-submit",
+          "label": "采购需求",
+          "attributes": {
+            "activity": "提交采购申请"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-013",
+          "kind": "OUTPUT",
+          "process_key": "P-procurement",
+          "subject_key": "A-submit",
+          "label": "采购申请单",
+          "attributes": {
+            "activity": "提交采购申请"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-014",
+          "kind": "INPUT",
+          "process_key": "P-procurement",
+          "subject_key": "A-manager-review",
+          "label": "采购申请单",
+          "attributes": {
+            "activity": "经理初审"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-015",
+          "kind": "OUTPUT",
+          "process_key": "P-procurement",
+          "subject_key": "A-manager-review",
+          "label": "初审结论",
+          "attributes": {
+            "activity": "经理初审"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-016",
+          "kind": "SLA",
+          "process_key": "P-procurement",
+          "subject_key": "A-manager-review",
+          "label": "2个工作日",
+          "attributes": {
+            "activity": "经理初审"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-017",
+          "kind": "INPUT",
+          "process_key": "P-procurement",
+          "subject_key": "A-procurement-review",
+          "label": "初审通过的申请单",
+          "attributes": {
+            "activity": "采购复核"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-018",
+          "kind": "OUTPUT",
+          "process_key": "P-procurement",
+          "subject_key": "A-procurement-review",
+          "label": "复核结论",
+          "attributes": {
+            "activity": "采购复核"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-019",
+          "kind": "SLA",
+          "process_key": "P-procurement",
+          "subject_key": "A-procurement-review",
+          "label": "3个工作日",
+          "attributes": {
+            "activity": "采购复核"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-020",
+          "kind": "INPUT",
+          "process_key": "P-procurement",
+          "subject_key": "A-approval",
+          "label": "复核结论",
+          "attributes": {
+            "activity": "审批决策"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-021",
+          "kind": "OUTPUT",
+          "process_key": "P-procurement",
+          "subject_key": "A-approval",
+          "label": "审批结果",
+          "attributes": {
+            "activity": "审批决策"
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-022",
+          "kind": "COMPLETION_CRITERIA",
+          "process_key": "P-procurement",
+          "subject_key": "P-procurement",
+          "label": "采购已批准或驳回",
+          "attributes": {},
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-001"
+          ]
+        },
+        {
+          "fact_id": "F-023",
+          "kind": "CONFIRMATION_CONDITION",
+          "process_key": "P-procurement",
+          "subject_key": "A-approval",
+          "label": "物料已入库、发票已核对、质量验收通过",
+          "attributes": {},
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-003"
+          ]
+        },
+        {
+          "fact_id": "F-024",
+          "kind": "ACTIVITY",
+          "process_key": "P-procurement",
+          "subject_key": "A-reject-return",
+          "label": "退回申请人",
+          "attributes": {
+            "trigger": "初审驳回",
+            "conditions": [
+              "预算不足",
+              "需求不合理"
+            ]
+          },
+          "certainty": "EXPLICIT",
+          "evidence_refs": [
+            "B-004"
+          ]
+        }
+      ],
+      "uncertainties": [
+        {
+          "kind": "MISSING",
+          "text": "审批决策的最终审批人角色不明确，B-003提及采购经理但B-002角色清单中未列出采购经理角色",
+          "related_fact_ids": [
+            "F-005",
+            "F-006",
+            "F-007",
+            "F-008"
+          ],
+          "evidence_refs": [
+            "B-002",
+            "B-003"
+          ]
+        },
+        {
+          "kind": "MISSING",
+          "text": "预算不足的具体阈值不明确，仅B-001提及5000元门槛但未说明预算判断标准",
+          "related_fact_ids": [
+            "F-001",
+            "F-024"
+          ],
+          "evidence_refs": [
+            "B-001",
+            "B-004"
+          ]
+        },
+        {
+          "kind": "MISSING",
+          "text": "流程未提及使用的工具或系统",
+          "related_fact_ids": [
+            "F-001"
+          ],
+          "evidence_refs": [
+            "B-001",
+            "B-002",
+            "B-003",
+            "B-004"
+          ]
+        },
+        {
+          "kind": "AMBIGUOUS",
+          "text": "采购复核通过后是否还有驳回路径不明确，B-004仅描述初审驳回条件",
+          "related_fact_ids": [
+            "F-004",
+            "F-005"
+          ],
+          "evidence_refs": [
+            "B-004"
+          ]
+        }
+      ]
+    }
+  }
+}

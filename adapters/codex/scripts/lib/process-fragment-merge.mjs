@@ -79,20 +79,38 @@ export async function mergeProcessFragments({ manifest, evidence, fragments, foc
   // 5. 分离冲突事实
   const { normalFacts, conflictFacts } = separateConflicts(dedupedFacts);
 
-  // 6. 收集组织和角色
+  // 6. 按类型分类事实（支持三类 capture 的全部 kind）
   const orgUnits = normalFacts.filter(f => f.kind === 'ORG_UNIT');
   const roles = normalFacts.filter(f => f.kind === 'ROLE');
+  const activityFacts = normalFacts.filter(f => f.kind === 'ACTIVITY');
+  const laneFacts = normalFacts.filter(f => f.kind === 'LANE');
+  const gatewayFacts = normalFacts.filter(f => f.kind === 'GATEWAY_XOR' || f.kind === 'GATEWAY_AND' || f.kind === 'GATEWAY_OR');
+  const flowFacts = normalFacts.filter(f => f.kind === 'FLOW' || f.kind === 'CONTROL_FLOW');
+  const conditionFacts = normalFacts.filter(f => f.kind === 'CONDITION');
+  const startEvents = normalFacts.filter(f => f.kind === 'START_EVENT');
+  const endEvents = findAllEndEvents(normalFacts);
 
   // 7. 计算末端组织候选
   const terminalOrgCandidates = computeTerminalOrgCandidates(orgUnits);
   const selectedOrgId = terminalOrgCandidates.length === 1 ? terminalOrgCandidates[0] : null;
 
-  // 8. 创建泳道
+  // 8. 创建泳道（角色 + LANE 事实）
   const lanes = createLanes(roles, orgUnits);
+  const seenLaneNames = new Set(lanes.map(l => l.name));
+  for (const laneFact of laneFacts) {
+    if (!seenLaneNames.has(laneFact.label)) {
+      seenLaneNames.add(laneFact.label);
+      lanes.push({
+        lane_id: `Lane-${stableHash(laneFact.fact_id).slice(0, 8)}`,
+        name: laneFact.label,
+        org_candidates: [],
+      });
+    }
+  }
 
   // 9. 转换活动为元素
   const { elements, questions: activityQuestions } = convertActivitiesToElements(
-    normalFacts.filter(f => f.kind === 'ACTIVITY'),
+    activityFacts,
     lanes,
     allUncertainties
   );
@@ -107,8 +125,32 @@ export async function mergeProcessFragments({ manifest, evidence, fragments, foc
     });
   }
 
-  // 10. 生成流转
-  const flows = generateFlows(normalFacts, elements);
+  // 10. 构建 subject_key → node_id 映射（连接控制流与活动/网关）
+  const startEventId = `Start-${stableHash('start').slice(0, 8)}`;
+  const startEventName = findBoundaryStart(elements, normalFacts);
+  const endResults = endEvents.length > 0 ? endEvents.map(event => ({
+    event_id: `End-${stableHash(event.fact_id).slice(0, 8)}`,
+    name: event.label,
+  })) : [{
+    event_id: `End-${stableHash('end').slice(0, 8)}`,
+    name: findBoundaryEnd(elements, normalFacts),
+  }];
+
+  const subjectToNodeId = new Map();
+  for (const element of elements) {
+    const stableId = stableHash(element.fact_id || element.element_id).slice(0, 8);
+    subjectToNodeId.set(element.subject_key || element.name, `Task-${stableId}`);
+  }
+  for (const gw of gatewayFacts) {
+    subjectToNodeId.set(gw.subject_key, `Gateway-${stableHash(gw.fact_id).slice(0, 8)}`);
+  }
+  for (const ev of endEvents) {
+    subjectToNodeId.set(ev.subject_key, `End-${stableHash(ev.fact_id).slice(0, 8)}`);
+  }
+  // 将所有 START_EVENT subject_key 映射到同一 startEventId（FLOW 可引用任一键）
+  for (const se of startEvents) {
+    subjectToNodeId.set(se.subject_key, startEventId);
+  }
 
   // 11. 生成问题（合并活动级问题）
   const questions = [
@@ -128,29 +170,122 @@ export async function mergeProcessFragments({ manifest, evidence, fragments, foc
     evidence_refs: f.evidence_refs,
   }));
 
-  // 13. 构建 V2 流程草稿
-  const endEvents = findAllEndEvents(normalFacts);
-
-  // 预计算 process_card（供 diagram.nodes 引用 start/end IDs）
-  const startEventId = `Start-${stableHash('start').slice(0, 8)}`;
-  const startEventName = findBoundaryStart(elements, normalFacts);
-  const endResults = endEvents.length > 0 ? endEvents.map(event => ({
-    event_id: `End-${stableHash(event.fact_id).slice(0, 8)}`,
-    name: event.label,
-  })) : [{
-    event_id: `End-${stableHash('end').slice(0, 8)}`,
-    name: findBoundaryEnd(elements, normalFacts),
-  }];
-
-  // 计算首尾活动的 task_id（用于生成 start/end 流转）
-  const firstTaskId = elements.length > 0 ? `Task-${stableHash(elements[0].fact_id || elements[0].element_id).slice(0, 8)}` : null;
-  const lastTaskId = elements.length > 0 ? `Task-${stableHash(elements[elements.length - 1].fact_id || elements[elements.length - 1].element_id).slice(0, 8)}` : null;
-
+  // 13. 构建 diagram 节点（活动 + 网关 + 开始/结束事件）
   const processCardRef = {
     start: { event_id: startEventId, name: startEventName, event_type: 'NONE' },
     end_results: endResults,
   };
 
+  const diagramNodes = [
+    {
+      node_id: processCardRef.start.event_id,
+      node_type: 'START_EVENT',
+      name: processCardRef.start.name,
+      lane_id: null,
+    },
+    ...elements.map(element => {
+      const stableId = stableHash(element.fact_id || element.element_id).slice(0, 8);
+      return {
+        node_id: `Task-${stableId}`,
+        node_type: 'MAIN_TASK',
+        name: element.name,
+        lane_id: element.lane_id,
+      };
+    }),
+    ...gatewayFacts.map(gw => ({
+      node_id: `Gateway-${stableHash(gw.fact_id).slice(0, 8)}`,
+      node_type: gw.kind,
+      name: gw.label,
+      lane_id: null,
+    })),
+    ...processCardRef.end_results.map(endEvent => ({
+      node_id: endEvent.event_id,
+      node_type: 'END_EVENT',
+      name: endEvent.name,
+      lane_id: null,
+    })),
+  ];
+
+  // 14. 生成流转（支持 V2 FLOW 事实的 subject_key 引用）
+  const conditionBySource = new Map();
+  for (const c of conditionFacts) {
+    const src = c.attributes?.source_subject_key;
+    if (src) {
+      if (!conditionBySource.has(src)) conditionBySource.set(src, []);
+      conditionBySource.get(src).push(c);
+    }
+  }
+
+  const flows = [];
+  const addedFlows = new Set();
+
+  // 从 V2 FLOW 事实生成流转
+  for (const flowFact of flowFacts) {
+    const srcKey = flowFact.attributes?.source_subject_key || flowFact.attributes?.source;
+    const tgtKey = flowFact.attributes?.target_subject_key || flowFact.attributes?.target;
+    if (!srcKey || !tgtKey) continue;
+
+    const sourceId = subjectToNodeId.get(srcKey);
+    const targetId = subjectToNodeId.get(tgtKey);
+    if (!sourceId || !targetId) continue;
+
+    const flowKey = `${sourceId}->${targetId}`;
+    if (addedFlows.has(flowKey)) continue;
+    addedFlows.add(flowKey);
+
+    const conditions = conditionBySource.get(srcKey) || [];
+    const matchingCondition = conditions.find(c => {
+      const tgt = c.attributes?.target_subject_key;
+      return !tgt || tgt === tgtKey;
+    });
+
+    flows.push({
+      flow_id: `Flow-${stableHash(flowFact.fact_id).slice(0, 8)}`,
+      source_ref: sourceId,
+      target_ref: targetId,
+      condition: matchingCondition ? {
+        label: matchingCondition.label,
+        source_output: matchingCondition.attributes?.source_output || null,
+        operator: matchingCondition.attributes?.operator || null,
+        value: matchingCondition.attributes?.value || null,
+      } : null,
+    });
+  }
+
+  // 线性回退：无 V2 流转时使用 start→tasks→end
+  if (flows.length === 0) {
+    const firstTaskId = elements.length > 0 ? `Task-${stableHash(elements[0].fact_id || elements[0].element_id).slice(0, 8)}` : null;
+    const lastTaskId = elements.length > 0 ? `Task-${stableHash(elements[elements.length - 1].fact_id || elements[elements.length - 1].element_id).slice(0, 8)}` : null;
+
+    if (firstTaskId) {
+      flows.push({
+        flow_id: `Flow-Start-${stableHash('start-flow').slice(0, 8)}`,
+        source_ref: startEventId,
+        target_ref: firstTaskId,
+        condition: null,
+      });
+    }
+    for (let i = 0; i < elements.length - 1; i++) {
+      const sid = stableHash(elements[i].fact_id || elements[i].element_id).slice(0, 8);
+      const tid = stableHash(elements[i + 1].fact_id || elements[i + 1].element_id).slice(0, 8);
+      flows.push({
+        flow_id: `Flow-Seq-${stableHash(`${i}`).slice(0, 8)}`,
+        source_ref: `Task-${sid}`,
+        target_ref: `Task-${tid}`,
+        condition: null,
+      });
+    }
+    if (lastTaskId && endResults.length > 0) {
+      flows.push({
+        flow_id: `Flow-End-${stableHash('end-flow').slice(0, 8)}`,
+        source_ref: lastTaskId,
+        target_ref: endResults[0].event_id,
+        condition: null,
+      });
+    }
+  }
+
+  // 15. 构建 V2 流程草稿
   const processDraft = {
     schema_version: '2.0.0',
     process_card: {
@@ -169,13 +304,11 @@ export async function mergeProcessFragments({ manifest, evidence, fragments, foc
       performance_indicators: [],
     },
     activities: elements.map(element => {
-      // 从原始事实中查找活动属性（通过 name 匹配）
       const originalFact = normalFacts.find(f => f.kind === 'ACTIVITY' && f.label === element.name);
       const activityType = originalFact?.attributes?.activity_type || 'STANDARD';
       const responsibilityModel = originalFact?.attributes?.responsibility_model || 'RASCI';
       const roleAssignments = originalFact?.attributes?.role_assignments || [];
 
-      // 生成稳定的活动ID和主任务ID（使用相同的哈希）
       const stableId = stableHash(element.fact_id || element.element_id).slice(0, 8);
       const activityId = `Activity-${stableId}`;
       const mainTaskId = `Task-${stableId}`;
@@ -208,55 +341,8 @@ export async function mergeProcessFragments({ manifest, evidence, fragments, foc
         name: lane.name,
         role_id: lane.lane_id,
       })),
-      nodes: [
-        // 开始事件节点
-        {
-          node_id: processCardRef.start.event_id,
-          node_type: 'START_EVENT',
-          name: processCardRef.start.name,
-          lane_id: null,
-        },
-        // 活动主任务节点
-        ...elements.map(element => {
-          const stableId = stableHash(element.fact_id || element.element_id).slice(0, 8);
-          return {
-            node_id: `Task-${stableId}`,
-            node_type: 'MAIN_TASK',
-            name: element.name,
-            lane_id: element.lane_id,
-          };
-        }),
-        // 结束事件节点
-        ...processCardRef.end_results.map(endEvent => ({
-          node_id: endEvent.event_id,
-          node_type: 'END_EVENT',
-          name: endEvent.name,
-          lane_id: null,
-        })),
-      ],
-      flows: [
-        // 开始事件到第一个活动的流转
-        ...firstTaskId ? [{
-          flow_id: `Flow-Start-${stableHash('start-flow').slice(0, 8)}`,
-          source_ref: processCardRef.start.event_id,
-          target_ref: firstTaskId,
-          condition: null,
-        }] : [],
-        // 活动间的流转
-        ...flows.map(flow => ({
-          flow_id: flow.flow_id,
-          source_ref: flow.source_ref,
-          target_ref: flow.target_ref,
-          condition: flow.condition,
-        })),
-        // 最后一个活动到结束事件的流转
-        ...lastTaskId ? [{
-          flow_id: `Flow-End-${stableHash('end-flow').slice(0, 8)}`,
-          source_ref: lastTaskId,
-          target_ref: processCardRef.end_results[0].event_id,
-          condition: null,
-        }] : [],
-      ],
+      nodes: diagramNodes,
+      flows,
       task_bindings: elements.map(element => {
         const stableId = stableHash(element.fact_id || element.element_id).slice(0, 8);
         return {
@@ -283,7 +369,7 @@ export async function mergeProcessFragments({ manifest, evidence, fragments, foc
     },
   };
 
-  // 14. 生成合并报告
+  // 16. 生成合并报告
   const mergeReport = {
     total_fragments: fragments.length,
     total_facts: allFacts.length,
@@ -293,6 +379,7 @@ export async function mergeProcessFragments({ manifest, evidence, fragments, foc
     terminal_org_candidates: terminalOrgCandidates,
     selected_org_id: selectedOrgId,
     fragment_refs: fragmentRefs,
+    fact_kinds_merged: [...new Set(dedupedFacts.map(f => f.kind))],
   };
 
   return { process_draft: processDraft, merge_report: mergeReport };
@@ -485,6 +572,7 @@ function convertActivitiesToElements(activities, lanes, uncertainties) {
     elements.push({
       element_id: `Activity-${stableHash(activity.fact_id).slice(0, 8)}`,
       fact_id: activity.fact_id,
+      subject_key: activity.subject_key,
       kind: 'ACTIVITY',
       name: activity.label,
       lane_id: laneId,
@@ -500,44 +588,21 @@ function convertActivitiesToElements(activities, lanes, uncertainties) {
 }
 
 /**
- * 生成流转
- */
-function generateFlows(facts, elements) {
-  const flows = [];
-  const flowFacts = facts.filter(f => f.kind === 'FLOW' || f.kind === 'CONTROL_FLOW');
-
-  for (const flowFact of flowFacts) {
-    const source = flowFact.attributes?.source;
-    const target = flowFact.attributes?.target;
-
-    if (source && target) {
-      const sourceElement = elements.find(e => e.name === source);
-      const targetElement = elements.find(e => e.name === target);
-
-      if (sourceElement && targetElement) {
-        // V2: 使用 Task-xxx 格式匹配 diagram.nodes
-        const sourceId = `Task-${stableHash(sourceElement.fact_id || sourceElement.element_id).slice(0, 8)}`;
-        const targetId = `Task-${stableHash(targetElement.fact_id || targetElement.element_id).slice(0, 8)}`;
-        flows.push({
-          flow_id: `Flow-${stableHash(`${source}-${target}`).slice(0, 8)}`,
-          source_ref: sourceId,
-          target_ref: targetId,
-          condition: flowFact.attributes?.condition || null,
-          evidence_refs: flowFact.evidence_refs,
-        });
-      }
-    }
-  }
-
-  return flows;
-}
-
-/**
  * 生成问题
  */
 function generateQuestions(uncertainties, elements, conflictFacts, context) {
   const questions = [];
   const seenTexts = new Set();
+
+  // 辅助函数：将 Activity element_id 转换为 Task ID
+  function toTaskId(elementId) {
+    if (!elementId) return 'process';
+    // Activity-xxx -> Task-xxx
+    if (elementId.startsWith('Activity-')) {
+      return 'Task-' + elementId.slice(9);
+    }
+    return elementId;
+  }
 
   // 从不确定性生成问题
   for (const uncertainty of uncertainties) {
@@ -554,10 +619,17 @@ function generateQuestions(uncertainties, elements, conflictFacts, context) {
       }
     }
 
+    // 默认使用第一个元素的 Task ID，或 process
+    const defaultTarget = elements[0]?.fact_id
+      ? `Task-${stableHash(elements[0].fact_id).slice(0, 8)}`
+      : 'process';
+
     questions.push({
       question_id: `Q-${stableHash(uncertainty.text).slice(0, 8)}`,
       text: uncertainty.text,
-      element_ids: relatedElements.length > 0 ? relatedElements : [elements[0]?.fact_id ? `Activity-${stableHash(elements[0].fact_id).slice(0, 8)}` : 'process'],
+      element_ids: relatedElements.length > 0
+        ? relatedElements.map(toTaskId)
+        : [defaultTarget],
       status: 'OPEN',
       answer: '',
       evidence_refs: uncertainty.evidence_refs,
@@ -566,10 +638,14 @@ function generateQuestions(uncertainties, elements, conflictFacts, context) {
 
   // 从冲突生成问题
   for (const conflict of conflictFacts) {
+    const defaultTarget = elements[0]?.fact_id
+      ? `Task-${stableHash(elements[0].fact_id).slice(0, 8)}`
+      : 'process';
+
     questions.push({
       question_id: `Q-${stableHash(conflict.label).slice(0, 8)}`,
       text: `冲突: ${conflict.label}`,
-      element_ids: [elements[0]?.fact_id ? `Activity-${stableHash(elements[0].fact_id).slice(0, 8)}` : 'process'],
+      element_ids: [defaultTarget],
       status: 'OPEN',
       answer: '',
       evidence_refs: conflict.evidence_refs,
@@ -595,7 +671,8 @@ function generateQuestions(uncertainties, elements, conflictFacts, context) {
  * 查找流程开始边界
  */
 function findBoundaryStart(elements, facts) {
-  const startFact = facts.find(f => f.kind === 'EVENT' && f.attributes?.type === 'start');
+  const startFact = facts.find(f => f.kind === 'START_EVENT')
+    || facts.find(f => f.kind === 'EVENT' && f.attributes?.type === 'start');
   if (startFact) return startFact.label;
 
   if (elements.length > 0) return elements[0].name;
@@ -619,7 +696,8 @@ function findBoundaryEnd(elements, facts) {
  * 查找所有结束事件
  */
 function findAllEndEvents(facts) {
-  return facts.filter(f => f.kind === 'EVENT' && f.attributes?.type === 'end');
+  return facts.filter(f => f.kind === 'END_EVENT')
+    .concat(facts.filter(f => f.kind === 'EVENT' && f.attributes?.type === 'end'));
 }
 
 /**

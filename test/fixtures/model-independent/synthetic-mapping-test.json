@@ -1,0 +1,314 @@
+{
+  "synthetic_process_card": {
+    "capture_schema_version": "1.0.0",
+    "model_id": "synthetic-model",
+    "task_file": "synthetic-task.json",
+    "task_sha256": "synthetic-sha256-process-card",
+    "attempt_count": 1,
+    "output": {
+      "schema_version": "2.0.0",
+      "task_kind": "PROCESS_CARD",
+      "batch_id": "synthetic-batch-001",
+      "batch_sha256": "synthetic-batch-sha256-001",
+      "payload": {
+        "facts": [
+          {
+            "fact_id": "SF-001",
+            "kind": "PROCESS_NAME",
+            "process_key": "synthetic-process",
+            "subject_key": "synthetic-process",
+            "label": "合成测试流程",
+            "attributes": {},
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-001"]
+          },
+          {
+            "fact_id": "SF-002",
+            "kind": "INPUT",
+            "process_key": "synthetic-process",
+            "subject_key": "business-step-x",
+            "label": "输入数据X",
+            "attributes": {
+              "activity": "处理甲"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-002"]
+          },
+          {
+            "fact_id": "SF-003",
+            "kind": "OUTPUT",
+            "process_key": "synthetic-process",
+            "subject_key": "business-step-x",
+            "label": "输出结果X",
+            "attributes": {
+              "activity": "处理甲"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-002"]
+          },
+          {
+            "fact_id": "SF-004",
+            "kind": "INPUT",
+            "process_key": "synthetic-process",
+            "subject_key": "business-step-y",
+            "label": "输入数据Y",
+            "attributes": {
+              "activity": "处理乙"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-003"]
+          },
+          {
+            "fact_id": "SF-005",
+            "kind": "OUTPUT",
+            "process_key": "synthetic-process",
+            "subject_key": "business-step-y",
+            "label": "输出结果Y",
+            "attributes": {
+              "activity": "处理乙"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-003"]
+          },
+          {
+            "fact_id": "SF-006",
+            "kind": "START_EVENT",
+            "process_key": "synthetic-process",
+            "subject_key": "synthetic-process",
+            "label": "开始",
+            "attributes": {},
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-001"]
+          },
+          {
+            "fact_id": "SF-007",
+            "kind": "END_EVENT",
+            "process_key": "synthetic-process",
+            "subject_key": "end-complete",
+            "label": "处理完成",
+            "attributes": {},
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-004"]
+          },
+          {
+            "fact_id": "SF-008",
+            "kind": "END_EVENT",
+            "process_key": "synthetic-process",
+            "subject_key": "end-cancel",
+            "label": "取消处理",
+            "attributes": {},
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-005"]
+          }
+        ]
+      }
+    }
+  },
+  "synthetic_activity_catalog": {
+    "capture_schema_version": "1.0.0",
+    "model_id": "synthetic-model",
+    "task_file": "synthetic-activity-task.json",
+    "task_sha256": "synthetic-sha256-activity",
+    "attempt_count": 1,
+    "output": {
+      "schema_version": "2.0.0",
+      "task_kind": "ACTIVITY_CATALOG",
+      "batch_id": "synthetic-batch-001",
+      "batch_sha256": "synthetic-batch-sha256-001",
+      "payload": {
+        "facts": [
+          {
+            "fact_id": "SAF-001",
+            "kind": "ACTIVITY",
+            "process_key": "synthetic-activity-process",
+            "subject_key": "model-step-z",
+            "label": "处理甲",
+            "attributes": {
+              "actor": "处理人员A",
+              "description": "处理甲任务"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-002", "SB-006"]
+          },
+          {
+            "fact_id": "SAF-006",
+            "kind": "INPUT",
+            "process_key": "synthetic-activity-process",
+            "subject_key": "model-step-z",
+            "label": "输入数据X",
+            "attributes": {
+              "activity": "处理甲"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-002"]
+          },
+          {
+            "fact_id": "SAF-007",
+            "kind": "OUTPUT",
+            "process_key": "synthetic-activity-process",
+            "subject_key": "model-step-z",
+            "label": "输出结果X",
+            "attributes": {
+              "activity": "处理甲"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-002"]
+          },
+          {
+            "fact_id": "SAF-002",
+            "kind": "ACTIVITY",
+            "process_key": "synthetic-activity-process",
+            "subject_key": "model-step-w",
+            "label": "处理乙",
+            "attributes": {
+              "actor": "处理人员B",
+              "description": "处理乙任务"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-003", "SB-007"]
+          },
+          {
+            "fact_id": "SAF-008",
+            "kind": "INPUT",
+            "process_key": "synthetic-activity-process",
+            "subject_key": "model-step-w",
+            "label": "输入数据Y",
+            "attributes": {
+              "activity": "处理乙"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-003"]
+          },
+          {
+            "fact_id": "SAF-009",
+            "kind": "OUTPUT",
+            "process_key": "synthetic-activity-process",
+            "subject_key": "model-step-w",
+            "label": "输出结果Y",
+            "attributes": {
+              "activity": "处理乙"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-003"]
+          },
+          {
+            "fact_id": "SAF-003",
+            "kind": "ACTIVITY",
+            "process_key": "synthetic-activity-process",
+            "subject_key": "model-outcome-cancel",
+            "label": "取消处理",
+            "attributes": {},
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-005"]
+          },
+          {
+            "fact_id": "SAF-004",
+            "kind": "ROLE",
+            "process_key": "synthetic-activity-process",
+            "subject_key": "Role-handler-A",
+            "label": "处理人员A",
+            "attributes": {},
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-006"]
+          },
+          {
+            "fact_id": "SAF-005",
+            "kind": "ROLE",
+            "process_key": "synthetic-activity-process",
+            "subject_key": "Role-handler-B",
+            "label": "处理人员B",
+            "attributes": {},
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-007"]
+          }
+        ]
+      }
+    }
+  },
+  "synthetic_control_flow": {
+    "capture_schema_version": "1.0.0",
+    "model_id": "synthetic-model",
+    "task_file": "synthetic-control-flow-task.json",
+    "task_sha256": "synthetic-sha256-control-flow",
+    "attempt_count": 1,
+    "output": {
+      "schema_version": "2.0.0",
+      "task_kind": "CONTROL_FLOW",
+      "batch_id": "synthetic-batch-001",
+      "batch_sha256": "synthetic-batch-sha256-001",
+      "payload": {
+        "facts": [
+          {
+            "fact_id": "SCF-001",
+            "kind": "START_EVENT",
+            "process_key": "synthetic-control-flow-process",
+            "subject_key": "start-1",
+            "label": "开始",
+            "attributes": {},
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-001"]
+          },
+          {
+            "fact_id": "SCF-002",
+            "kind": "END_EVENT",
+            "process_key": "synthetic-control-flow-process",
+            "subject_key": "end-complete",
+            "label": "处理完成",
+            "attributes": {},
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-004"]
+          },
+          {
+            "fact_id": "SCF-003",
+            "kind": "END_EVENT",
+            "process_key": "synthetic-control-flow-process",
+            "subject_key": "end-cancel",
+            "label": "取消处理",
+            "attributes": {},
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-005"]
+          },
+          {
+            "fact_id": "SCF-004",
+            "kind": "FLOW",
+            "process_key": "synthetic-control-flow-process",
+            "subject_key": "flow-1",
+            "label": "流程1",
+            "attributes": {
+              "source_subject_key": "start-1",
+              "target_subject_key": "business-step-x"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-008"]
+          },
+          {
+            "fact_id": "SCF-005",
+            "kind": "FLOW",
+            "process_key": "synthetic-control-flow-process",
+            "subject_key": "flow-2",
+            "label": "流程2",
+            "attributes": {
+              "source_subject_key": "business-step-x",
+              "target_subject_key": "business-step-y"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-009"]
+          },
+          {
+            "fact_id": "SCF-006",
+            "kind": "FLOW",
+            "process_key": "synthetic-control-flow-process",
+            "subject_key": "flow-3",
+            "label": "流程3",
+            "attributes": {
+              "source_subject_key": "business-step-y",
+              "target_subject_key": "end-complete"
+            },
+            "certainty": "EXPLICIT",
+            "evidence_refs": ["SB-010"]
+          }
+        ]
+      }
+    }
+  }
+}

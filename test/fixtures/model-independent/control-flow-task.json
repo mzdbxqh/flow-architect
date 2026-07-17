@@ -1,0 +1,81 @@
+{
+  "task_kind": "CONTROL_FLOW",
+  "instructions": "请从以下证据批次中提取控制流事实。只输出一个 JSON 对象，不要输出 Markdown fence、解释或思维过程。输出必须严格符合以下 Schema 信封格式。",
+  "output_schema_summary": {
+    "envelope": {
+      "schema_version": "2.0.0",
+      "task_kind": "CONTROL_FLOW",
+      "batch_id": "EB-procurement-demo",
+      "batch_sha256": "c9eb4c5318d11343244d1fb869cd2f6d23a6267199a325223577051433739261",
+      "payload": { "facts": "[...]", "uncertainties": "[...]" }
+    },
+    "fact_fields": ["fact_id", "kind", "process_key", "subject_key", "label", "attributes", "certainty", "evidence_refs"],
+    "allowed_kinds": ["FLOW", "GATEWAY_XOR", "GATEWAY_AND", "GATEWAY_OR", "CONDITION", "START_EVENT", "END_EVENT", "INTERMEDIATE_EVENT", "LANE", "EXCEPTION", "RULE"],
+    "certainty_values": ["EXPLICIT", "INFERRED", "MISSING", "CONFLICT", "NOT_APPLICABLE"],
+    "uncertainty_fields": ["kind", "text", "related_fact_ids", "evidence_refs"],
+    "uncertainty_kinds": ["MISSING", "CONFLICT", "AMBIGUOUS", "NEEDS_CONTEXT"],
+    "attributes_schema": {
+      "_description": "attributes 对象 additionalProperties=false，只允许以下字段：",
+      "allowed_properties": {
+        "source_subject_key": "string — 来源活动/节点的 subject_key",
+        "target_subject_key": "string — 目标活动/节点的 subject_key",
+        "source_output": "string — 来源活动的输出物名称",
+        "operator": "EQUALS|NOT_EQUALS|GREATER_THAN|LESS_THAN|IS_TRUE|IS_FALSE|CONTAINS",
+        "value": "string — 条件值或阈值",
+        "event_type": "NONE|MESSAGE|TIMER|SIGNAL|CONDITIONAL|LINK",
+        "gateway_direction": "DIVERGING|CONVERGING|MIXED"
+      },
+      "additionalProperties": false,
+      "per_kind": {
+        "START_EVENT": { "required": ["event_type"], "notes": "默认 event_type=\"NONE\"" },
+        "END_EVENT": { "required": ["event_type"], "notes": "默认 event_type=\"NONE\"" },
+        "INTERMEDIATE_EVENT": { "required": ["event_type"], "notes": "用 CONDITIONAL 表示条件中间事件" },
+        "FLOW": { "required": ["source_subject_key", "target_subject_key"], "optional": ["source_output"], "notes": "source_key 和 target_key 必须使用 allowed_properties 中的标准字段名" },
+        "GATEWAY_XOR": { "required": ["gateway_direction"], "notes": "DIVERGING 或 CONVERGING" },
+        "GATEWAY_AND": { "required": ["gateway_direction"] },
+        "GATEWAY_OR": { "required": ["gateway_direction"] },
+        "CONDITION": { "required": ["source_subject_key", "operator", "value"], "optional": ["source_output"] },
+        "LANE": { "allowed": [], "notes": "泳道无 attributes 属性字段；角色信息编码在 subject_key 和 label 中" },
+        "EXCEPTION": { "optional": ["source_subject_key", "value"] },
+        "RULE": { "required": ["source_subject_key", "operator", "value"], "optional": ["source_output"], "notes": "与 CONDITION 相同结构" }
+      }
+    }
+  },
+  "prohibitions": [
+    "不得输出 BPMN XML、DI、坐标、尺寸、waypoints、SVG、HTML、布局或供应商说明",
+    "不得输出 x、y、width、height、bounds、position、coordinates、waypoints、bpmn_xml、bpmn_di、xml、html、svg、layout、di 等字段",
+    "不确定时使用 MISSING 或 INFERRED certainty，并在 uncertainties 中说明",
+    "不得虚构证据中不存在的事实",
+    "evidence_refs 只能引用当前 batch 中的 block_id（B-001 到 B-004）",
+    "条件只能使用结构化字段（source_subject_key、source_output、operator、value），不得输出自由 BPMN 表达式",
+    "attributes 中只允许 source_subject_key、target_subject_key、source_output、operator、value、event_type、gateway_direction 七个字段（additionalProperties=false）",
+    "FLOW 的 attributes 必须使用 source_subject_key 和 target_subject_key（不是 source_key 或 target_key）",
+    "LANE 的 attributes 不包含任何属性字段，角色信息编码在 subject_key 和 label 中",
+    "不得在 attributes 中使用 role_key、source_key、target_key、condition_ref、input、output、sla、lane_key 等 schema 未定义的字段名"
+  ],
+  "evidence_batch": {
+    "batch_id": "EB-procurement-demo",
+    "blocks": [
+      {
+        "block_id": "B-001",
+        "source_format": "text",
+        "content": "采购申请流程：申请人填写采购申请单，提交后由直属经理进行初审。初审通过后，采购部门进行复核并作出最终决定。流程适用于金额超过5000元的采购请求。采购申请已批准或驳回后流程结束。"
+      },
+      {
+        "block_id": "B-002",
+        "source_format": "text",
+        "content": "角色说明：申请人（Role-applicant）负责填写并提交采购申请；直属经理（Role-manager）负责初审采购需求的合理性和预算；采购专员（Role-procurement）负责复核供应商资质和价格合理性。"
+      },
+      {
+        "block_id": "B-003",
+        "source_format": "text",
+        "content": "活动清单：1. 提交采购申请（申请人填写申请单并提交，输入：采购需求，输出：采购申请单）；2. 经理初审（直属经理审核需求合理性，输入：采购申请单，输出：初审结论，SLA：2个工作日）；3. 采购复核（采购专员复核供应商和价格，输入：初审通过的申请单，输出：复核结论，SLA：3个工作日）；4. 审批决策（采购经理最终审批，输入：复核结论，输出：审批结果）。确认从 Task 三条件：物料已入库、发票已核对、质量验收通过。"
+      },
+      {
+        "block_id": "B-004",
+        "source_format": "text",
+        "content": "控制流：开始事件 → 提交采购申请 → 经理初审 → [初审通过] 采购复核 → [复核通过] 审批决策 → [批准] 采购已批准（结束）；[驳回] 退回申请人（结束）。初审驳回条件：预算不足或需求不合理 → 退回申请人。泳道：申请人在申请泳道，经理和采购专员在审核泳道。"
+      }
+    ]
+  }
+}

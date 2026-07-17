@@ -605,17 +605,19 @@ describe('Task 4 V2 合并要求', () => {
             attributes: { role: '职员' },
           },
           {
-            ...createFact('F-004', 'CONTROL_FLOW', 'test', 'flow-condition', '条件流转'),
+            ...createFact('F-004', 'FLOW', 'test', 'flow-condition', '条件流转'),
             attributes: {
-              source: '提交申请',
-              target: '审批申请',
-              condition: {
-                label: '审批结论为通过',
-                source_subject_key: 'approve-request',
-                source_output: '审批结论',
-                operator: 'EQUALS',
-                value: '通过',
-              },
+              source_subject_key: 'submit',
+              target_subject_key: 'approve',
+            },
+          },
+          {
+            ...createFact('F-005', 'CONDITION', 'test', 'condition-approve', '审批结论为通过'),
+            attributes: {
+              source_subject_key: 'submit',
+              source_output: '审批结论',
+              operator: 'EQUALS',
+              value: '通过',
             },
           },
         ]),
