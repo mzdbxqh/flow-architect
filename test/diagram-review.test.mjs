@@ -275,3 +275,140 @@ test('None Start/End 不触发事件类型错误', () => {
   const typeFindings = findings.filter(f => f.rule_id === 'FA-BPMN-003');
   assert.equal(typeFindings.length, 0, `None Start/End should not trigger type error, got ${JSON.stringify(typeFindings)}`);
 });
+
+// ── V2 BPMN 口径修正测试 ──
+
+test('V2: XOR 全部分支有条件时不触发 FA-BPMN-005', () => {
+  const diagramModel = {
+    nodes: [
+      { node_id: 'Start', node_type: 'START_EVENT', name: '开始', lane_id: null },
+      { node_id: 'Gw-xor', node_type: 'GATEWAY_XOR', name: '审批分支', lane_id: null },
+      { node_id: 'Task-a', node_type: 'MAIN_TASK', name: '任务A', lane_id: null },
+      { node_id: 'Task-b', node_type: 'MAIN_TASK', name: '任务B', lane_id: null },
+      { node_id: 'End', node_type: 'END_EVENT', name: '结束', lane_id: null },
+    ],
+    flows: [
+      { flow_id: 'f1', source_ref: 'Start', target_ref: 'Gw-xor', condition: null },
+      { flow_id: 'f2', source_ref: 'Gw-xor', target_ref: 'Task-a', condition: { label: '条件A', source_output: 'x', operator: 'EQUALS', value: 'A' } },
+      { flow_id: 'f3', source_ref: 'Gw-xor', target_ref: 'Task-b', condition: { label: '条件B', source_output: 'x', operator: 'EQUALS', value: 'B' } },
+      { flow_id: 'f4', source_ref: 'Task-a', target_ref: 'End', condition: null },
+      { flow_id: 'f5', source_ref: 'Task-b', target_ref: 'End', condition: null },
+    ],
+    task_bindings: [],
+    layout_version: '2.0.0',
+  };
+  const findings = reviewBpmn({ diagramModel });
+  const f005 = findings.filter(f => f.rule_id === 'FA-BPMN-005');
+  assert.equal(f005.length, 0, `XOR 全有条件不应触发 005: ${JSON.stringify(findings)}`);
+});
+
+test('V2: XOR 无条件分支触发 FA-BPMN-005', () => {
+  const diagramModel = {
+    nodes: [
+      { node_id: 'Start', node_type: 'START_EVENT', name: '开始', lane_id: null },
+      { node_id: 'Gw-xor', node_type: 'GATEWAY_XOR', name: '分支', lane_id: null },
+      { node_id: 'Task-a', node_type: 'MAIN_TASK', name: '任务A', lane_id: null },
+      { node_id: 'End', node_type: 'END_EVENT', name: '结束', lane_id: null },
+    ],
+    flows: [
+      { flow_id: 'f1', source_ref: 'Start', target_ref: 'Gw-xor', condition: null },
+      { flow_id: 'f2', source_ref: 'Gw-xor', target_ref: 'Task-a', condition: null },
+      { flow_id: 'f3', source_ref: 'Gw-xor', target_ref: 'End', condition: null },
+      { flow_id: 'f4', source_ref: 'Task-a', target_ref: 'End', condition: null },
+    ],
+    task_bindings: [],
+    layout_version: '2.0.0',
+  };
+  const findings = reviewBpmn({ diagramModel });
+  const f005 = findings.filter(f => f.rule_id === 'FA-BPMN-005');
+  assert.ok(f005.length >= 1, `XOR 无条件应触发 005: ${JSON.stringify(findings)}`);
+  assert.equal(f005[0].target_refs[0], 'Gw-xor');
+});
+
+test('V2: 无汇合需求的 XOR 不因拆分/汇合数量不等失败', () => {
+  // XOR 拆分后不再汇合（两个分支各自到 End），不应有 004
+  const diagramModel = {
+    nodes: [
+      { node_id: 'Start', node_type: 'START_EVENT', name: '开始', lane_id: null },
+      { node_id: 'Gw-xor', node_type: 'GATEWAY_XOR', name: '分支', lane_id: null },
+      { node_id: 'End-a', node_type: 'END_EVENT', name: '结束A', lane_id: null },
+      { node_id: 'End-b', node_type: 'END_EVENT', name: '结束B', lane_id: null },
+    ],
+    flows: [
+      { flow_id: 'f1', source_ref: 'Start', target_ref: 'Gw-xor', condition: null },
+      { flow_id: 'f2', source_ref: 'Gw-xor', target_ref: 'End-a', condition: { label: '条件A', source_output: 'x', operator: 'EQUALS', value: 'A' } },
+      { flow_id: 'f3', source_ref: 'Gw-xor', target_ref: 'End-b', condition: { label: '条件B', source_output: 'x', operator: 'EQUALS', value: 'B' } },
+    ],
+    task_bindings: [],
+    layout_version: '2.0.0',
+  };
+  const findings = reviewBpmn({ diagramModel });
+  const f004 = findings.filter(f => f.rule_id === 'FA-BPMN-004');
+  assert.equal(f004.length, 0, `XOR 不需汇合不应触发 004: ${JSON.stringify(findings)}`);
+});
+
+test('V2: AND 拆分/汇合不成对仍产生 FA-BPMN-004', () => {
+  // AND split 没有对应 join
+  const diagramModel = {
+    nodes: [
+      { node_id: 'Start', node_type: 'START_EVENT', name: '开始', lane_id: null },
+      { node_id: 'Gw-and', node_type: 'GATEWAY_AND', name: '并行拆分', lane_id: null },
+      { node_id: 'Task-a', node_type: 'MAIN_TASK', name: '任务A', lane_id: null },
+      { node_id: 'Task-b', node_type: 'MAIN_TASK', name: '任务B', lane_id: null },
+      { node_id: 'End', node_type: 'END_EVENT', name: '结束', lane_id: null },
+    ],
+    flows: [
+      { flow_id: 'f1', source_ref: 'Start', target_ref: 'Gw-and', condition: null },
+      { flow_id: 'f2', source_ref: 'Gw-and', target_ref: 'Task-a', condition: null },
+      { flow_id: 'f3', source_ref: 'Gw-and', target_ref: 'Task-b', condition: null },
+      { flow_id: 'f4', source_ref: 'Task-a', target_ref: 'End', condition: null },
+      { flow_id: 'f5', source_ref: 'Task-b', target_ref: 'End', condition: null },
+    ],
+    task_bindings: [],
+    layout_version: '2.0.0',
+  };
+  const findings = reviewBpmn({ diagramModel });
+  const f004 = findings.filter(f => f.rule_id === 'FA-BPMN-004');
+  assert.ok(f004.length >= 1, `AND 不成对应触发 004: ${JSON.stringify(findings)}`);
+  assert.equal(f004[0].target_refs[0], 'Gw-and');
+});
+
+test('V2: 孤立元素仍触发 FA-BPMN-007', () => {
+  const diagramModel = {
+    nodes: [
+      { node_id: 'Start', node_type: 'START_EVENT', name: '开始', lane_id: null },
+      { node_id: 'Task-1', node_type: 'MAIN_TASK', name: '任务1', lane_id: null },
+      { node_id: 'Task-orphan', node_type: 'MAIN_TASK', name: '孤立任务', lane_id: null },
+      { node_id: 'End', node_type: 'END_EVENT', name: '结束', lane_id: null },
+    ],
+    flows: [
+      { flow_id: 'f1', source_ref: 'Start', target_ref: 'Task-1', condition: null },
+      { flow_id: 'f2', source_ref: 'Task-1', target_ref: 'End', condition: null },
+    ],
+    task_bindings: [],
+    layout_version: '2.0.0',
+  };
+  const findings = reviewBpmn({ diagramModel });
+  const f007 = findings.filter(f => f.rule_id === 'FA-BPMN-007');
+  assert.ok(f007.length >= 1, `孤立元素应触发 007: ${JSON.stringify(findings)}`);
+  assert.equal(f007[0].target_refs[0], 'Task-orphan');
+});
+
+test('V2: None Start/End 不触发事件类型错误（V2 格式）', () => {
+  const diagramModel = {
+    nodes: [
+      { node_id: 'Start', node_type: 'START_EVENT', name: '开始', lane_id: null },
+      { node_id: 'Task-1', node_type: 'MAIN_TASK', name: '任务1', lane_id: null },
+      { node_id: 'End', node_type: 'END_EVENT', name: '结束', lane_id: null },
+    ],
+    flows: [
+      { flow_id: 'f1', source_ref: 'Start', target_ref: 'Task-1', condition: null },
+      { flow_id: 'f2', source_ref: 'Task-1', target_ref: 'End', condition: null },
+    ],
+    task_bindings: [],
+    layout_version: '2.0.0',
+  };
+  const findings = reviewBpmn({ diagramModel });
+  // None Start/End 不应有任何 finding
+  assert.equal(findings.length, 0, `None Start/End 不应触发任何规则: ${JSON.stringify(findings)}`);
+});

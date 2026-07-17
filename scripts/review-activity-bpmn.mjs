@@ -4,6 +4,7 @@ import { createReviewFinding } from './lib/review-finding.mjs';
  * 活动—BPMN 交叉审查
  *
  * 规则 FA-ACT-BPMN-001 ~ 009
+ * V2-only：使用 diagram-draft V2 节点类型和流字段。
  *
  * @param {object} params
  * @param {object} params.processCard - 流程卡片
@@ -22,25 +23,6 @@ export function reviewActivityBpmn({
   if (!activities) throw new Error('activities is required');
   if (!diagramModel) throw new Error('diagramModel is required');
 
-  // 缺少活动表时返回 NEEDS_INPUT
-  if (!Array.isArray(activities) || activities.length === 0) {
-    const finding = createReviewFinding({
-      ruleId: 'NEEDS_INPUT',
-      category: 'ACTIVITY_BPMN',
-      severity: 'INFO',
-      artifactId,
-      targetRef: 'activities',
-      observation: '缺少活动表，无法进行活动—BPMN 交叉审查',
-      expected: '至少包含一个活动的活动表',
-      actual: '活动表为空或未提供',
-      recommendation: '请提供完整的活动表以启用活动—BPMN 交叉审查',
-      confidence: 1,
-    });
-    // 添加 target_ref 兼容属性
-    finding.target_ref = finding.target_refs[0];
-    return [finding];
-  }
-
   const findings = [];
 
   // 构建辅助数据
@@ -53,47 +35,56 @@ export function reviewActivityBpmn({
   const nodeById = new Map(nodes.map(n => [n.node_id, n]));
   const bindingByActivityId = new Map(bindings.map(b => [b.activity_id, b]));
 
-  // 收集 Link Throw/Catch 用于配对检查
-  const linkThrows = nodes.filter(n => n.sub_type === 'linkThrow');
-  const linkCatches = nodes.filter(n => n.sub_type === 'linkCatch');
-
   // ── FA-ACT-BPMN-001: 泳道不得使用个人姓名 ──
-  // 保守检测：明显姓名格式（2-3个中文字或 First Last 格式）且与角色目录不一致
+  // 保守检测：只有同时出现明确个人信号时确定性报告。
+  // 明确信号：person_/employee_/emp_/user_ 前缀的角色 ID；
+  // 或者泳道名明显是姓名格式且角色 ID 不含合法角色语义。
   for (const lane of lanes) {
     const name = lane.name || '';
     const roleId = lane.role_id || '';
 
-    // 检测明显个人姓名格式
-    const isLikelyChineseName = /^[一-龥]{2,3}$/.test(name) && !/角色|人员|部门|团队|组|申请人|审批人|采购员|经理|主管/.test(name);
+    // 检测个人标识前缀（确定性信号）
+    const hasPersonalPrefix = /^person_|^employee_|^emp_|^user_/i.test(roleId);
+
+    // 检测明显姓名格式
+    const isLikelyChineseName = /^[一-龥]{2,3}$/.test(name);
     const isLikelyWesternName = /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(name);
 
-    if (isLikelyChineseName || isLikelyWesternName) {
-      // 角色 ID 语义检测 - 'role_' 前缀不算语义
-      const roleIdWithoutPrefix = roleId.replace(/^role_/i, '');
-      const meaningfulRoleId = /agent|operator|manager|approver|reviewer|purchaser|requester|admin|staff|user/i.test(roleIdWithoutPrefix);
+    // 合法角色关键词列表（不得误报）
+    const roleKeywords = /角色|人员|部门|团队|组|申请人|审批人|采购员|经理|主管|经办人|审核人|操作人|管理员|负责人|财务|会计|出纳|秘书|助理|总监|主任|科长|处长|部长|委员|代表|顾问|分析师|设计师|工程师|架构师|测试员|开发员|运维|运营|销售|客服|前台|后勤|法务|人事|行政|质检|仓管|物流|生产|计划|采购|审计|风控|合规/;
+    const hasRoleSemantic = roleKeywords.test(name);
 
-      // 角色 ID 与泳道名称匹配（如 role_zhangsan 对应 张三）
-      const roleIdMatchesName = roleIdWithoutPrefix.toLowerCase().includes(name.toLowerCase()) ||
-                                 name.toLowerCase().includes(roleIdWithoutPrefix.toLowerCase());
+    // 角色 ID 语义检测：排除 "Role-" 或 "role_" 这类纯前缀，只匹配有实际角色含义的词
+    // 例如：approver, requester, purchaser, admin, manager 等有实际业务语义
+    const roleIdWithoutPrefix = roleId.replace(/^(Role[-_]|role[-_])/i, '');
+    const roleIdHasSemanticWord = /agent|operator|manager|approver|reviewer|purchaser|requester|admin|staff|owner|lead|supervisor|auditor|analyst|engineer|designer|secretary|assistant|director|commissioner/i.test(roleIdWithoutPrefix);
 
-      // 触发条件：姓名格式 + 角色 ID 无语义 或 角色 ID 匹配姓名
-      if (!meaningfulRoleId || roleIdMatchesName) {
-        findings.push(createReviewFinding({
-          ruleId: 'FA-ACT-BPMN-001',
-          category: 'ACTIVITY_BPMN',
-          severity: 'CRITICAL',
-          artifactId,
-          targetRef: lane.lane_id,
-          locatorType: 'BPMN_LANE',
-          locator: lane.lane_id,
-          excerpt: name,
-          observation: `泳道 "${name}" 可能使用了个人姓名而非业务角色`,
-          expected: '泳道应使用业务角色名称',
-          actual: `泳道名称 "${name}" 与角色 ID "${roleId}" 均不含角色语义`,
-          recommendation: '将泳道名称改为业务角色，例如"申请人"、"审批人"等',
-          confidence: 0.7,
-        }));
-      }
+    let shouldReport = false;
+
+    if (hasPersonalPrefix) {
+      // 有明确个人前缀 → 确定性报告
+      shouldReport = true;
+    } else if ((isLikelyChineseName || isLikelyWesternName) && !hasRoleSemantic && !roleIdHasSemanticWord) {
+      // 姓名格式 + 泳道名无角色关键词 + 角色 ID 无业务语义 → 报告
+      shouldReport = true;
+    }
+
+    if (shouldReport) {
+      findings.push(createReviewFinding({
+        ruleId: 'FA-ACT-BPMN-001',
+        category: 'ACTIVITY_BPMN',
+        severity: 'CRITICAL',
+        artifactId,
+        targetRef: lane.lane_id,
+        locatorType: 'BPMN_ELEMENT',
+        locator: lane.lane_id,
+        excerpt: name,
+        observation: `泳道 "${name}" 可能使用了个人姓名而非业务角色`,
+        expected: '泳道应使用业务角色名称',
+        actual: `泳道名称 "${name}" 与角色 ID "${roleId}" 均不含角色语义`,
+        recommendation: '将泳道名称改为业务角色，例如"申请人"、"审批人"等',
+        confidence: hasPersonalPrefix ? 0.95 : 0.7,
+      }));
     }
   }
 
@@ -102,7 +93,6 @@ export function reviewActivityBpmn({
     const binding = bindingByActivityId.get(activity.activity_id);
     const mainTaskId = activity.main_task_id;
 
-    // 检查是否有主 Task
     if (!mainTaskId && !binding) {
       findings.push(createReviewFinding({
         ruleId: 'FA-ACT-BPMN-002',
@@ -119,12 +109,28 @@ export function reviewActivityBpmn({
       continue;
     }
 
-    // binding 三方一致性检查
+    // binding 缺失但 mainTaskId 存在
+    if (!binding) {
+      findings.push(createReviewFinding({
+        ruleId: 'FA-ACT-BPMN-002',
+        category: 'ACTIVITY_BPMN',
+        severity: 'BLOCKER',
+        artifactId,
+        targetRef: activity.activity_id,
+        observation: `活动 "${activity.name}" 缺少 task_binding，但声明了 main_task_id "${mainTaskId}"`,
+        expected: '每个 L5 活动应有 task_binding',
+        actual: `activity.main_task_id="${mainTaskId}"，无 binding`,
+        recommendation: '为活动创建 task_binding',
+        confidence: 1,
+      }));
+      continue;
+    }
+
     if (binding) {
       const bindingMainTaskId = binding.main_task_id;
       const mainTaskNode = nodeById.get(bindingMainTaskId);
 
-      // binding.main_task_id 与 activity.main_task_id 一致
+      // 三方 ID 一致性
       if (mainTaskId && bindingMainTaskId !== mainTaskId) {
         findings.push(createReviewFinding({
           ruleId: 'FA-ACT-BPMN-002',
@@ -156,7 +162,7 @@ export function reviewActivityBpmn({
         }));
       }
 
-      // 检查是否有多个 MAIN_TASK 绑定到同一活动
+      // 多个 binding
       const activityBindings = bindings.filter(b => b.activity_id === activity.activity_id);
       if (activityBindings.length > 1) {
         findings.push(createReviewFinding({
@@ -183,18 +189,44 @@ export function reviewActivityBpmn({
     const mainTaskNode = nodeById.get(binding.main_task_id);
     if (!mainTaskNode) continue;
 
-    // 确定责任角色
     const model = activity.responsibility_model;
     const targetResp = model === 'RASCI' ? 'R' : model === 'OARP' ? 'O' : null;
     if (!targetResp) continue;
 
     const responsibleAssignment = activity.role_assignments.find(r => r.responsibility === targetResp);
-    if (!responsibleAssignment) continue;
+    if (!responsibleAssignment) {
+      // R/O 角色缺失 → 003
+      findings.push(createReviewFinding({
+        ruleId: 'FA-ACT-BPMN-003',
+        category: 'ACTIVITY_BPMN',
+        severity: 'CRITICAL',
+        artifactId,
+        targetRef: activity.activity_id,
+        observation: `活动 "${activity.name}" 的 ${model} 缺少 ${targetResp} 角色分配`,
+        expected: `${model} 应有且仅有一个 ${targetResp} 角色`,
+        actual: `缺少 ${targetResp} 角色`,
+        recommendation: `为活动分配 ${targetResp} 角色`,
+        confidence: 1,
+      }));
+      continue;
+    }
 
     const expectedLane = laneByRoleId.get(responsibleAssignment.role_id);
-    if (!expectedLane) continue;
-
-    if (mainTaskNode.lane_id !== expectedLane.lane_id) {
+    if (!expectedLane) {
+      // 责任角色没有对应泳道 → 003
+      findings.push(createReviewFinding({
+        ruleId: 'FA-ACT-BPMN-003',
+        category: 'ACTIVITY_BPMN',
+        severity: 'CRITICAL',
+        artifactId,
+        targetRef: activity.activity_id,
+        observation: `活动 "${activity.name}" 的责任角色 "${responsibleAssignment.role_id}" 找不到对应泳道`,
+        expected: `主 Task 位于 ${targetResp} 角色泳道`,
+        actual: `角色 "${responsibleAssignment.role_id}" 无泳道`,
+        recommendation: `为角色 "${responsibleAssignment.role_id}" 创建泳道`,
+        confidence: 1,
+      }));
+    } else if (mainTaskNode.lane_id !== expectedLane.lane_id) {
       findings.push(createReviewFinding({
         ruleId: 'FA-ACT-BPMN-003',
         category: 'ACTIVITY_BPMN',
@@ -210,7 +242,7 @@ export function reviewActivityBpmn({
     }
   }
 
-  // ── FA-ACT-BPMN-004: 确认从 Task 三条件 ──
+  // ── FA-ACT-BPMN-004: 确认从 Task ──
   for (const activity of activities) {
     if (!activity.confirmation) continue;
 
@@ -232,8 +264,28 @@ export function reviewActivityBpmn({
       }));
     }
 
-    // 确认角色必须存在且不同于主责角色
+    // confirm_role_id 存在于活动角色或泳道角色目录
     const confirmRoleId = conf.confirm_role_id;
+    const allRoleIds = new Set([
+      ...activity.role_assignments.map(r => r.role_id),
+      ...lanes.map(l => l.role_id),
+    ]);
+    if (!allRoleIds.has(confirmRoleId)) {
+      findings.push(createReviewFinding({
+        ruleId: 'FA-ACT-BPMN-004',
+        category: 'ACTIVITY_BPMN',
+        severity: 'BLOCKER',
+        artifactId,
+        targetRef: activity.activity_id,
+        observation: `活动 "${activity.name}" 的确认角色 "${confirmRoleId}" 不存在于活动角色或泳道角色目录`,
+        expected: 'confirm_role_id 应存在于角色目录',
+        actual: `confirm_role_id="${confirmRoleId}" 未找到`,
+        recommendation: '指定正确的确认角色',
+        confidence: 1,
+      }));
+    }
+
+    // 确认角色必须不同于主责角色
     const mainResp = activity.responsibility_model === 'RASCI' ? 'R' : 'O';
     const mainRole = activity.role_assignments.find(r => r.responsibility === mainResp);
 
@@ -250,6 +302,49 @@ export function reviewActivityBpmn({
         recommendation: '指定不同于主责角色的确认角色',
         confidence: 1,
       }));
+    }
+
+    // confirmation 三方一致性
+    const binding = bindingByActivityId.get(activity.activity_id);
+    const bindingConfTaskId = binding?.confirmation_task_id;
+
+    if (bindingConfTaskId) {
+      const confNode = nodeById.get(bindingConfTaskId);
+      if (confNode) {
+        // 确认 Task 位于确认角色泳道
+        const confirmLane = laneByRoleId.get(confirmRoleId);
+        if (confirmLane && confNode.lane_id !== confirmLane.lane_id) {
+          findings.push(createReviewFinding({
+            ruleId: 'FA-ACT-BPMN-004',
+            category: 'ACTIVITY_BPMN',
+            severity: 'BLOCKER',
+            artifactId,
+            targetRef: activity.activity_id,
+            observation: `确认 Task "${bindingConfTaskId}" 位于 "${confNode.lane_id}" 而非确认角色泳道 "${confirmLane.lane_id}"`,
+            expected: `确认 Task 位于确认角色泳道`,
+            actual: `位于 ${confNode.lane_id}`,
+            recommendation: `将确认 Task 移至 ${confirmLane.name} 泳道`,
+            confidence: 1,
+          }));
+        }
+
+        // 确认 Task 泳道不同于主 Task 泳道
+        const mainTaskNode = nodeById.get(binding.main_task_id);
+        if (mainTaskNode && confNode.lane_id === mainTaskNode.lane_id) {
+          findings.push(createReviewFinding({
+            ruleId: 'FA-ACT-BPMN-004',
+            category: 'ACTIVITY_BPMN',
+            severity: 'BLOCKER',
+            artifactId,
+            targetRef: activity.activity_id,
+            observation: `确认 Task "${bindingConfTaskId}" 与主 Task "${binding.main_task_id}" 位于同一泳道`,
+            expected: '确认 Task 位于不同于主 Task 的泳道',
+            actual: `两者均位于 ${confNode.lane_id}`,
+            recommendation: '将确认 Task 移至确认角色的泳道',
+            confidence: 1,
+          }));
+        }
+      }
     }
   }
 
@@ -275,20 +370,19 @@ export function reviewActivityBpmn({
   }
 
   // ── FA-ACT-BPMN-006: XOR/OR 必须有条件或默认路径 ──
-  const gateways = nodes.filter(n => n.node_type === 'GATEWAY');
+  // V2: 使用 GATEWAY_XOR/GATEWAY_OR 节点类型和 V2 flow.condition
+  const gatewayTypes = new Set(['GATEWAY_XOR', 'GATEWAY_OR']);
+  const gateways = nodes.filter(n => gatewayTypes.has(n.node_type));
   for (const gw of gateways) {
-    const subType = gw.sub_type;
-    if (subType !== 'exclusiveGateway' && subType !== 'inclusiveGateway') continue;
-
     // 找到该网关的出向流
-    const outFlows = flows.filter(f => f.source_ref === gw.node_id && f.type === 'SEQUENCE_FLOW');
+    const outFlows = flows.filter(f => f.source_ref === gw.node_id);
     if (outFlows.length <= 1) continue;
 
-    // 检查是否有默认流或条件
-    const hasDefault = outFlows.some(f => f.is_default === true);
-    const hasConditions = outFlows.every(f => f.condition_expression || f.is_default === true);
+    // V2 条件检查：每条出向流都必须有非空结构化 condition
+    const allHaveCondition = outFlows.every(f => f.condition != null && typeof f.condition === 'object' && f.condition.label);
 
-    if (!hasDefault && !hasConditions) {
+    if (!allHaveCondition) {
+      const gwType = gw.node_type === 'GATEWAY_XOR' ? 'XOR' : 'OR';
       findings.push(createReviewFinding({
         ruleId: 'FA-ACT-BPMN-006',
         category: 'ACTIVITY_BPMN',
@@ -298,10 +392,10 @@ export function reviewActivityBpmn({
         locatorType: 'BPMN_ELEMENT',
         locator: gw.node_id,
         excerpt: gw.name,
-        observation: `${subType === 'exclusiveGateway' ? 'XOR' : 'OR'} 网关 "${gw.name || gw.node_id}" 缺少条件表达式或默认路径`,
+        observation: `${gwType} 网关 "${gw.name || gw.node_id}" 的出向流缺少结构化条件`,
         expected: '每个分支有结构化条件或明确默认路径',
-        actual: '无条件表达式且无默认流',
-        recommendation: '为每条分支添加条件表达式，或指定一条默认流',
+        actual: `${outFlows.filter(f => !f.condition).length} 条出向流无条件`,
+        recommendation: '为每条分支添加结构化条件',
         confidence: 1,
       }));
     }
@@ -313,7 +407,6 @@ export function reviewActivityBpmn({
   const endResultById = new Map(endResults.map(r => [r.event_id, r]));
 
   for (const endEvent of endEvents) {
-    // 检查名称是否有意义
     if (!endEvent.name || endEvent.name.trim() === '') {
       findings.push(createReviewFinding({
         ruleId: 'FA-ACT-BPMN-007',
@@ -326,12 +419,11 @@ export function reviewActivityBpmn({
         observation: `结束事件 "${endEvent.node_id}" 缺少业务结果名称`,
         expected: '业务结束事件应有可区分的业务结果名称',
         actual: '名称为空',
-        recommendation: '为结束事件指定业务结果名称，如"采购完成"、"申请驳回"',
+        recommendation: '为结束事件指定业务结果名称',
         confidence: 1,
       }));
     }
 
-    // 检查与流程卡片终点一致性
     if (!endResultById.has(endEvent.node_id)) {
       findings.push(createReviewFinding({
         ruleId: 'FA-ACT-BPMN-007',
@@ -350,7 +442,7 @@ export function reviewActivityBpmn({
     }
   }
 
-  // 检查 end_results 中有但图中没有的结束事件
+  // end_results 有但图中没有的结束事件
   for (const result of endResults) {
     if (!endEvents.some(e => e.node_id === result.event_id)) {
       findings.push(createReviewFinding({
@@ -369,8 +461,18 @@ export function reviewActivityBpmn({
   }
 
   // ── FA-ACT-BPMN-008: Link Catch/Throw 成对 ──
-  const throwNames = new Set(linkThrows.map(n => n.name));
-  const catchNames = new Set(linkCatches.map(n => n.name));
+  // V2: 使用 INTERMEDIATE_LINK_THROW 和 INTERMEDIATE_LINK_CATCH 节点类型
+  const linkThrows = nodes.filter(n => n.node_type === 'INTERMEDIATE_LINK_THROW');
+  const linkCatches = nodes.filter(n => n.node_type === 'INTERMEDIATE_LINK_CATCH');
+  const throwNames = new Map();
+  const catchNames = new Map();
+
+  for (const n of linkThrows) {
+    throwNames.set(n.name, (throwNames.get(n.name) || 0) + 1);
+  }
+  for (const n of linkCatches) {
+    catchNames.set(n.name, (catchNames.get(n.name) || 0) + 1);
+  }
 
   for (const throwEvent of linkThrows) {
     if (!catchNames.has(throwEvent.name)) {
@@ -412,6 +514,49 @@ export function reviewActivityBpmn({
     }
   }
 
+  // 多配检查
+  for (const [name, count] of throwNames) {
+    if (count > 1) {
+      const event = linkThrows.find(n => n.name === name);
+      findings.push(createReviewFinding({
+        ruleId: 'FA-ACT-BPMN-008',
+        category: 'ACTIVITY_BPMN',
+        severity: 'CRITICAL',
+        artifactId,
+        targetRef: event.node_id,
+        locatorType: 'BPMN_ELEMENT',
+        locator: event.node_id,
+        excerpt: name,
+        observation: `Link Throw "${name}" 有 ${count} 个，应只有 1 个`,
+        expected: 'Link Throw 和 Catch 各自最多一个同名',
+        actual: `${count} 个同名 Throw`,
+        recommendation: '删除多余的 Link Throw',
+        confidence: 1,
+      }));
+    }
+  }
+
+  for (const [name, count] of catchNames) {
+    if (count > 1) {
+      const event = linkCatches.find(n => n.name === name);
+      findings.push(createReviewFinding({
+        ruleId: 'FA-ACT-BPMN-008',
+        category: 'ACTIVITY_BPMN',
+        severity: 'CRITICAL',
+        artifactId,
+        targetRef: event.node_id,
+        locatorType: 'BPMN_ELEMENT',
+        locator: event.node_id,
+        excerpt: name,
+        observation: `Link Catch "${name}" 有 ${count} 个，应只有 1 个`,
+        expected: 'Link Throw 和 Catch 各自最多一个同名',
+        actual: `${count} 个同名 Catch`,
+        recommendation: '删除多余的 Link Catch',
+        confidence: 1,
+      }));
+    }
+  }
+
   // ── FA-ACT-BPMN-009: 同一 L5 不得映射并行主 Task ──
   const activityMainTasks = new Map();
   for (const binding of bindings) {
@@ -439,18 +584,46 @@ export function reviewActivityBpmn({
     }
   }
 
-  // 添加 target_ref 兼容属性并排序确保稳定性
-  for (const finding of findings) {
-    finding.target_ref = finding.target_refs[0];
-  }
-
+  // 排序确保稳定性（不添加 target_ref 额外属性）
   findings.sort((a, b) => {
     if (a.rule_id < b.rule_id) return -1;
     if (a.rule_id > b.rule_id) return 1;
-    if (a.target_ref < b.target_ref) return -1;
-    if (a.target_ref > b.target_ref) return 1;
+    if (a.target_refs[0] < b.target_refs[0]) return -1;
+    if (a.target_refs[0] > b.target_refs[0]) return 1;
     return 0;
   });
 
   return findings;
+}
+
+/**
+ * 活动—BPMN 审查 stage 判定接口
+ *
+ * 完整输入时调用 reviewActivityBpmn；
+ * 缺少 processCard、activities 或 diagramModel 时返回 NEEDS_INPUT。
+ *
+ * @param {object} params
+ * @param {object|null} params.processCard
+ * @param {Array|null} params.activities
+ * @param {object|null} params.diagramModel
+ * @param {string} [params.artifactId]
+ * @returns {{ status: 'NEEDS_INPUT'|'SUCCEEDED', missing: string[], findings: Array<Finding> }}
+ */
+export function evaluateActivityBpmnStage({
+  processCard,
+  activities,
+  diagramModel,
+  artifactId = 'process-draft.json',
+}) {
+  const missing = [];
+  if (!processCard) missing.push('process_card');
+  if (!activities || !Array.isArray(activities) || activities.length === 0) missing.push('activities');
+  if (!diagramModel) missing.push('diagram_model');
+
+  if (missing.length > 0) {
+    return { status: 'NEEDS_INPUT', missing, findings: [] };
+  }
+
+  const findings = reviewActivityBpmn({ processCard, activities, diagramModel, artifactId });
+  return { status: 'SUCCEEDED', missing: [], findings };
 }
