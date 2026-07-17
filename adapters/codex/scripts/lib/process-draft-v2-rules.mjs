@@ -102,6 +102,28 @@ export function validateDraftBusinessRules(draft) {
     }
   }
 
+  // ── FA-DRAFT-LANE-003: 泳道 ID 与角色映射必须唯一 ──
+  const laneIds = new Set();
+  const laneRoleIds = new Set();
+  for (const lane of diagram.lanes) {
+    if (laneIds.has(lane.lane_id)) {
+      errors.push({
+        code: 'FA-DRAFT-LANE-003',
+        path: '/diagram/lanes',
+        message: `泳道 ID 重复：${lane.lane_id}`,
+      });
+    }
+    if (laneRoleIds.has(lane.role_id)) {
+      errors.push({
+        code: 'FA-DRAFT-LANE-003',
+        path: '/diagram/lanes',
+        message: `同一角色只能对应一个泳道：${lane.role_id}`,
+      });
+    }
+    laneIds.add(lane.lane_id);
+    laneRoleIds.add(lane.role_id);
+  }
+
   // ── FA-DRAFT-MODEL-001: 责任模型匹配 ──
   for (const activity of activities) {
     const type = activity.activity_type;
@@ -208,6 +230,26 @@ export function validateDraftBusinessRules(draft) {
         code: 'FA-DRAFT-BIND-002',
         path: `/diagram/nodes/${binding.main_task_id}/node_type`,
         message: `活动 "${activity.name}" 的 main_task "${binding.main_task_id}" 节点类型为 "${mainTaskNode.node_type}"，应为 MAIN_TASK`,
+      });
+    }
+  }
+
+  // binding 也必须反向引用存在的活动和 MAIN_TASK。
+  for (const binding of diagram.task_bindings) {
+    const activity = activities.find(item => item.activity_id === binding.activity_id);
+    const mainTaskNode = diagram.nodes.find(item => item.node_id === binding.main_task_id);
+    if (!activity) {
+      errors.push({
+        code: 'FA-DRAFT-BIND-002',
+        path: '/diagram/task_bindings',
+        message: `Task binding 引用了不存在的活动 "${binding.activity_id}"`,
+      });
+    }
+    if (!mainTaskNode || mainTaskNode.node_type !== 'MAIN_TASK') {
+      errors.push({
+        code: 'FA-DRAFT-BIND-002',
+        path: '/diagram/task_bindings',
+        message: `Task binding 的 main_task_id "${binding.main_task_id}" 未指向有效 MAIN_TASK`,
       });
     }
   }
@@ -375,24 +417,72 @@ export function validateDraftBusinessRules(draft) {
     }
   }
 
-  // ── FA-DRAFT-CARD-002: 必须有开始事件 ──
-  const hasStartEvent = diagram.nodes.some(n => n.node_type === 'START_EVENT');
-  if (!hasStartEvent) {
-    errors.push({
-      code: 'FA-DRAFT-CARD-002',
-      path: '/diagram/nodes',
-      message: '流程必须包含至少一个开始事件',
-    });
+  // ── F4: FA-DRAFT-BINDING-001 (反向): 每个 MAIN_TASK 必须恰好被一个 binding 引用 ──
+  const mainTaskNodes = diagram.nodes.filter(n => n.node_type === 'MAIN_TASK');
+  for (const mt of mainTaskNodes) {
+    const referencingBindings = diagram.task_bindings.filter(b => b.main_task_id === mt.node_id);
+    if (referencingBindings.length === 0) {
+      errors.push({
+        code: 'FA-DRAFT-BINDING-001',
+        path: `/diagram/nodes/${mt.node_id}`,
+        message: `MAIN_TASK "${mt.node_id}" 未被任何 task_binding 引用`,
+      });
+    } else if (referencingBindings.length > 1) {
+      errors.push({
+        code: 'FA-DRAFT-BINDING-002',
+        path: '/diagram/task_bindings',
+        message: `MAIN_TASK "${mt.node_id}" 被 ${referencingBindings.length} 个 binding 引用，必须恰好一个`,
+      });
+    }
   }
 
-  // ── FA-DRAFT-CARD-003: 必须有结束事件 ──
-  const hasEndEvent = diagram.nodes.some(n => n.node_type === 'END_EVENT');
-  if (!hasEndEvent) {
-    errors.push({
-      code: 'FA-DRAFT-CARD-003',
-      path: '/diagram/nodes',
-      message: '流程必须包含至少一个结束事件',
-    });
+  if (isLeafL4(card)) {
+    // ── FA-DRAFT-CARD-002: 末端 L4 必须恰有一个开始事件 ──
+    const startEventCount = diagram.nodes.filter(n => n.node_type === 'START_EVENT').length;
+    if (startEventCount !== 1) {
+      errors.push({
+        code: 'FA-DRAFT-CARD-002',
+        path: '/diagram/nodes',
+        message: `末端 L4 流程必须恰好一个开始事件，当前 ${startEventCount} 个`,
+      });
+    } else {
+      const startNode = diagram.nodes.find(n => n.node_type === 'START_EVENT');
+      if (card.start?.event_id !== startNode.node_id || card.start?.name !== startNode.name) {
+        errors.push({
+          code: 'FA-DRAFT-CARD-004',
+          path: '/process_card/start',
+          message: `流程卡片起点必须与 START_EVENT 的 ID 和名称一致：卡片 ${card.start?.event_id}/${card.start?.name}，图 ${startNode.node_id}/${startNode.name}`,
+        });
+      }
+    }
+
+    // ── FA-DRAFT-CARD-003: 末端 L4 必须有至少一个结束事件 ──
+    const hasEndEvent = diagram.nodes.some(n => n.node_type === 'END_EVENT');
+    if (!hasEndEvent) {
+      errors.push({
+        code: 'FA-DRAFT-CARD-003',
+        path: '/diagram/nodes',
+        message: '末端 L4 流程必须包含至少一个结束事件',
+      });
+    } else {
+      const endNodes = diagram.nodes.filter(n => n.node_type === 'END_EVENT');
+      const endResults = card.end_results || [];
+      const endNodeById = new Map(endNodes.map(node => [node.node_id, node]));
+      const resultById = new Map(endResults.map(result => [result.event_id, result]));
+      const inconsistent = endNodes.length !== endResults.length
+        || endResults.some(result => {
+          const node = endNodeById.get(result.event_id);
+          return !node || node.name !== result.name;
+        })
+        || endNodes.some(node => !resultById.has(node.node_id));
+      if (inconsistent) {
+        errors.push({
+          code: 'FA-DRAFT-CARD-005',
+          path: '/process_card/end_results',
+          message: '流程卡片业务终点必须与 END_EVENT 的 ID、名称和集合完全一致',
+        });
+      }
+    }
   }
 
   return {

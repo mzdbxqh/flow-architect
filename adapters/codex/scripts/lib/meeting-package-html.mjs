@@ -56,7 +56,7 @@ export function buildMeetingPackageHtml({ draft, bpmnXml, metadata }) {
   const bpmnIds = new Set(elements.map(e => e.node_id));
   bpmnIds.add(metadata.process_id);
 
-  const questions = draft.questions || [];
+  const questions = draft.questions;
 
   // Validate question target_paths against BPMN elements (V2 only: direct node_id match)
   for (const q of questions) {
@@ -67,8 +67,8 @@ export function buildMeetingPackageHtml({ draft, bpmnXml, metadata }) {
   }
 
   // Validate task_bindings against BPMN elements
-  const diagram = draft.diagram || { lanes: [], nodes: [], flows: [], task_bindings: [], layout_version: '2.0.0' };
-  for (const binding of (diagram.task_bindings || [])) {
+  const diagram = draft.diagram;
+  for (const binding of diagram.task_bindings) {
     if (!bpmnIds.has(binding.main_task_id)) {
       throw new Error(`task_binding references missing BPMN element: ${binding.main_task_id}`);
     }

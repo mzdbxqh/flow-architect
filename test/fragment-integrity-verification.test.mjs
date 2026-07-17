@@ -765,9 +765,9 @@ describe('finalize 入口完整性验证 (finalizeProcessDraft)', () => {
       diagram: {
         lanes: [{ lane_id: 'Lane-001', name: '申请人', role_id: 'Lane-001' }],
         nodes: [
-          { node_id: 'Start-001', node_type: 'START_EVENT', name: '开始', lane_id: 'Lane-001' },
+          { node_id: 'Start-001', node_type: 'START_EVENT', name: '提交申请', lane_id: 'Lane-001' },
           { node_id: 'Task-001', node_type: 'MAIN_TASK', name: '提交申请', lane_id: 'Lane-001' },
-          { node_id: 'End-001', node_type: 'END_EVENT', name: '结束', lane_id: 'Lane-001' },
+          { node_id: 'End-001', node_type: 'END_EVENT', name: '提交申请', lane_id: 'Lane-001' },
         ],
         flows: [
           { flow_id: 'Flow-001', source_ref: 'Start-001', target_ref: 'Task-001', condition: null },

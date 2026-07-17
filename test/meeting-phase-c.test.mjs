@@ -109,7 +109,7 @@ function createTestPayload() {
       lanes: [{ lane_id: 'Lane_1', name: '泳道 1', role_id: 'Role_1' }],
       nodes: [
         { node_id: 'Start_1', node_type: 'START_EVENT', name: '开始', lane_id: null },
-        { node_id: 'Task_1', node_type: 'MAIN_TASK', name: '活动 1', lane_id: 'Lane_1', activity_id: 'Activity_1' },
+        { node_id: 'Task_1', node_type: 'MAIN_TASK', name: '活动 1', lane_id: 'Lane_1' },
         { node_id: 'End_1', node_type: 'END_EVENT', name: '结束', lane_id: null },
       ],
       flows: [
@@ -202,7 +202,7 @@ describe('Phase C: 活动表和图上按钮同步', () => {
       assert.ok(newTask, '新主 Task 应存在');
       assert.equal(newTask.node_type, 'MAIN_TASK');
       assert.equal(newTask.lane_id, 'Lane_1');
-      assert.equal(newTask.activity_id, 'Activity_2');
+      assert.equal(newTask.node_type, 'MAIN_TASK');
 
       // 验证 binding
       const newBinding = snapshot.diagram.task_bindings.find(b => b.activity_id === 'Activity_2');

@@ -3,6 +3,8 @@
  *
  * HTML 中流程卡片、活动一览表、图模型和问题的唯一权威内存状态。
  * 所有控制器通过 DraftStore 读写，不直接修改 payload。
+ * F2: 结构变更（起点/终点）由 ProcessCardController 通过结构命令 + AutoLayout 处理，
+ * DraftStore 不直接修改 diagram。
  */
 export class DraftStore {
   #payload;
@@ -22,21 +24,23 @@ export class DraftStore {
   }
 
   /** 用完整 payload 替换当前状态 */
-  restore(payload) {
+  restore(payload, { dirty = true } = {}) {
     this.#validatePayload(payload);
     this.#payload = structuredClone(payload);
-    this.#dirty = true;
+    this.#dirty = dirty;
     this.#notify('restore', {});
   }
 
-  /** 部分更新流程卡片 */
+  /** 部分更新流程卡片（仅更新 card 字段，不修改 diagram） */
   updateProcessCard(partial) {
     const card = this.#payload.process_card;
+
     for (const [key, value] of Object.entries(partial)) {
       if (Object.prototype.hasOwnProperty.call(card, key) || key in card) {
         card[key] = structuredClone(value);
       }
     }
+
     this.#dirty = true;
     this.#notify('process_card', { field: Object.keys(partial) });
   }
@@ -140,6 +144,15 @@ export class DraftStore {
     }
     if (!payload.diagram) {
       throw new Error('payload 缺少 diagram');
+    }
+    if (!Array.isArray(payload.questions)) {
+      throw new Error('payload 缺少 questions 数组');
+    }
+    if (!payload.provenance || typeof payload.provenance !== 'object') {
+      throw new Error('payload 缺少 provenance');
+    }
+    if (!payload.source_summary || typeof payload.source_summary !== 'object') {
+      throw new Error('payload 缺少 source_summary');
     }
   }
 }

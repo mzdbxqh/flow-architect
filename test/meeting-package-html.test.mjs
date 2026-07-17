@@ -21,8 +21,8 @@ function v2Draft(overrides = {}) {
       description: '完成采购申请的审查与决策', purpose: '形成可执行的采购决定',
       owner: 'Role-process-owner', parent_process_name: '采购管理',
       inputs: ['采购申请'], outputs: ['审批结果'],
-      start: { event_id: 'Start_1', name: '收到采购申请', event_type: 'NONE' },
-      end_results: [{ event_id: 'End_1', name: '采购申请已批准' }],
+      start: { event_id: 'StartEvent_1', name: '开始', event_type: 'NONE' },
+      end_results: [{ event_id: 'EndEvent_1', name: '结束' }],
       performance_indicators: [],
     },
     activities: [
@@ -45,16 +45,11 @@ function v2Draft(overrides = {}) {
       nodes: [
         { node_id: 'StartEvent_1', node_type: 'START_EVENT', name: '开始', lane_id: null },
         { node_id: 'Task_Review', node_type: 'MAIN_TASK', name: '审核采购申请', lane_id: 'Lane_Applicant' },
-        { node_id: 'Task_Approve', node_type: 'MAIN_TASK', name: '批准采购', lane_id: 'Lane_Manager' },
-        { node_id: 'Task_Rework', node_type: 'MAIN_TASK', name: '退回修改', lane_id: 'Lane_Manager' },
         { node_id: 'EndEvent_1', node_type: 'END_EVENT', name: '结束', lane_id: null },
       ],
       flows: [
         { flow_id: 'Flow_Start_Review', source_ref: 'StartEvent_1', target_ref: 'Task_Review', condition: null },
-        { flow_id: 'Flow_Review_Approve', source_ref: 'Task_Review', target_ref: 'Task_Approve', condition: null },
-        { flow_id: 'Flow_Review_Rework', source_ref: 'Task_Review', target_ref: 'Task_Rework', condition: null },
-        { flow_id: 'Flow_Rework_Review', source_ref: 'Task_Rework', target_ref: 'Task_Review', condition: null },
-        { flow_id: 'Flow_Approve_End', source_ref: 'Task_Approve', target_ref: 'EndEvent_1', condition: null },
+        { flow_id: 'Flow_Review_End', source_ref: 'Task_Review', target_ref: 'EndEvent_1', condition: null },
       ],
       task_bindings: [
         { activity_id: 'Activity_Review', main_task_id: 'Task_Review', confirmation_task_id: null },
@@ -63,7 +58,7 @@ function v2Draft(overrides = {}) {
     },
     questions: [
       { question_id: 'Q-001', text: '采购申请是否需要经理复核？', target_paths: ['Task_Review'], status: 'OPEN', answer: '' },
-      { question_id: 'Q-002', text: '超过多少金额需要额外审批？', target_paths: ['Task_Approve'], status: 'OPEN', answer: '' },
+      { question_id: 'Q-002', text: '超过多少金额需要额外审批？', target_paths: ['Task_Review'], status: 'OPEN', answer: '' },
     ],
     provenance: {},
     source_summary: { total_blocks: 0, formats: [], evidence_refs: [] },
@@ -94,6 +89,16 @@ test('HTML build is deterministic and round-trips payload', () => {
   assert.equal(extracted.bpmn_xml, bpmnXml);
   assert.deepEqual(extracted.process_card, draft.process_card);
   assert.deepEqual(extracted.activities, draft.activities);
+});
+
+test('builder rejects a V2 draft missing any required top-level field', () => {
+  const draft = v2Draft();
+  const bpmnXml = generateBpmnXml(draft);
+  delete draft.questions;
+  assert.throws(
+    () => buildMeetingPackageHtml({ draft, bpmnXml, metadata }),
+    /流程草稿不符合 schema|questions|required/i,
+  );
 });
 
 test('HTML contains no external dependency', () => {
@@ -220,7 +225,6 @@ test('builder rejects XML declarations and unsafe output paths', () => {
   const result = spawnSync(process.execPath, [
     fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
     '--draft', fixture('meeting-package/v2-draft.json'),
-    '--questions', fixture('meeting-package/questions.valid.json'),
     '--title', '采购审批流程', '--revision', 'r01',
     '--package-id', 'procurement-approval', '--run-dir', safeRunDir,
     '--output', '../escape.html',
@@ -233,7 +237,6 @@ test('path containment rejects same-prefix directory escape', () => {
   const result = spawnSync(process.execPath, [
     fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
     '--draft', fixture('meeting-package/v2-draft.json'),
-    '--questions', fixture('meeting-package/questions.valid.json'),
     '--title', '采购审批流程', '--revision', 'r01',
     '--package-id', 'procurement-approval', '--run-dir', runDir,
     '--output', '../' + path.basename(runDir) + '-escape/out.html',
@@ -246,7 +249,6 @@ test('path containment rejects absolute output path outside runDir', () => {
   const result = spawnSync(process.execPath, [
     fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
     '--draft', fixture('meeting-package/v2-draft.json'),
-    '--questions', fixture('meeting-package/questions.valid.json'),
     '--title', '采购审批流程', '--revision', 'r01',
     '--package-id', 'procurement-approval', '--run-dir', runDir,
     '--output', '/tmp/escape-outside.html',
@@ -254,24 +256,35 @@ test('path containment rejects absolute output path outside runDir', () => {
   assert.equal(result.status, 2);
 });
 
-test('CLI accepts explicit --process-id for multi-process BPMN', () => {
-  const runDir = makeRunDir('multi-process-explicit');
-  fs.mkdirSync(runDir, { recursive: true });
-  const tmpQuestions = path.join(runDir, 'q.json');
-  fs.writeFileSync(tmpQuestions, JSON.stringify([{
-    question_id: 'Q-001', text: '测试问题', target_paths: ['Task_A1'], status: 'OPEN', answer: '',
-  }]));
+test('CLI uses one V2 draft as the complete business-data input', () => {
+  const runDir = makeRunDir('v2-draft-only');
   const result = spawnSync(process.execPath, [
     fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
     '--draft', fixture('meeting-package/v2-draft.json'),
-    '--questions', tmpQuestions,
-    '--title', '多流程测试', '--revision', 'r01',
-    '--package-id', 'multi-process-test', '--process-id', 'Process_A',
-    '--run-dir', runDir, '--output', 'multi-explicit.html',
+    '--title', 'V2 草稿测试', '--revision', 'r01',
+    '--package-id', 'v2-draft-test',
+    '--run-dir', runDir, '--output', 'draft-only.html',
   ], { encoding: 'utf8' });
   assert.equal(result.status, 0);
   const out = JSON.parse(result.stdout);
   assert.equal(out.status, 'SUCCEEDED');
+  const payload = extractMeetingPackageHtml(fs.readFileSync(path.join(runDir, 'draft-only.html'), 'utf8'));
+  assert.equal(payload.metadata.process_id, v2Draft().process_card.process_id);
+  assert.deepEqual(payload.questions, v2Draft().questions);
+});
+
+test('CLI rejects removed --questions compatibility argument', () => {
+  const runDir = makeRunDir('removed-cli-argument');
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
+    '--draft', fixture('meeting-package/v2-draft.json'),
+    '--questions', fixture('meeting-package/questions.valid.json'),
+    '--title', 'V2 草稿测试', '--revision', 'r01',
+    '--package-id', 'v2-draft-test',
+    '--run-dir', runDir, '--output', 'should-not-exist.html',
+  ], { encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /未知参数.*--questions/);
 });
 
 test('validateProcessId supports prefixed bpmn: namespace', () => {
@@ -285,7 +298,6 @@ test('nested output directory is created inside runDir', () => {
   const result = spawnSync(process.execPath, [
     fileURLToPath(new URL('../scripts/build-single-diagram-html.mjs', import.meta.url)),
     '--draft', fixture('meeting-package/v2-draft.json'),
-    '--questions', fixture('meeting-package/questions.valid.json'),
     '--title', '采购审批流程', '--revision', 'r01',
     '--package-id', 'procurement-approval', '--run-dir', runDir,
     '--output', 'nested/deep/output.html',

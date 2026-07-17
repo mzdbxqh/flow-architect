@@ -12,7 +12,7 @@
     "build:meeting:check": "node scripts/build-meeting-editor.mjs --check",
     "check:skills": "node scripts/check-skills.mjs",
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
-    "test:browser": "node --test test/meeting-package-browser.test.mjs test/process-draft-browser-e2e.test.mjs",
+    "test:browser": "node --test test/meeting-package-browser.test.mjs test/meeting-f2-browser.test.mjs test/meeting-f3-browser.test.mjs test/process-draft-browser-e2e.test.mjs",
     "test:contract": "node scripts/check-skills.mjs && node scripts/build-adapters.mjs --check",
     "test:smoke": "node --test test/integrated-review.test.mjs"
   },

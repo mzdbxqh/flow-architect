@@ -30,6 +30,16 @@ import {
   removeConfirmationTask,
 } from '../meeting-package/src/structural-commands.js';
 
+function confirmationDeclaration(overrides = {}) {
+  return {
+    confirm_role_id: 'Role_2',
+    co_completes: true,
+    confirm_bears_final_responsibility: true,
+    no_formal_approval_meeting: true,
+    ...overrides,
+  };
+}
+
 describe('Phase B: 业务合同结构命令', () => {
   let store;
   let initialSnapshot;
@@ -77,7 +87,7 @@ describe('Phase B: 业务合同结构命令', () => {
         lanes: [{ lane_id: 'Lane_1', name: '泳道 1', role_id: 'Role_1' }],
         nodes: [
           { node_id: 'Start_1', node_type: 'START_EVENT', name: '开始', lane_id: null },
-          { node_id: 'Task_1', node_type: 'MAIN_TASK', name: '活动 1', lane_id: 'Lane_1', activity_id: 'Activity_1' },
+          { node_id: 'Task_1', node_type: 'MAIN_TASK', name: '活动 1', lane_id: 'Lane_1' },
           { node_id: 'End_1', node_type: 'END_EVENT', name: '结束', lane_id: null },
         ],
         flows: [
@@ -258,6 +268,19 @@ describe('Phase B: 业务合同结构命令', () => {
         assert.ok(flow.condition.source_output);
       }
     });
+
+    it('AND 网关分支不得携带真假条件', () => {
+      const result = appendGatewayBranch(store, 'Task_1', 'AND', [
+        { label: '并行 A', condition: { source_output: '判断', operator: 'IS_TRUE' } },
+        { label: '并行 B', condition: { source_output: '判断', operator: 'IS_FALSE' } },
+      ]);
+      const snapshot = store.snapshot();
+      const branchFlows = snapshot.diagram.flows.filter(
+        flow => flow.source_ref === result.gateway_id,
+      );
+      assert.equal(branchFlows.length, 2);
+      assert.ok(branchFlows.every(flow => flow.condition === null));
+    });
   });
 
   describe('deleteNode', () => {
@@ -280,11 +303,15 @@ describe('Phase B: 业务合同结构命令', () => {
       // 验证相关 flow 被删除
       const flowsFromDeleted = snapshot.diagram.flows.filter(f => f.source_ref === 'Task_1' || f.target_ref === 'Task_1');
       assert.equal(flowsFromDeleted.length, 0);
+      assert.ok(snapshot.diagram.flows.some(
+        flow => flow.source_ref === 'Start_1' && flow.target_ref === 'End_1',
+      ), '删除主 Task 后应旁路重连前驱与后继');
     });
 
     it('删除确认 Task 仅取消 confirmation', () => {
       // 先添加确认 Task
-      addConfirmationTask(store, 'Activity_1', 'Role_2');
+      addLane(store, { lane_id: 'Lane_2', name: '确认人泳道', role_id: 'Role_2' });
+      addConfirmationTask(store, 'Activity_1', confirmationDeclaration());
 
       const snapshotBefore = store.snapshot();
       const confirmTask = snapshotBefore.diagram.nodes.find(n => n.node_type === 'CONFIRMATION_TASK');
@@ -304,6 +331,37 @@ describe('Phase B: 业务合同结构命令', () => {
       // 验证确认 Task 被删除
       const deletedTask = snapshotAfter.diagram.nodes.find(n => n.node_id === confirmTask.node_id);
       assert.ok(!deletedTask);
+      assert.ok(snapshotAfter.diagram.flows.some(
+        flow => flow.source_ref === 'Task_1' && flow.target_ref === 'End_1',
+      ));
+    });
+
+    it('删除网关后应将前驱连接到各分支 Task', () => {
+      const result = appendGatewayBranch(store, 'Task_1', 'XOR', [
+        { label: '分支 A', condition: { source_output: '判断', operator: 'IS_TRUE' } },
+        { label: '分支 B', condition: { source_output: '判断', operator: 'IS_FALSE' } },
+      ]);
+      deleteNode(store, result.gateway_id);
+      const snapshot = store.snapshot();
+      for (const taskId of result.branch_tasks) {
+        assert.ok(snapshot.diagram.flows.some(
+          flow => flow.source_ref === 'Task_1' && flow.target_ref === taskId,
+        ));
+      }
+    });
+
+    it('删除业务结束事件时应同步移除流程卡片结束结果', () => {
+      const { event_id: eventId } = addEndResultAfter(store, 'Task_1', { name: '拒绝结束' });
+      deleteNode(store, eventId);
+      const snapshot = store.snapshot();
+      assert.ok(!snapshot.diagram.nodes.some(node => node.node_id === eventId));
+      assert.ok(!snapshot.process_card.end_results.some(result => result.event_id === eventId));
+    });
+
+    it('不得删除唯一开始事件', () => {
+      const before = store.snapshot();
+      assert.throws(() => deleteNode(store, 'Start_1'), /开始事件/);
+      assert.deepEqual(store.snapshot(), before);
     });
   });
 
@@ -337,6 +395,40 @@ describe('Phase B: 业务合同结构命令', () => {
         moveActivityToAccountableLane(store, 'Activity_1');
       }, /没有对应泳道/);
     });
+
+    it('主责角色不是恰好一个时应失败', () => {
+      store.upsertActivity({
+        ...store.snapshot().activities.find(a => a.activity_id === 'Activity_1'),
+        role_assignments: [
+          { role_id: 'Role_1', responsibility: 'R' },
+          { role_id: 'Role_2', responsibility: 'R' },
+        ],
+      });
+      assert.throws(
+        () => moveActivityToAccountableLane(store, 'Activity_1'),
+        /恰有一个 R/,
+      );
+    });
+
+    it('移动主 Task 时确认从 Task 保持在确认角色泳道', () => {
+      addLane(store, { lane_id: 'Lane_2', name: '确认人泳道', role_id: 'Role_2' });
+      addLane(store, { lane_id: 'Lane_3', name: '新主责泳道', role_id: 'Role_3' });
+      addConfirmationTask(store, 'Activity_1', confirmationDeclaration());
+      store.upsertActivity({
+        ...store.snapshot().activities.find(a => a.activity_id === 'Activity_1'),
+        role_assignments: [{ role_id: 'Role_3', responsibility: 'R' }],
+      });
+
+      moveActivityToAccountableLane(store, 'Activity_1');
+
+      const snapshot = store.snapshot();
+      const binding = snapshot.diagram.task_bindings.find(b => b.activity_id === 'Activity_1');
+      assert.equal(snapshot.diagram.nodes.find(n => n.node_id === 'Task_1').lane_id, 'Lane_3');
+      assert.equal(
+        snapshot.diagram.nodes.find(n => n.node_id === binding.confirmation_task_id).lane_id,
+        'Lane_2',
+      );
+    });
   });
 
   describe('addLane', () => {
@@ -351,6 +443,24 @@ describe('Phase B: 业务合同结构命令', () => {
       assert.ok(newLane);
       assert.equal(newLane.name, '泳道 2');
       assert.equal(newLane.role_id, 'Role_2');
+    });
+
+    it('省略 lane_id 时应确定性分配最小可用 ID', () => {
+      assert.equal(addLane(store, { name: '泳道 2', role_id: 'Role_2' }).lane_id, 'Lane_2');
+      assert.equal(addLane(store, { name: '泳道 3', role_id: 'Role_3' }).lane_id, 'Lane_3');
+    });
+
+    it('重复 lane_id 或 role_id 时应失败且不修改合同', () => {
+      const before = store.snapshot();
+      assert.throws(
+        () => addLane(store, { lane_id: 'Lane_1', name: '重复 ID', role_id: 'Role_2' }),
+        /泳道 ID 已存在/,
+      );
+      assert.throws(
+        () => addLane(store, { name: '重复角色', role_id: 'Role_1' }),
+        /角色泳道已存在/,
+      );
+      assert.deepEqual(store.snapshot(), before);
     });
   });
 
@@ -379,6 +489,14 @@ describe('Phase B: 业务合同结构命令', () => {
       assert.equal(flowsFromEvent.length, 1);
       assert.equal(flowsFromEvent[0].target_ref, 'End_1');
     });
+
+    it('省略 node_id 时应确定性分配最小可用 ID', () => {
+      const result = addIntermediateEventAfter(store, 'Task_1', {
+        name: '等待消息',
+        event_type: 'INTERMEDIATE_MESSAGE_CATCH',
+      });
+      assert.equal(result.node_id, 'Intermediate_1');
+    });
   });
 
   describe('addEndResultAfter', () => {
@@ -406,58 +524,94 @@ describe('Phase B: 业务合同结构命令', () => {
       assert.ok(endResult);
       assert.equal(endResult.name, '完成');
     });
+
+    it('省略 event_id 时应确定性分配最小可用 ID', () => {
+      const result = addEndResultAfter(store, 'Task_1', { name: '另一结束结果' });
+      assert.equal(result.event_id, 'End_2');
+    });
   });
 
   describe('connectNodes', () => {
     it('应连接两个节点', () => {
-      const result = connectNodes(store, 'Task_1', 'End_1', null);
+      const result = connectNodes(store, 'Start_1', 'End_1', null);
 
       const snapshot = store.snapshot();
 
       // 验证流被创建
       const flow = snapshot.diagram.flows.find(f => f.flow_id === result.flow_id);
       assert.ok(flow);
-      assert.equal(flow.source_ref, 'Task_1');
+      assert.equal(flow.source_ref, 'Start_1');
       assert.equal(flow.target_ref, 'End_1');
+    });
+
+    it('源或目标节点不存在时应在修改前失败', () => {
+      const before = store.snapshot();
+      assert.throws(
+        () => connectNodes(store, 'Task_1', 'Missing_1', null),
+        /目标节点不存在/,
+      );
+      assert.deepEqual(store.snapshot(), before);
     });
   });
 
   describe('addConfirmationTask/removeConfirmationTask', () => {
     it('应添加确认 Task 并满足三条件', () => {
-      const result = addConfirmationTask(store, 'Activity_1', 'Role_2');
+      addLane(store, { lane_id: 'Lane_2', name: '确认人泳道', role_id: 'Role_2' });
+      const result = addConfirmationTask(store, 'Activity_1', confirmationDeclaration());
 
       const snapshot = store.snapshot();
 
       // 验证确认 Task 被创建
       const confirmTask = snapshot.diagram.nodes.find(n => n.node_type === 'CONFIRMATION_TASK');
       assert.ok(confirmTask);
-      assert.equal(confirmTask.lane_id, 'Lane_1'); // 主 Task 的泳道
+      assert.equal(confirmTask.lane_id, 'Lane_2');
 
       // 验证 confirmation 被设置
       const activity = snapshot.activities.find(a => a.activity_id === 'Activity_1');
       assert.ok(activity.confirmation);
       assert.equal(activity.confirmation.confirm_role_id, 'Role_2');
+      assert.equal(activity.confirmation.co_completes, true);
+      assert.equal(activity.confirmation.confirm_bears_final_responsibility, true);
+      assert.equal(activity.confirmation.no_formal_approval_meeting, true);
       assert.equal(activity.confirmation.confirmation_task_id, confirmTask.node_id);
 
       // 验证 binding 被更新
       const binding = snapshot.diagram.task_bindings.find(b => b.activity_id === 'Activity_1');
       assert.equal(binding.confirmation_task_id, confirmTask.node_id);
+
+      assert.ok(snapshot.diagram.flows.some(
+        flow => flow.source_ref === 'Task_1' && flow.target_ref === confirmTask.node_id,
+      ));
+      assert.ok(snapshot.diagram.flows.some(
+        flow => flow.source_ref === confirmTask.node_id && flow.target_ref === 'End_1',
+      ));
+      assert.ok(!snapshot.diagram.flows.some(
+        flow => flow.source_ref === 'Task_1' && flow.target_ref === 'End_1',
+      ));
     });
 
     it('确认角色为空时应失败（FA-DRAFT-CONFIRM-001）', () => {
       assert.throws(() => {
-        addConfirmationTask(store, 'Activity_1', null);
+        addConfirmationTask(store, 'Activity_1', confirmationDeclaration({ confirm_role_id: null }));
       }, /FA-DRAFT-CONFIRM-001/);
     });
 
     it('确认角色与主责角色相同时应失败（FA-DRAFT-CONFIRM-001）', () => {
       assert.throws(() => {
-        addConfirmationTask(store, 'Activity_1', 'Role_1');
+        addConfirmationTask(store, 'Activity_1', confirmationDeclaration({ confirm_role_id: 'Role_1' }));
       }, /FA-DRAFT-CONFIRM-001/);
     });
 
+    it('三个业务条件任一不满足时应失败（FA-DRAFT-CONFIRM-001）', () => {
+      addLane(store, { lane_id: 'Lane_2', name: '确认人泳道', role_id: 'Role_2' });
+      assert.throws(() => {
+        addConfirmationTask(store, 'Activity_1', confirmationDeclaration({ co_completes: false }));
+      }, /FA-DRAFT-CONFIRM-001.*三个条件/);
+    });
+
     it('应移除确认 Task', () => {
-      addConfirmationTask(store, 'Activity_1', 'Role_2');
+      addLane(store, { lane_id: 'Lane_2', name: '确认人泳道', role_id: 'Role_2' });
+      addConfirmationTask(store, 'Activity_1', confirmationDeclaration());
       removeConfirmationTask(store, 'Activity_1');
 
       const snapshot = store.snapshot();
@@ -473,6 +627,9 @@ describe('Phase B: 业务合同结构命令', () => {
       // 验证 binding 被更新
       const binding = snapshot.diagram.task_bindings.find(b => b.activity_id === 'Activity_1');
       assert.equal(binding.confirmation_task_id, null);
+      assert.ok(snapshot.diagram.flows.some(
+        flow => flow.source_ref === 'Task_1' && flow.target_ref === 'End_1',
+      ));
     });
   });
 });

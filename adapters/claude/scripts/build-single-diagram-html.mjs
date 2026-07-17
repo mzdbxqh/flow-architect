@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildMeetingPackageHtml, validateProcessId } from './lib/meeting-package-html.mjs';
+import { buildMeetingPackageHtml } from './lib/meeting-package-html.mjs';
 import { compileBpmn } from './lib/bpmn-compiler.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,14 +10,20 @@ const __dirname = path.dirname(__filename);
 function parseArgs(args) {
   const result = {};
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--draft' && args[i + 1]) result.draft = args[++i];
-    else if (args[i] === '--questions' && args[i + 1]) result.questions = args[++i];
-    else if (args[i] === '--title' && args[i + 1]) result.title = args[++i];
-    else if (args[i] === '--revision' && args[i + 1]) result.revision = args[++i];
-    else if (args[i] === '--package-id' && args[i + 1]) result.packageId = args[++i];
-    else if (args[i] === '--process-id' && args[i + 1]) result.processId = args[++i];
-    else if (args[i] === '--run-dir' && args[i + 1]) result.runDir = args[++i];
-    else if (args[i] === '--output' && args[i + 1]) result.output = args[++i];
+    const flag = args[i];
+    const key = {
+      '--draft': 'draft',
+      '--title': 'title',
+      '--revision': 'revision',
+      '--package-id': 'packageId',
+      '--run-dir': 'runDir',
+      '--output': 'output',
+    }[flag];
+    if (!key) throw new Error(`未知参数：${flag}`);
+    if (!args[i + 1] || args[i + 1].startsWith('--')) {
+      throw new Error(`参数缺少值：${flag}`);
+    }
+    result[key] = args[++i];
   }
   return result;
 }
@@ -48,15 +54,23 @@ function validatePath(filePath, runDir) {
   return resolved;
 }
 
-const args = parseArgs(process.argv.slice(2));
-if (!args.draft || !args.questions || !args.title || !args.revision || !args.packageId || !args.runDir || !args.output) {
+let args;
+try {
+  args = parseArgs(process.argv.slice(2));
+} catch (error) {
+  console.error(JSON.stringify({ status: 'FAILED', error: error.message }));
+  process.exit(1);
+}
+if (!args.draft || !args.title || !args.revision || !args.packageId || !args.runDir || !args.output) {
   console.error(JSON.stringify({ status: 'FAILED', error: 'Missing required arguments' }));
   process.exit(1);
 }
 
 try {
   const draft = JSON.parse(fs.readFileSync(path.resolve(args.draft), 'utf8'));
-  const questions = JSON.parse(fs.readFileSync(path.resolve(args.questions), 'utf8'));
+  if (draft.schema_version !== '2.0.0') {
+    throw new Error('仅支持 schema_version 2.0.0 的流程草稿');
+  }
 
   const runDir = path.resolve(args.runDir);
   fs.mkdirSync(runDir, { recursive: true });
@@ -66,18 +80,6 @@ try {
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
-  const processId = args.processId || draft.process_card?.process_id || 'Process_1';
-
-  // 确保 draft 有 schema_version
-  if (!draft.schema_version) {
-    draft.schema_version = '2.0.0';
-  }
-
-  // 确保 draft 有问题
-  if (!draft.questions) {
-    draft.questions = questions;
-  }
-
   const { xml: bpmnXml } = compileBpmn(draft);
 
   const html = buildMeetingPackageHtml({
@@ -85,7 +87,7 @@ try {
     bpmnXml,
     metadata: {
       package_id: args.packageId,
-      process_id: processId,
+      process_id: draft.process_card.process_id,
       title: args.title,
       revision: args.revision,
       based_on_revision: null,

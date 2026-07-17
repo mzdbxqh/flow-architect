@@ -29,9 +29,9 @@ function normalizeKeys(obj) {
  */
 export async function contentHash(bpmnXml, questions, { processCard, activities, diagram, provenance, sourceSummary } = {}) {
   const canonicalQuestions = questions.map(q => ({
-    question_id: q.question_id || q.id,
+    question_id: q.question_id,
     text: q.text,
-    target_paths: [...(q.target_paths || q.element_ids || [])],
+    target_paths: [...q.target_paths],
     status: q.status,
     answer: q.answer,
   }));

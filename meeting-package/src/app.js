@@ -28,11 +28,11 @@ import * as structuralCommands from './structural-commands.js';
     payload: {
       schema_version: schemaVersion,
       process_card: payload.process_card,
-      activities: payload.activities || [],
-      diagram: payload.diagram || { lanes: [], nodes: [], flows: [], task_bindings: [], layout_version: '2.0.0' },
-      questions: payload.questions || [],
-      provenance: payload.provenance || {},
-      source_summary: payload.source_summary || { total_blocks: 0, formats: [], evidence_refs: [] },
+      activities: payload.activities,
+      diagram: payload.diagram,
+      questions: payload.questions,
+      provenance: payload.provenance,
+      source_summary: payload.source_summary,
       metadata: payload.metadata,
       bpmn_xml: payload.bpmn_xml,
     },
@@ -131,9 +131,23 @@ import * as structuralCommands from './structural-commands.js';
   // --- Process Card Controller ---
   const cardPanel = document.querySelector('#fa-card-panel');
   if (cardPanel) {
-    const cardController = new ProcessCardController({ store, root: cardPanel });
+    const cardController = new ProcessCardController({ store, root: cardPanel, autoLayout });
     cardController.render();
+    store.subscribe((kind) => {
+      if (kind === 'restore') cardController.render();
+    });
     cardPanel.addEventListener('fa-level-change', () => updateTabApplicability());
+
+  // F2: 删除终点确认
+  cardPanel.addEventListener('fa-delete-end-result', async (e) => {
+    const { eventId, eventName } = e.detail;
+    const deleteMessage = document.querySelector('#fa-delete-confirm-message');
+    if (deleteMessage) {
+      deleteMessage.textContent = `确定要删除终点「${eventName}」？此操作不可撤销。`;
+    }
+    pendingDeleteTarget = { type: 'end-result', eventId, eventName };
+    document.querySelector('#fa-delete-confirm-dialog').showModal();
+  });
   }
 
   // --- Activity Catalog Controller ---
@@ -155,7 +169,7 @@ import * as structuralCommands from './structural-commands.js';
     root: document.querySelector('#fa-questions'),
     onChange: (questions) => {
       for (const q of questions) {
-        store.updateQuestion(q.question_id || q.id, {
+        store.updateQuestion(q.question_id, {
           answer: q.answer,
           status: q.status,
         });
@@ -170,8 +184,18 @@ import * as structuralCommands from './structural-commands.js';
 
   // --- Palette business event routing ---
   let pendingDeleteTarget = null;
+  let pendingConfirmationActivityId = null;
   let currentGatewayType = 'XOR';
   const eventBus = modeler.get('eventBus');
+
+  function openSelectedDeleteDialog() {
+    if (!diagramController.selected) return;
+    pendingDeleteTarget = null;
+    const selectedId = diagramController.selected.id;
+    document.querySelector('#fa-delete-confirm-message').textContent =
+      `确定要删除「${diagramController.selected.businessObject?.name || selectedId}」？此操作不可撤销。`;
+    document.querySelector('#fa-delete-confirm-dialog').showModal();
+  }
 
   eventBus.on('flowArchitect.paletteAction', (event) => {
     const { action } = event;
@@ -191,14 +215,12 @@ import * as structuralCommands from './structural-commands.js';
         const act = store.snapshot().activities.find(a => a.activity_id === binding.activity_id);
         if (!act) { alert('关联活动不存在'); return; }
         if (act.confirmation) { alert('该活动已有确认从 Task'); return; }
-        const confirmRoleId = prompt('请输入确认角色 ID（不能与主责角色相同）');
-        if (!confirmRoleId) return;
-        const doConfirm = (store) => structuralCommands.addConfirmationTask(store, act.activity_id, confirmRoleId);
-        if (autoLayout) {
-          autoLayout.applyStructureChange(doConfirm, '添加确认从 Task').catch(e => alert(e.message));
-        } else {
-          try { doConfirm(store); } catch (e) { alert(e.message); }
-        }
+        pendingConfirmationActivityId = act.activity_id;
+        document.querySelector('#fa-confirmation-role').value = '';
+        document.querySelector('#fa-confirmation-co-completes').checked = false;
+        document.querySelector('#fa-confirmation-final-responsibility').checked = false;
+        document.querySelector('#fa-confirmation-no-meeting').checked = false;
+        document.querySelector('#fa-confirmation-dialog').showModal();
         break;
       }
       case 'create.xor':
@@ -225,14 +247,11 @@ import * as structuralCommands from './structural-commands.js';
         if (!selected) { alert('请先选择一个节点'); return; }
         const name = prompt('中间事件名称');
         if (!name) return;
-        const doIntermediate = (store) => {
-          const nodeId = `Intermediate_${Date.now()}`;
-          return structuralCommands.addIntermediateEventAfter(store, selected.id, {
-            node_id: nodeId,
-            name,
-            event_type: 'INTERMEDIATE_MESSAGE_CATCH',
-          });
-        };
+        const doIntermediate = (store) => structuralCommands.addIntermediateEventAfter(
+          store,
+          selected.id,
+          { name, event_type: 'INTERMEDIATE_MESSAGE_CATCH' },
+        );
         if (autoLayout) {
           autoLayout.applyStructureChange(doIntermediate, '添加中间事件').catch(e => alert(e.message));
         } else {
@@ -245,13 +264,11 @@ import * as structuralCommands from './structural-commands.js';
         if (!selected) { alert('请先选择一个节点'); return; }
         const name = prompt('结束结果名称');
         if (!name) return;
-        const doEnd = (store) => {
-          const eventId = `End_${Date.now()}`;
-          return structuralCommands.addEndResultAfter(store, selected.id, {
-            event_id: eventId,
-            name,
-          });
-        };
+        const doEnd = (store) => structuralCommands.addEndResultAfter(
+          store,
+          selected.id,
+          { name },
+        );
         if (autoLayout) {
           autoLayout.applyStructureChange(doEnd, '添加结束事件').catch(e => alert(e.message));
         } else {
@@ -264,10 +281,7 @@ import * as structuralCommands from './structural-commands.js';
         if (!name) return;
         const roleId = prompt('角色 ID');
         if (!roleId) return;
-        const doLane = (store) => {
-          const laneId = `Lane_${Date.now()}`;
-          return structuralCommands.addLane(store, { lane_id: laneId, name, role_id: roleId });
-        };
+        const doLane = (store) => structuralCommands.addLane(store, { name, role_id: roleId });
         if (autoLayout) {
           autoLayout.applyStructureChange(doLane, '添加泳道').catch(e => alert(e.message));
         } else {
@@ -276,11 +290,21 @@ import * as structuralCommands from './structural-commands.js';
         break;
       }
       case 'connect': {
-        alert('请使用工具栏的「后插活动」或「增加判断」来创建结构连接');
+        const selected = diagramController.selected;
+        if (!selected) { alert('请先选择顺序流的源节点'); return; }
+        const targetId = prompt('请输入顺序流目标节点 ID');
+        if (!targetId) return;
+        const connect = store => structuralCommands.connectNodes(
+          store,
+          selected.id,
+          targetId.trim(),
+          null,
+        );
+        autoLayout.applyStructureChange(connect, '添加顺序流').catch(e => alert(e.message));
         break;
       }
       case 'delete': {
-        diagramController.deleteSelected().catch(e => alert(e.message));
+        openSelectedDeleteDialog();
         break;
       }
       default:
@@ -295,10 +319,16 @@ import * as structuralCommands from './structural-commands.js';
     document.querySelector('#fa-rename-dialog').showModal();
   });
 
-  document.querySelector('#fa-rename-confirm').addEventListener('click', () => {
-    const name = document.querySelector('#fa-rename-input').value;
-    diagramController.renameSelected(name);
-    document.querySelector('#fa-rename-dialog').close();
+  document.querySelector('#fa-rename-confirm').addEventListener('click', (event) => {
+    event.preventDefault();
+    const name = document.querySelector('#fa-rename-input').value.trim();
+    if (!name) { alert('活动名称不能为空'); return; }
+    try {
+      diagramController.renameSelected(name);
+      document.querySelector('#fa-rename-dialog').close();
+    } catch (error) {
+      alert(error.message);
+    }
   });
 
   document.querySelector('#fa-rename-cancel').addEventListener('click', () => {
@@ -311,8 +341,10 @@ import * as structuralCommands from './structural-commands.js';
     document.querySelector('#fa-insert-dialog').showModal();
   });
 
-  document.querySelector('#fa-insert-confirm').addEventListener('click', async () => {
-    const name = document.querySelector('#fa-insert-input').value;
+  document.querySelector('#fa-insert-confirm').addEventListener('click', async (event) => {
+    event.preventDefault();
+    const name = document.querySelector('#fa-insert-input').value.trim();
+    if (!name) { alert('新活动名称不能为空'); return; }
     try {
       await diagramController.insertL5TaskAfterSelected(name);
       document.querySelector('#fa-insert-dialog').close();
@@ -325,6 +357,31 @@ import * as structuralCommands from './structural-commands.js';
     document.querySelector('#fa-insert-dialog').close();
   });
 
+  document.querySelector('#fa-confirmation-confirm').addEventListener('click', async (event) => {
+    event.preventDefault();
+    if (!pendingConfirmationActivityId) return;
+    const declaration = {
+      confirm_role_id: document.querySelector('#fa-confirmation-role').value.trim(),
+      co_completes: document.querySelector('#fa-confirmation-co-completes').checked,
+      confirm_bears_final_responsibility: document.querySelector('#fa-confirmation-final-responsibility').checked,
+      no_formal_approval_meeting: document.querySelector('#fa-confirmation-no-meeting').checked,
+    };
+    const activityId = pendingConfirmationActivityId;
+    const doConfirm = (store) => structuralCommands.addConfirmationTask(store, activityId, declaration);
+    try {
+      await autoLayout.applyStructureChange(doConfirm, '添加确认从 Task');
+      pendingConfirmationActivityId = null;
+      document.querySelector('#fa-confirmation-dialog').close();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+
+  document.querySelector('#fa-confirmation-cancel').addEventListener('click', () => {
+    pendingConfirmationActivityId = null;
+    document.querySelector('#fa-confirmation-dialog').close();
+  });
+
   document.querySelector('#fa-add-gateway').addEventListener('click', () => {
     if (!diagramController.selected) return;
     document.querySelector('#fa-gateway-question').value = '';
@@ -333,10 +390,15 @@ import * as structuralCommands from './structural-commands.js';
     document.querySelector('#fa-gateway-dialog').showModal();
   });
 
-  document.querySelector('#fa-gateway-confirm').addEventListener('click', async () => {
-    const question = document.querySelector('#fa-gateway-question').value;
-    const yesLabel = document.querySelector('#fa-gateway-yes').value;
-    const noLabel = document.querySelector('#fa-gateway-no').value;
+  document.querySelector('#fa-gateway-confirm').addEventListener('click', async (event) => {
+    event.preventDefault();
+    const question = document.querySelector('#fa-gateway-question').value.trim();
+    const yesLabel = document.querySelector('#fa-gateway-yes').value.trim();
+    const noLabel = document.querySelector('#fa-gateway-no').value.trim();
+    if (!question || !yesLabel || !noLabel) {
+      alert('判断问题和两个分支活动名称均不能为空');
+      return;
+    }
     try {
       await diagramController.appendGatewayBranch(currentGatewayType, question, yesLabel, noLabel);
       document.querySelector('#fa-gateway-dialog').close();
@@ -350,11 +412,7 @@ import * as structuralCommands from './structural-commands.js';
   });
 
   document.querySelector('#fa-delete').addEventListener('click', () => {
-    if (!diagramController.selected) return;
-    const selectedId = diagramController.selected.id;
-    document.querySelector('#fa-delete-confirm-message').textContent =
-      `确定要删除「${diagramController.selected.businessObject?.name || selectedId}」？此操作不可撤销。`;
-    document.querySelector('#fa-delete-confirm-dialog').showModal();
+    openSelectedDeleteDialog();
   });
 
   // 活动表"删除此活动"按钮二次确认
@@ -367,11 +425,16 @@ import * as structuralCommands from './structural-commands.js';
   });
 
   // 删除确认对话框：确认按钮
-  document.querySelector('#fa-delete-confirm').addEventListener('click', async () => {
+  document.querySelector('#fa-delete-confirm').addEventListener('click', async (event) => {
+    event.preventDefault();
     try {
       if (pendingDeleteTarget?.type === 'activity') {
         const doDelete = (store) => structuralCommands.deleteNode(store, pendingDeleteTarget.mainTaskId);
         await autoLayout.applyStructureChange(doDelete, '删除活动');
+      } else if (pendingDeleteTarget?.type === 'end-result') {
+        const eventId = pendingDeleteTarget.eventId;
+        const doDeleteEnd = (store) => structuralCommands.deleteNode(store, eventId);
+        await autoLayout.applyStructureChange(doDeleteEnd, '删除终点');
       } else {
         await diagramController.deleteSelected();
       }
@@ -387,14 +450,6 @@ import * as structuralCommands from './structural-commands.js';
   document.querySelector('#fa-delete-cancel').addEventListener('click', () => {
     pendingDeleteTarget = null;
     document.querySelector('#fa-delete-confirm-dialog').close();
-  });
-
-  document.querySelector('#fa-undo').addEventListener('click', () => {
-    diagramController.undo();
-  });
-
-  document.querySelector('#fa-redo').addEventListener('click', () => {
-    diagramController.redo();
   });
 
   document.querySelector('#fa-export-html').addEventListener('click', () => {

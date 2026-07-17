@@ -389,7 +389,7 @@ export class ActivityCatalogController {
 
     const list = document.createElement('ul');
     list.className = 'fa-array-list';
-    for (const ra of act.role_assignments) {
+    for (const [assignmentIndex, ra] of act.role_assignments.entries()) {
       const li = document.createElement('li');
       li.className = 'fa-role-item';
       const roleInput = document.createElement('input');
@@ -411,19 +411,19 @@ export class ActivityCatalogController {
 
       // 角色 ID 变更时保存并尝试移泳道
       const handleRoleChange = async () => {
-        const current = this.#store.snapshot().activities.find(a => a.activity_id === act.activity_id);
-        if (!current) return;
-        // `ra` belongs to the render-time snapshot, while `current` is a fresh
-        // DraftStore clone. Update the corresponding item in the fresh object.
-        const assignmentIndex = act.role_assignments.indexOf(ra);
-        if (assignmentIndex < 0 || !current.role_assignments[assignmentIndex]) return;
-        current.role_assignments[assignmentIndex] = {
-          role_id: roleInput.value,
-          responsibility: respSelect.value,
-        };
-        this.#store.upsertActivity(current);
-        // 尝试移泳道
-        await this.#tryMoveToLane(act.activity_id);
+        try {
+          await this.#applyRoleChange(act.activity_id, current => {
+            if (!current.role_assignments[assignmentIndex]) return;
+            current.role_assignments[assignmentIndex] = {
+              role_id: roleInput.value.trim(),
+              responsibility: respSelect.value,
+            };
+          });
+        } catch (error) {
+          roleInput.value = ra.role_id;
+          respSelect.value = ra.responsibility;
+          alert(error.message);
+        }
       };
       roleInput.addEventListener('change', handleRoleChange);
       respSelect.addEventListener('change', handleRoleChange);
@@ -432,14 +432,16 @@ export class ActivityCatalogController {
       removeBtn.type = 'button';
       removeBtn.textContent = '删除';
       removeBtn.className = 'fa-array-remove';
-      removeBtn.addEventListener('click', () => {
-        const current = this.#store.snapshot().activities.find(a => a.activity_id === act.activity_id);
-        if (!current) return;
-        const idx = current.role_assignments.indexOf(ra);
-        if (idx >= 0) current.role_assignments.splice(idx, 1);
-        this.#store.upsertActivity(current);
-        this.#renderDetail(this.#store.snapshot().activities.find(a => a.activity_id === act.activity_id),
-          this.#root.querySelector('#fa-activity-detail'));
+      removeBtn.addEventListener('click', async () => {
+        try {
+          await this.#applyRoleChange(act.activity_id, current => {
+            current.role_assignments.splice(assignmentIndex, 1);
+          });
+          this.#renderDetail(this.#store.snapshot().activities.find(a => a.activity_id === act.activity_id),
+            this.#root.querySelector('#fa-activity-detail'));
+        } catch (error) {
+          alert(error.message);
+        }
       });
       li.append(roleInput, respSelect, removeBtn);
       list.appendChild(li);
@@ -451,11 +453,15 @@ export class ActivityCatalogController {
     addBtn.textContent = '新增角色';
     addBtn.className = 'fa-array-add';
     addBtn.addEventListener('click', () => {
+      const roleId = prompt('请输入新增角色 ID');
+      if (!roleId) return;
       const current = this.#store.snapshot().activities.find(a => a.activity_id === act.activity_id);
       if (!current) return;
-      const codes = current.responsibility_model === 'OARP'
-        ? ['O', 'A', 'R', 'P'] : ['R', 'A', 'S', 'C', 'I'];
-      current.role_assignments.push({ role_id: '', responsibility: codes[0] });
+      if (current.role_assignments.some(item => item.role_id === roleId.trim())) {
+        alert(`角色已存在：${roleId.trim()}`);
+        return;
+      }
+      current.role_assignments.push({ role_id: roleId.trim(), responsibility: 'A' });
       this.#store.upsertActivity(current);
       this.#renderDetail(this.#store.snapshot().activities.find(a => a.activity_id === act.activity_id),
         this.#root.querySelector('#fa-activity-detail'));
@@ -464,18 +470,26 @@ export class ActivityCatalogController {
     return wrap;
   }
 
-  async #tryMoveToLane(activityId) {
-    const doMove = (store) => {
+  async #applyRoleChange(activityId, update) {
+    const mutation = (store) => {
+      const current = store.snapshot().activities.find(
+        activity => activity.activity_id === activityId,
+      );
+      if (!current) throw new Error(`活动不存在：${activityId}`);
+      update(current);
+      store.upsertActivity(current);
       structuralCommands.moveActivityToAccountableLane(store, activityId);
     };
-    try {
-      if (this.#autoLayout) {
-        await this.#autoLayout.applyStructureChange(doMove, '移泳道');
-      } else {
-        doMove(this.#store);
+    if (this.#autoLayout) {
+      await this.#autoLayout.applyStructureChange(mutation, '修改角色分工并移泳道');
+    } else {
+      const snapshot = this.#store.snapshot();
+      try {
+        mutation(this.#store);
+      } catch (error) {
+        this.#store.restore(snapshot);
+        throw error;
       }
-    } catch (_) {
-      // 无对应泳道等失败不阻断保存
     }
   }
 
@@ -554,8 +568,13 @@ export class ActivityCatalogController {
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.textContent = '移除确认从 Task';
-      removeBtn.addEventListener('click', () => {
-        this.#saveActivity(act.activity_id, { confirmation: null });
+      removeBtn.addEventListener('click', async () => {
+        const remove = store => structuralCommands.removeConfirmationTask(store, act.activity_id);
+        if (this.#autoLayout) {
+          await this.#autoLayout.applyStructureChange(remove, '移除确认从 Task');
+        } else {
+          remove(this.#store);
+        }
         this.render();
       });
       wrap.appendChild(removeBtn);
@@ -568,9 +587,38 @@ export class ActivityCatalogController {
   }
 
   #saveActivity(activityId, updates) {
-    const act = this.#store.snapshot().activities.find(a => a.activity_id === activityId);
+    const snapshot = this.#store.snapshot();
+    const act = snapshot.activities.find(a => a.activity_id === activityId);
     if (!act) return;
+    if (updates.responsibility_model
+      && updates.responsibility_model !== act.responsibility_model) {
+      const oldCode = act.responsibility_model === 'OARP' ? 'O' : 'R';
+      const newCode = updates.responsibility_model === 'OARP' ? 'O' : 'R';
+      if (!act.role_assignments.some(role => role.responsibility === newCode)) {
+        const oldAccountable = act.role_assignments.find(
+          role => role.responsibility === oldCode,
+        );
+        if (oldAccountable) oldAccountable.responsibility = newCode;
+      }
+    }
     Object.assign(act, updates);
+
+    if (typeof updates.name === 'string') {
+      const binding = snapshot.diagram.task_bindings.find(
+        item => item.activity_id === activityId,
+      );
+      const node = binding
+        ? snapshot.diagram.nodes.find(item => item.node_id === binding.main_task_id)
+        : null;
+      if (node) {
+        node.name = updates.name;
+        this.#store.updateDiagram(snapshot.diagram);
+        const modeler = this.#autoLayout?.modeler;
+        const element = modeler?.get('elementRegistry').get(node.node_id);
+        if (element) modeler.get('modeling').updateLabel(element, updates.name);
+      }
+    }
+
     this.#store.upsertActivity(act);
   }
 

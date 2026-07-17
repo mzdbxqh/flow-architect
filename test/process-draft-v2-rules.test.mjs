@@ -47,6 +47,18 @@ function minimalDraft(overrides = {}) {
   };
 }
 
+function boundaryDraft() {
+  const draft = minimalDraft();
+  draft.diagram.nodes = [
+    { node_id: 'Start-1', node_type: 'START_EVENT', name: '触发事件', lane_id: null },
+    { node_id: 'End-1', node_type: 'END_EVENT', name: '业务结果', lane_id: null },
+  ];
+  draft.diagram.flows = [
+    { flow_id: 'Flow-1', source_ref: 'Start-1', target_ref: 'End-1', condition: null },
+  ];
+  return draft;
+}
+
 // 辅助：构造标准 RASCI 活动
 function standardActivity(overrides = {}) {
   return {
@@ -434,6 +446,27 @@ describe('validateDraftBusinessRules — 确认从 Task 门禁', () => {
 });
 
 describe('validateDraftBusinessRules — 泳道一致性门禁', () => {
+  it('泳道 ID 或角色重复时报错（FA-DRAFT-LANE-003）', async () => {
+    const { validateDraftBusinessRules } = await loadRules();
+    const draft = minimalDraft({
+      diagram: {
+        lanes: [
+          { lane_id: 'Lane-1', name: '泳道一', role_id: 'Role-1' },
+          { lane_id: 'Lane-1', name: '泳道二', role_id: 'Role-1' },
+        ],
+        nodes: [
+          { node_id: 'Start-1', node_type: 'START_EVENT', name: '触发事件', lane_id: null },
+          { node_id: 'End-1', node_type: 'END_EVENT', name: '业务结果', lane_id: null },
+        ],
+        flows: [{ flow_id: 'Flow-1', source_ref: 'Start-1', target_ref: 'End-1', condition: null }],
+        task_bindings: [], layout_version: '2.0.0',
+      },
+    });
+    const result = validateDraftBusinessRules(draft);
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some(error => error.code === 'FA-DRAFT-LANE-003'));
+  });
+
   it('主 Task 泳道与 RASCI.R 不一致时报错（FA-DRAFT-LANE-001）', async () => {
     const { validateDraftBusinessRules } = await loadRules();
     const draft = minimalDraft({
@@ -546,6 +579,25 @@ describe('validateDraftBusinessRules — parent_process_name 必填门禁', () =
       '应包含 FA-DRAFT-CARD-001');
   });
 
+  it('多个开始事件应报错（FA-DRAFT-CARD-002）', async () => {
+    const { validateDraftBusinessRules } = await loadRules();
+    const draft = minimalDraft({
+      diagram: {
+        lanes: [],
+        nodes: [
+          { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始一', lane_id: null },
+          { node_id: 'Start-2', node_type: 'START_EVENT', name: '开始二', lane_id: null },
+          { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+        ],
+        flows: [], task_bindings: [], layout_version: '2.0.0',
+      },
+    });
+    const result = validateDraftBusinessRules(draft);
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some(error =>
+      error.code === 'FA-DRAFT-CARD-002' && /恰好一个/.test(error.message)));
+  });
+
   it('parent_process_name 为 null 时通过', async () => {
     const { validateDraftBusinessRules } = await loadRules();
     const draft = minimalDraft({
@@ -553,9 +605,9 @@ describe('validateDraftBusinessRules — parent_process_name 必填门禁', () =
       diagram: {
         lanes: [{ lane_id: 'Lane-R', name: 'R 泳道', role_id: 'Role-R' }],
         nodes: [
-          { node_id: 'Start-1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+          { node_id: 'Start-1', node_type: 'START_EVENT', name: '触发事件', lane_id: null },
           { node_id: 'Task-1', node_type: 'MAIN_TASK', name: '审核申请', lane_id: 'Lane-R' },
-          { node_id: 'End-1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+          { node_id: 'End-1', node_type: 'END_EVENT', name: '业务结果', lane_id: null },
         ],
         flows: [],
         task_bindings: [{ activity_id: 'Activity-1', main_task_id: 'Task-1', confirmation_task_id: null }],
@@ -564,6 +616,24 @@ describe('validateDraftBusinessRules — parent_process_name 必填门禁', () =
     });
     const result = validateDraftBusinessRules(draft);
     assert.equal(result.valid, true, `parent_process_name=null 应通过: ${JSON.stringify(result.errors)}`);
+  });
+});
+
+describe('validateDraftBusinessRules — 流程卡片起终点与图一致性', () => {
+  it('起点 ID 或名称漂移时报错（FA-DRAFT-CARD-004）', async () => {
+    const { validateDraftBusinessRules } = await loadRules();
+    const draft = boundaryDraft();
+    draft.process_card.start.name = '不同名称';
+    const result = validateDraftBusinessRules(draft);
+    assert.ok(result.errors.some(error => error.code === 'FA-DRAFT-CARD-004'));
+  });
+
+  it('终点 ID、名称或集合漂移时报错（FA-DRAFT-CARD-005）', async () => {
+    const { validateDraftBusinessRules } = await loadRules();
+    const draft = boundaryDraft();
+    draft.process_card.end_results[0].name = '不同名称';
+    const result = validateDraftBusinessRules(draft);
+    assert.ok(result.errors.some(error => error.code === 'FA-DRAFT-CARD-005'));
   });
 });
 

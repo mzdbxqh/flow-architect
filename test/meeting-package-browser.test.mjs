@@ -39,8 +39,8 @@ function v2Payload() {
       parent_process_name: '采购管理',
       inputs: ['采购申请'],
       outputs: ['审批结果'],
-      start: { event_id: 'Start_1', name: '收到采购申请', event_type: 'NONE' },
-      end_results: [{ event_id: 'End_1', name: '采购申请已批准' }],
+      start: { event_id: 'StartEvent_1', name: '开始', event_type: 'NONE' },
+      end_results: [{ event_id: 'EndEvent_1', name: '结束' }],
       performance_indicators: [],
     },
     activities: [
@@ -71,16 +71,11 @@ function v2Payload() {
       nodes: [
         { node_id: 'StartEvent_1', node_type: 'START_EVENT', name: '开始', lane_id: null },
         { node_id: 'Task_Review', node_type: 'MAIN_TASK', name: '审核采购申请', lane_id: 'Lane_Applicant' },
-        { node_id: 'Task_Approve', node_type: 'MAIN_TASK', name: '批准采购', lane_id: 'Lane_Manager' },
-        { node_id: 'Task_Rework', node_type: 'MAIN_TASK', name: '退回修改', lane_id: 'Lane_Manager' },
         { node_id: 'EndEvent_1', node_type: 'END_EVENT', name: '结束', lane_id: null },
       ],
       flows: [
-        { flow_id: 'Flow_Start_Review', source_ref: 'StartEvent_1', target_ref: 'Task_Review' },
-        { flow_id: 'Flow_Review_Approve', source_ref: 'Task_Review', target_ref: 'Task_Approve' },
-        { flow_id: 'Flow_Review_Rework', source_ref: 'Task_Review', target_ref: 'Task_Rework' },
-        { flow_id: 'Flow_Rework_Review', source_ref: 'Task_Rework', target_ref: 'Task_Review' },
-        { flow_id: 'Flow_Approve_End', source_ref: 'Task_Approve', target_ref: 'EndEvent_1' },
+        { flow_id: 'Flow_Start_Review', source_ref: 'StartEvent_1', target_ref: 'Task_Review', condition: null },
+        { flow_id: 'Flow_Review_End', source_ref: 'Task_Review', target_ref: 'EndEvent_1', condition: null },
       ],
       task_bindings: [
         { activity_id: 'Activity_Review', main_task_id: 'Task_Review', confirmation_task_id: null },
@@ -151,6 +146,18 @@ async function openV2Fixture(t, payloadOverride, options = {}) {
   return { browser, page, runDir };
 }
 
+async function assertExportable(page) {
+  const result = await page.evaluate(async () => {
+    try {
+      await window.__FLOW_ARCHITECT__.exportController.currentPayload();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error.message };
+    }
+  });
+  assert.equal(result.ok, true, `导出门禁失败：${result.message || ''}`);
+}
+
 // ===== 四页签结构 =====
 
 test('V2 HTML has four tabs: diagram, card, activities, questions', async t => {
@@ -160,6 +167,12 @@ test('V2 HTML has four tabs: diagram, card, activities, questions', async t => {
   assert.ok(tabTexts.some(t => t.includes('流程卡片')));
   assert.ok(tabTexts.some(t => t.includes('活动一览表')));
   assert.ok(tabTexts.some(t => t.includes('待确认问题')));
+});
+
+test('meeting package does not expose bpmn-js-only undo or redo controls', async t => {
+  const { page } = await openV2Fixture(t);
+  assert.equal(await page.locator('#fa-undo').count(), 0);
+  assert.equal(await page.locator('#fa-redo').count(), 0);
 });
 
 test('tab switching shows correct panel and hides others', async t => {
@@ -194,6 +207,13 @@ test('process card shows all fields and edits flow through DraftStore', async t 
   assert.equal(card.purpose, '新采购决定');
 });
 
+test('process hierarchy and leaf status are read-only inside a meeting package', async t => {
+  const { page } = await openV2Fixture(t);
+  await page.getByRole('tab', { name: /流程卡片/ }).click();
+  assert.equal(await page.getByLabel('流程层级').isDisabled(), true);
+  assert.equal(await page.getByLabel('末端流程').isDisabled(), true);
+});
+
 // ===== 活动一览表编辑 =====
 
 test('activity catalog shows RASCI/OARP, SLA, tools, inputs, outputs', async t => {
@@ -212,6 +232,77 @@ test('activity catalog shows RASCI/OARP, SLA, tools, inputs, outputs', async t =
   const act = await page.evaluate(() =>
     window.__FLOW_ARCHITECT__.store.snapshot().activities[0]);
   assert.equal(act.process_summary, '新处理概要');
+});
+
+test('switching activity type also converts the accountable responsibility code', async t => {
+  const { page } = await openV2Fixture(t);
+  await page.getByRole('tab', { name: /活动一览表/ }).click();
+  await page.locator('[data-activity-row="Activity_Review"]').click();
+  await page.locator('#fa-activity-detail').getByLabel('活动类型').selectOption('REVIEW_MEETING');
+  const activity = await page.evaluate(() =>
+    window.__FLOW_ARCHITECT__.store.snapshot().activities[0]);
+  assert.equal(activity.responsibility_model, 'OARP');
+  assert.equal(
+    activity.role_assignments.filter(role => role.responsibility === 'O').length,
+    1,
+  );
+});
+
+test('renaming an activity in the catalog synchronizes its MAIN_TASK without relayout', async t => {
+  const { page } = await openV2Fixture(t);
+  await page.getByRole('tab', { name: /活动一览表/ }).click();
+  await page.locator('[data-activity-row="Activity_Review"]').click();
+  const nameInput = page.locator('#fa-activity-detail').getByLabel('活动名称');
+  await nameInput.fill('表内复核采购申请');
+  await nameInput.press('Tab');
+  const state = await page.evaluate(() => {
+    const snapshot = window.__FLOW_ARCHITECT__.store.snapshot();
+    return {
+      activityName: snapshot.activities.find(item => item.activity_id === 'Activity_Review').name,
+      nodeName: snapshot.diagram.nodes.find(item => item.node_id === 'Task_Review').name,
+    };
+  });
+  assert.deepEqual(state, {
+    activityName: '表内复核采购申请',
+    nodeName: '表内复核采购申请',
+  });
+  await page.getByRole('tab', { name: /流程图/ }).click();
+  assert.match(
+    await page.locator('[data-element-id="Task_Review"] .djs-label').textContent(),
+    /表内复核采购申请/,
+  );
+});
+
+test('invalid accountable-role edit rolls back both activity and lane', async t => {
+  const { page } = await openV2Fixture(t);
+  page.on('dialog', dialog => dialog.accept());
+  await page.getByRole('tab', { name: /活动一览表/ }).click();
+  await page.locator('[data-activity-row="Activity_Review"]').click();
+  const roleInput = page.locator('#fa-activity-detail').getByLabel('角色 ID').first();
+  await roleInput.fill('Role-missing');
+  await roleInput.press('Tab');
+  await page.waitForFunction(() =>
+    window.__FLOW_ARCHITECT__.autoLayout.applying === false);
+  const state = await page.evaluate(() => {
+    const snapshot = window.__FLOW_ARCHITECT__.store.snapshot();
+    return {
+      roleId: snapshot.activities[0].role_assignments[0].role_id,
+      laneId: snapshot.diagram.nodes.find(node => node.node_id === 'Task_Review').lane_id,
+    };
+  });
+  assert.deepEqual(state, { roleId: 'Role-applicant', laneId: 'Lane_Applicant' });
+});
+
+test('deleting the only accountable role is rejected and rolled back', async t => {
+  const { page } = await openV2Fixture(t);
+  page.on('dialog', dialog => dialog.accept());
+  await page.getByRole('tab', { name: /活动一览表/ }).click();
+  await page.locator('[data-activity-row="Activity_Review"]').click();
+  await page.locator('#fa-activity-detail .fa-role-item .fa-array-remove').click();
+  await page.waitForFunction(() => window.__FLOW_ARCHITECT__.autoLayout.applying === false);
+  const assignments = await page.evaluate(() =>
+    window.__FLOW_ARCHITECT__.store.snapshot().activities[0].role_assignments);
+  assert.deepEqual(assignments, [{ role_id: 'Role-applicant', responsibility: 'R' }]);
 });
 
 test('new L5 activity adds row to catalog and DraftStore', async t => {
@@ -308,15 +399,121 @@ test('non-leaf L3 disables diagram and activity tabs', async t => {
 
 // ===== 有限工具箱 =====
 
-test('default bpmn-js palette is replaced by limited palette', async t => {
+test('default bpmn-js palette is replaced by an exact visible limited palette', async t => {
   const { page } = await openV2Fixture(t);
-  const defaultPalette = page.locator('.djs-palette');
-  const count = await defaultPalette.count();
-  if (count > 0) {
-    const isHidden = await defaultPalette.evaluate(el =>
-      getComputedStyle(el).display === 'none' || !el.offsetHeight);
-    assert.ok(isHidden, 'Default palette should be hidden');
-  }
+  await page.locator('.djs-palette').waitFor({ state: 'visible', timeout: 1000 });
+  const actions = await page.locator('.djs-palette [data-action]:visible').evaluateAll(
+    entries => entries.map(entry => entry.dataset.action).sort(),
+  );
+  assert.deepEqual(actions, [
+    'connect', 'create.and', 'create.confirmation-task', 'create.end',
+    'create.intermediate', 'create.l5-task', 'create.lane', 'create.or',
+    'create.start', 'create.xor', 'delete', 'hand-tool', 'lasso-tool',
+  ]);
+});
+
+test('palette delete uses the same confirmation dialog as the toolbar', async t => {
+  const { page } = await openV2Fixture(t);
+  await page.locator('[data-element-id="Task_Review"]').click();
+  await page.locator('.djs-palette [data-action="delete"]:visible').click();
+  await page.locator('#fa-delete-confirm-dialog').waitFor({ state: 'visible' });
+  assert.match(await page.locator('#fa-delete-confirm-message').textContent(), /审核采购申请/);
+  await page.locator('#fa-delete-cancel').click();
+  assert.equal(await page.locator('[data-element-id="Task_Review"]').count(), 1);
+});
+
+test('palette sequence-flow action asks for a target and updates the deterministic contract', async t => {
+  const { page } = await openV2Fixture(t);
+  const before = await page.evaluate(() =>
+    window.__FLOW_ARCHITECT__.store.snapshot().diagram.flows.length);
+  await page.locator('[data-element-id="StartEvent_1"]').click();
+  page.once('dialog', dialog => dialog.accept('EndEvent_1'));
+  await page.locator('.djs-palette [data-action="connect"]:visible').click();
+  await page.waitForFunction(
+    expected => window.__FLOW_ARCHITECT__.store.snapshot().diagram.flows.length === expected,
+    before + 1,
+  );
+  const added = await page.evaluate(() =>
+    window.__FLOW_ARCHITECT__.store.snapshot().diagram.flows.find(
+      flow => flow.source_ref === 'StartEvent_1' && flow.target_ref === 'EndEvent_1',
+    ));
+  assert.ok(added);
+});
+
+test('palette L5 and XOR actions open the business input dialogs', async t => {
+  const { page } = await openV2Fixture(t);
+  await page.locator('[data-element-id="Task_Review"]').click();
+  await page.locator('.djs-palette [data-action="create.l5-task"]:visible').click();
+  await page.locator('#fa-insert-dialog').waitFor({ state: 'visible' });
+  await page.locator('#fa-insert-cancel').click();
+
+  await page.locator('.djs-palette [data-action="create.xor"]:visible').click();
+  await page.locator('#fa-gateway-dialog').waitFor({ state: 'visible' });
+  await page.locator('#fa-gateway-cancel').click();
+});
+
+test('empty structural dialog input is rejected without closing or mutating the draft', async t => {
+  const { page } = await openV2Fixture(t);
+  page.on('dialog', dialog => dialog.accept());
+  await page.locator('[data-element-id="Task_Review"]').click();
+  const before = await page.evaluate(() =>
+    window.__FLOW_ARCHITECT__.store.snapshot().activities.length);
+  await page.getByRole('button', { name: '后插活动' }).click();
+  await page.locator('#fa-insert-confirm').click();
+  assert.equal(await page.locator('#fa-insert-dialog').isVisible(), true);
+  assert.equal(await page.evaluate(() =>
+    window.__FLOW_ARCHITECT__.store.snapshot().activities.length), before);
+});
+
+test('palette end and lane actions update the contract through deterministic layout', async t => {
+  const { page } = await openV2Fixture(t);
+  await page.locator('[data-element-id="Task_Review"]').click();
+  page.once('dialog', dialog => dialog.accept('采购申请已拒绝'));
+  await page.locator('.djs-palette [data-action="create.end"]:visible').click();
+  await page.waitForFunction(() =>
+    window.__FLOW_ARCHITECT__.store.snapshot().process_card.end_results.length === 2);
+
+  const answers = ['法务', 'Role-legal'];
+  const answerDialog = dialog => dialog.accept(answers.shift());
+  page.on('dialog', answerDialog);
+  await page.locator('.djs-palette [data-action="create.lane"]:visible').click();
+  await page.waitForFunction(() =>
+    window.__FLOW_ARCHITECT__.store.snapshot().diagram.lanes.some(
+      lane => lane.role_id === 'Role-legal' && lane.name === '法务',
+    ));
+  page.off('dialog', answerDialog);
+});
+
+test('palette internal confirmation creates a serial confirmation task only after all gates pass', async t => {
+  const { page } = await openV2Fixture(t);
+  await page.locator('[data-element-id="Task_Review"]').click();
+  await page.locator('.djs-palette [data-action="create.confirmation-task"]:visible').click();
+  await page.getByLabel('确认角色 ID').fill('Role-manager');
+  await page.getByLabel('与主任务共同完成').check();
+  await page.getByLabel('确认者承担最终责任').check();
+  await page.getByLabel('不存在正式审批会议').check();
+  await page.getByRole('button', { name: '确认新增内部确认' }).click();
+  await page.waitForFunction(() =>
+    window.__FLOW_ARCHITECT__.store.snapshot().activities[0].confirmation != null);
+  const snapshot = await page.evaluate(() => window.__FLOW_ARCHITECT__.store.snapshot());
+  const confirmation = snapshot.activities[0].confirmation;
+  const confirmationNode = snapshot.diagram.nodes.find(
+    node => node.node_id === confirmation.confirmation_task_id,
+  );
+  assert.equal(confirmationNode.node_type, 'CONFIRMATION_TASK');
+  assert.equal(confirmationNode.lane_id, 'Lane_Manager');
+  assert.ok(snapshot.diagram.flows.some(
+    flow => flow.source_ref === 'Task_Review' && flow.target_ref === confirmationNode.node_id,
+  ));
+});
+
+test('internal confirmation uses a business gate dialog with role and three declarations', async t => {
+  const { page } = await openV2Fixture(t);
+  assert.equal(await page.locator('#fa-confirmation-dialog').count(), 1);
+  assert.equal(await page.getByLabel('确认角色 ID').count(), 1);
+  assert.equal(await page.getByLabel('与主任务共同完成').count(), 1);
+  assert.equal(await page.getByLabel('确认者承担最终责任').count(), 1);
+  assert.equal(await page.getByLabel('不存在正式审批会议').count(), 1);
 });
 
 // ===== 导出 r02 =====
@@ -330,6 +527,7 @@ test('export r02 HTML preserves V2 payload and can be reopened', async t => {
 
   // Switch back to diagram and export
   await page.getByRole('tab', { name: /流程图/ }).click();
+  await assertExportable(page);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出新版本' }).click();
   const item = await download;
@@ -359,6 +557,7 @@ test('export r02 HTML preserves V2 payload and can be reopened', async t => {
 
 test('export full JSON includes all V2 business fields', async t => {
   const { page } = await openV2Fixture(t);
+  await assertExportable(page);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出完整 JSON' }).click();
   const item = await download;
@@ -416,6 +615,7 @@ test('export with illegal question status shows Chinese error', async t => {
 test('r02 can modify and re-export to r03', async t => {
   const { browser, page } = await openV2Fixture(t);
   // Export r02
+  await assertExportable(page);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出新版本' }).click();
   const item = await download;
@@ -436,6 +636,7 @@ test('r02 can modify and re-export to r03', async t => {
 
   // Export r03
   await r02Page.getByRole('tab', { name: /流程图/ }).click();
+  await assertExportable(r02Page);
   const r03Download = r02Page.waitForEvent('download');
   await r02Page.getByRole('button', { name: '导出新版本' }).click();
   const r03 = await r03Download;

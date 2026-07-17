@@ -3,14 +3,19 @@
  *
  * 按基本、归属、边界、绩效四组渲染可编辑表单。
  * 所有修改通过 DraftStore 提交。
+ * F2: 结构变更（起点/终点）通过结构命令 + AutoLayout 事务重排。
  */
+import * as structuralCommands from './structural-commands.js';
+
 export class ProcessCardController {
   #store;
   #root;
+  #autoLayout;
 
-  constructor({ store, root }) {
+  constructor({ store, root, autoLayout }) {
     this.#store = store;
     this.#root = root;
+    this.#autoLayout = autoLayout;
   }
 
   render() {
@@ -101,6 +106,7 @@ export class ProcessCardController {
     lbl.textContent = label;
     const select = document.createElement('select');
     select.setAttribute('aria-label', label);
+    if (key === 'level') select.disabled = true;
     for (const opt of options) {
       const option = document.createElement('option');
       option.value = opt;
@@ -126,6 +132,7 @@ export class ProcessCardController {
     input.type = 'checkbox';
     input.checked = checked;
     input.setAttribute('aria-label', label);
+    if (key === 'is_leaf') input.disabled = true;
     input.addEventListener('change', () => {
       this.#store.updateProcessCard({ [key]: input.checked });
       this.#notifyLevelChange();
@@ -206,10 +213,12 @@ export class ProcessCardController {
     nameInput.type = 'text';
     nameInput.value = start.name || '';
     nameInput.setAttribute('aria-label', '起点名称');
-    nameInput.addEventListener('change', () => {
-      this.#store.updateProcessCard({
-        start: { ...start, name: nameInput.value },
-      });
+    nameInput.addEventListener('change', async () => {
+      const current = this.#store.snapshot().process_card.start;
+      await this.#applyStructureChange(
+        store => structuralCommands.updateStartEvent(store, { ...current, name: nameInput.value }),
+        '修改流程起点',
+      );
     });
     nameLbl.appendChild(nameInput);
     wrap.appendChild(nameLbl);
@@ -225,10 +234,12 @@ export class ProcessCardController {
       opt.selected = t === start.event_type;
       typeSelect.appendChild(opt);
     }
-    typeSelect.addEventListener('change', () => {
-      this.#store.updateProcessCard({
-        start: { ...start, event_type: typeSelect.value },
-      });
+    typeSelect.addEventListener('change', async () => {
+      const current = this.#store.snapshot().process_card.start;
+      await this.#applyStructureChange(
+        store => structuralCommands.updateStartEvent(store, { ...current, event_type: typeSelect.value }),
+        '修改起点事件类型',
+      );
     });
     typeLbl.appendChild(typeSelect);
     wrap.appendChild(typeLbl);
@@ -238,7 +249,7 @@ export class ProcessCardController {
 
   #endResultsField(endResults) {
     const wrap = document.createElement('div');
-    wrap.className = 'fa-field fa-array-field';
+    wrap.className = 'fa-field fa-array-field fa-end-results';
     const title = document.createElement('span');
     title.textContent = '业务终点';
     title.className = 'fa-array-title';
@@ -252,22 +263,33 @@ export class ProcessCardController {
       nameInput.type = 'text';
       nameInput.value = er.name;
       nameInput.setAttribute('aria-label', '终点名称');
-      nameInput.addEventListener('change', () => {
-        const current = this.#store.snapshot().process_card.end_results;
-        const idx = [...list.children].indexOf(li);
-        if (idx >= 0) current[idx] = { ...current[idx], name: nameInput.value };
-        this.#store.updateProcessCard({ end_results: current });
+      // F2: 终点改名同步 END_EVENT 节点名称
+      nameInput.addEventListener('change', async () => {
+        await this.#applyStructureChange(
+          store => structuralCommands.renameEndResult(store, er.event_id, nameInput.value),
+          '修改业务终点',
+        );
       });
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.textContent = '删除';
       removeBtn.className = 'fa-array-remove';
-      removeBtn.addEventListener('click', () => {
+      // F2: 删除终点通过结构命令 + AutoLayout
+      removeBtn.addEventListener('click', async () => {
         const current = this.#store.snapshot().process_card.end_results;
+        if (current.length <= 1) {
+          alert('FA-DRAFT-CARD-002: 流程必须保留至少一个业务终点');
+          return;
+        }
         const idx = [...list.children].indexOf(li);
-        if (idx >= 0) current.splice(idx, 1);
-        this.#store.updateProcessCard({ end_results: current });
-        this.render();
+        if (idx < 0) return;
+        const eventId = current[idx].event_id;
+        const eventName = current[idx].name;
+        // 派发确认事件，由 app.js 处理
+        this.#root.dispatchEvent(new CustomEvent('fa-delete-end-result', {
+          detail: { eventId, eventName, eventIds: current.map(r => r.event_id) },
+          bubbles: true,
+        }));
       });
       li.append(nameInput, removeBtn);
       list.appendChild(li);
@@ -278,15 +300,62 @@ export class ProcessCardController {
     addBtn.type = 'button';
     addBtn.textContent = '新增终点';
     addBtn.className = 'fa-array-add';
-    addBtn.addEventListener('click', () => {
+    // F2: 新增终点通过结构命令 + AutoLayout 重排
+    addBtn.addEventListener('click', async () => {
       const current = this.#store.snapshot().process_card.end_results;
-      const nextId = `End_${current.length + 1}`;
-      current.push({ event_id: nextId, name: '' });
-      this.#store.updateProcessCard({ end_results: current });
-      this.render();
+      const nextIdx = current.length + 1;
+      const eventName = `终点${nextIdx}`;
+      await this.#applyAddEndResult(eventName);
     });
     wrap.appendChild(addBtn);
     return wrap;
+  }
+
+  /**
+   * F2: 通过结构命令 + AutoLayout 新增终点
+   * 使用确定性业务插入点，不得武断连接 START_EVENT → END_EVENT
+   */
+  async #applyAddEndResult(eventName) {
+    const mutation = (store) => {
+      const snapshot = store.snapshot();
+      // 确定性插入点：最后一个连接到 END_EVENT 的 MAIN_TASK
+      const endEvents = snapshot.diagram.nodes.filter(n => n.node_type === 'END_EVENT');
+      let insertAfterId = null;
+      for (const endEvent of endEvents) {
+        const incomingFlows = snapshot.diagram.flows.filter(f => f.target_ref === endEvent.node_id);
+        for (const flow of incomingFlows) {
+          const sourceNode = snapshot.diagram.nodes.find(n => n.node_id === flow.source_ref);
+          if (sourceNode && sourceNode.node_type === 'MAIN_TASK') {
+            insertAfterId = sourceNode.node_id;
+            break;
+          }
+        }
+        if (insertAfterId) break;
+      }
+      if (!insertAfterId) {
+        // 回退到 START_EVENT
+        const startEvent = snapshot.diagram.nodes.find(n => n.node_type === 'START_EVENT');
+        if (startEvent) insertAfterId = startEvent.node_id;
+      }
+      if (!insertAfterId) {
+        throw new Error('FA-DRAFT-ROLE-001: 无法确定终点插入点');
+      }
+      structuralCommands.addEndResultAfter(store, insertAfterId, { name: eventName });
+    };
+    await this.#applyStructureChange(mutation, '新增终点');
+  }
+
+  async #applyStructureChange(mutation, description) {
+    try {
+      if (!this.#autoLayout) throw new Error('流程卡片缺少自动布局控制器');
+      await this.#autoLayout.applyStructureChange(mutation, description);
+      this.render();
+      return true;
+    } catch (error) {
+      alert(error.message);
+      this.render();
+      return false;
+    }
   }
 
   #kpiField(kpis) {
@@ -299,7 +368,8 @@ export class ProcessCardController {
 
     const list = document.createElement('ul');
     list.className = 'fa-array-list';
-    for (const kpi of kpis) {
+    for (let kpiIdx = 0; kpiIdx < kpis.length; kpiIdx++) {
+      const kpi = kpis[kpiIdx];
       const li = document.createElement('li');
       li.className = 'fa-kpi-item';
       const nameInput = document.createElement('input');
@@ -307,11 +377,27 @@ export class ProcessCardController {
       nameInput.value = kpi.name;
       nameInput.placeholder = '指标名称';
       nameInput.setAttribute('aria-label', 'KPI 名称');
+      // F2: KPI 名称 change listener 写回 DraftStore
+      nameInput.addEventListener('change', () => {
+        const current = this.#store.snapshot().process_card.performance_indicators;
+        if (kpiIdx < current.length) {
+          current[kpiIdx] = { ...current[kpiIdx], name: nameInput.value };
+          this.#store.updateProcessCard({ performance_indicators: current });
+        }
+      });
       const targetInput = document.createElement('input');
       targetInput.type = 'text';
       targetInput.value = kpi.target || '';
       targetInput.placeholder = '目标值';
       targetInput.setAttribute('aria-label', 'KPI 目标值');
+      // F2: KPI 目标值 change listener 写回 DraftStore
+      targetInput.addEventListener('change', () => {
+        const current = this.#store.snapshot().process_card.performance_indicators;
+        if (kpiIdx < current.length) {
+          current[kpiIdx] = { ...current[kpiIdx], target: targetInput.value };
+          this.#store.updateProcessCard({ performance_indicators: current });
+        }
+      });
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.textContent = '删除';

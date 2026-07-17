@@ -39,7 +39,22 @@ function scanForV1Fallbacks(filePath) {
       pattern: /model\.elements/,
       message: 'V1 引用: model.elements (应使用 model.diagram.nodes)',
     },
+    {
+      pattern: /q\.question_id\s*\|\|\s*q\.id|item\.question_id\s*\|\|\s*item\.id/,
+      message: 'V1 问题 ID fallback（应只使用 question_id）',
+    },
+    {
+      pattern: /q\.target_paths\s*\|\|\s*q\.element_ids/,
+      message: 'V1 问题目标 fallback（应只使用 target_paths）',
+    },
   ];
+
+  if (filePath.includes(`${path.sep}meeting-package${path.sep}src${path.sep}`)) {
+    patterns.push({
+      pattern: /Date\.now\s*\(/,
+      message: '非确定性结构 ID（应由结构命令分配稳定 ID）',
+    });
+  }
 
   for (const [lineNumber, line] of lines.entries()) {
     for (const { pattern, message } of patterns) {
@@ -95,5 +110,20 @@ test('所有 scripts/lib/*.mjs 不应包含 V1 fallback', () => {
     allViolations,
     [],
     `发现 V1 fallback:\n${allViolations.map(v => `  ${v.file}:${v.line}: ${v.message}\n    ${v.code}`).join('\n')}`
+  );
+});
+
+test('meeting-package/src/*.js 不应包含 V1 fallback 或非确定性结构 ID', () => {
+  const sourceDir = path.join(ROOT, 'meeting-package', 'src');
+  const files = fs.readdirSync(sourceDir)
+    .filter(f => f.endsWith('.js'))
+    .map(f => path.join(sourceDir, f));
+
+  const allViolations = files.flatMap(scanForV1Fallbacks);
+
+  assert.deepEqual(
+    allViolations,
+    [],
+    `发现 V1 fallback 或非确定性结构 ID:\n${allViolations.map(v => `  ${v.file}:${v.line}: ${v.message}\n    ${v.code}`).join('\n')}`
   );
 });

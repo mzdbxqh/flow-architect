@@ -18,8 +18,8 @@ function v2Draft() {
       description: '完成采购申请的审查与决策', purpose: '形成可执行的采购决定',
       owner: 'Role-process-owner', parent_process_name: '采购管理',
       inputs: ['采购申请'], outputs: ['审批结果'],
-      start: { event_id: 'StartEvent_1', name: '收到采购申请', event_type: 'NONE' },
-      end_results: [{ event_id: 'EndEvent_1', name: '采购申请已批准' }],
+      start: { event_id: 'StartEvent_1', name: '开始', event_type: 'NONE' },
+      end_results: [{ event_id: 'EndEvent_1', name: '结束' }],
       performance_indicators: [],
     },
     activities: [
@@ -32,6 +32,16 @@ function v2Draft() {
         process_summary: '审核采购申请内容', outputs: ['审核结果'],
         completion_criteria: ['申请已审核'], references: [],
         main_task_id: 'Task_Review', confirmation: null, completeness: 'COMPLETE',
+      },
+      {
+        activity_id: 'Activity_Approve', name: '批准采购',
+        description: '批准已审核的采购申请',
+        activity_type: 'STANDARD', responsibility_model: 'RASCI',
+        role_assignments: [{ role_id: 'Role-manager', responsibility: 'R' }],
+        sla: null, tools: ['ERP'], inputs: ['审核结果'],
+        process_summary: '批准采购申请', outputs: ['审批结果'],
+        completion_criteria: ['审批结论已记录'], references: [],
+        main_task_id: 'Task_Approve', confirmation: null, completeness: 'COMPLETE',
       },
     ],
     diagram: {
@@ -52,6 +62,7 @@ function v2Draft() {
       ],
       task_bindings: [
         { activity_id: 'Activity_Review', main_task_id: 'Task_Review', confirmation_task_id: null },
+        { activity_id: 'Activity_Approve', main_task_id: 'Task_Approve', confirmation_task_id: null },
       ],
       layout_version: '2.0.0',
     },
@@ -88,43 +99,38 @@ test('XOR branch creation rolls back all elements and sequence flows on failure'
   const { page } = await openFixture(t);
   await page.locator('[data-element-id="Task_Review"]').click();
 
-  const beforeXml = await page.evaluate(async () =>
-    (await window.__FLOW_ARCHITECT__.modeler.saveXML({ format: true })).xml);
-
-  await page.evaluate(() => {
-    const dc = window.__FLOW_ARCHITECT__.diagramController;
-    const origAppend = window.__FLOW_ARCHITECT__.modeler.get('autoPlace').append;
-    let callCount = 0;
-    window.__FLOW_ARCHITECT__.modeler.get('autoPlace').append = function (...args) {
-      callCount++;
-      if (callCount === 3) throw new Error('模拟第三步失败');
-      return origAppend.apply(this, args);
+  const result = await page.evaluate(async () => {
+    const app = window.__FLOW_ARCHITECT__;
+    const beforeDraft = app.store.snapshot();
+    const beforeXml = (await app.modeler.saveXML({ format: true })).xml;
+    const beforeSelection = app.modeler.get('selection').get().map(element => element.id);
+    const originalCompile = app.autoLayout.compileBpmn;
+    app.autoLayout.compileBpmn = () => {
+      throw new Error('模拟编译失败');
     };
+    let message = '';
     try {
-      dc.appendExclusiveBranch('测试问题', '是', '否');
+      await app.diagramController.appendGatewayBranch('XOR', '测试问题', '是', '否');
     } catch (e) {
-      // expected
+      message = e.message;
+    } finally {
+      app.autoLayout.compileBpmn = originalCompile;
     }
-    window.__FLOW_ARCHITECT__.modeler.get('autoPlace').append = origAppend;
+    return {
+      beforeDraft,
+      afterDraft: app.store.snapshot(),
+      beforeXml,
+      afterXml: (await app.modeler.saveXML({ format: true })).xml,
+      beforeSelection,
+      afterSelection: app.modeler.get('selection').get().map(element => element.id),
+      message,
+    };
   });
 
-  const afterXml = await page.evaluate(async () =>
-    (await window.__FLOW_ARCHITECT__.modeler.saveXML({ format: true })).xml);
-
-  const extractIds = (xml) => {
-    const elements = new Set();
-    const flows = new Set();
-    for (const m of xml.matchAll(/id="(Task_|Gateway_|Activity_|StartEvent_|EndEvent_)[^"]*"/g)) elements.add(m[0]);
-    for (const m of xml.matchAll(/id="Flow_[^"]*"/g)) flows.add(m[0]);
-    for (const m of xml.matchAll(/id="SequenceFlow_[^"]*"/g)) flows.add(m[0]);
-    return { elements, flows };
-  };
-
-  const before = extractIds(beforeXml);
-  const after = extractIds(afterXml);
-  assert.deepEqual(after.elements, before.elements);
-  assert.deepEqual(after.flows, before.flows);
-  assert.equal(afterXml, beforeXml);
+  assert.match(result.message, /FA-DRAFT-LAYOUT-001.*结构变更失败.*模拟编译失败/);
+  assert.deepEqual(result.afterDraft, result.beforeDraft);
+  assert.equal(result.afterXml, result.beforeXml);
+  assert.deepEqual(result.afterSelection, result.beforeSelection);
 });
 
 test('question pre-export validation rejects duplicate IDs', async t => {

@@ -1,4 +1,6 @@
 import { contentHash, encodePayload } from './payload-codec.js';
+import { validateV2Draft } from './schema-validator.js';
+import { validateDraftBusinessRules as validateDraftBusinessRulesFull } from '../../scripts/lib/process-draft-v2-rules.mjs';
 
 export function nextRevision(revision) {
   const match = /^r(\d+)$/.exec(revision);
@@ -13,8 +15,8 @@ function validateQuestionsBeforeExport(questions, modeler, processId) {
   const ids = new Set();
   const registry = modeler?.get('elementRegistry');
   for (const q of questions) {
-    const qid = q.question_id || q.id;
-    const paths = q.target_paths || q.element_ids || [];
+    const qid = q.question_id;
+    const paths = q.target_paths;
     if (!qid || typeof qid !== 'string') throw new Error('问题 ID 不能为空');
     if (!ID_PATTERN.test(qid)) throw new Error(`问题 ID 格式非法：${qid}`);
     if (ids.has(qid)) throw new Error(`问题 ID 重复：${qid}`);
@@ -33,6 +35,40 @@ function validateQuestionsBeforeExport(questions, modeler, processId) {
   }
 }
 
+/**
+ * F1: 执行完整 V2 Schema 门禁
+ *
+ * 使用 Ajv + 真实 process-draft.schema.json 及其引用 Schema，
+ * 对当前完整草稿执行与服务端构建器相同语义的 V2 Schema 校验。
+ * 浏览器端校验必须来自可打包的确定性合同，不得联网，也不得复制会漂移的字段列表。
+ */
+function validateV2SchemaBeforeExport(snapshot) {
+  // 提取 process-draft schema 相关字段（排除 metadata/bpmn_xml 等非 schema 字段）
+  const draftSubset = {
+    schema_version: snapshot.schema_version,
+    process_card: snapshot.process_card,
+    activities: snapshot.activities,
+    diagram: snapshot.diagram,
+    questions: snapshot.questions,
+    provenance: snapshot.provenance,
+    source_summary: snapshot.source_summary,
+  };
+
+  // 1. Ajv 完整 Schema 校验（复用真实 JSON Schema）
+  const schemaResult = validateV2Draft(draftSubset);
+  if (!schemaResult.valid) {
+    const firstError = schemaResult.errors[0];
+    throw new Error(`${firstError.code}: ${firstError.message}`);
+  }
+
+  // 2. 服务端与浏览器共同使用的完整业务规则。
+  const fullResult = validateDraftBusinessRulesFull(draftSubset);
+  if (!fullResult.valid) {
+    const firstError = fullResult.errors[0];
+    throw new Error(`${firstError.code}: ${firstError.message}`);
+  }
+}
+
 export class ExportController {
   constructor({ modeler, payload, store, compileBpmn }) {
     this.modeler = modeler;
@@ -42,18 +78,27 @@ export class ExportController {
   }
 
   async currentPayload() {
-    const questions = this.store ? this.store.snapshot().questions : this.payload.questions;
+    const snapshot = this.store.snapshot();
+    const questions = snapshot.questions;
     validateQuestionsBeforeExport(questions, this.modeler, this.payload.metadata.process_id);
 
+    // F1: 执行完整 V2 Schema 门禁
+    validateV2SchemaBeforeExport(snapshot);
+
     let bpmnXml;
-    if (this.store && this.compileBpmn) {
+    if (snapshot.process_card.level === 'L4' && snapshot.process_card.is_leaf) {
       // 末端 L4：使用 compileBpmn 从业务合同生成规范 XML
-      const snapshot = this.store.snapshot();
       const { xml } = this.compileBpmn(snapshot);
       bpmnXml = xml;
     } else {
-      // 非末端流程：无 BPMN，不调用 compileBpmn 或 modeler.saveXML
-      bpmnXml = null;
+      // 非末端流程只允许流程卡片；保留构建时的空 BPMN 容器以满足会议包合同。
+      if (snapshot.activities.length > 0
+        || snapshot.diagram.nodes.length > 0
+        || snapshot.diagram.flows.length > 0
+        || snapshot.diagram.task_bindings.length > 0) {
+        throw new Error('非末端流程只能包含流程卡片，不能包含活动或流程图');
+      }
+      bpmnXml = this.payload.bpmn_xml;
     }
 
     const next = {
@@ -64,17 +109,12 @@ export class ExportController {
       },
       questions,
     };
-    if (bpmnXml !== null) {
-      next.bpmn_xml = bpmnXml;
-    }
-    if (this.store) {
-      const snap = this.store.snapshot();
-      next.process_card = snap.process_card;
-      next.activities = snap.activities;
-      next.diagram = snap.diagram;
-      next.provenance = snap.provenance;
-      next.source_summary = snap.source_summary;
-    }
+    next.bpmn_xml = bpmnXml;
+    next.process_card = snapshot.process_card;
+    next.activities = snapshot.activities;
+    next.diagram = snapshot.diagram;
+    next.provenance = snapshot.provenance;
+    next.source_summary = snapshot.source_summary;
     next.metadata.content_hash = await contentHash(next.bpmn_xml, next.questions, {
       processCard: next.process_card,
       activities: next.activities,

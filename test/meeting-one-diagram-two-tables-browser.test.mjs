@@ -33,8 +33,8 @@ function v2Payload() {
       parent_process_name: '采购管理',
       inputs: ['采购申请'],
       outputs: ['审批结果'],
-      start: { event_id: 'Start_1', name: '收到采购申请', event_type: 'NONE' },
-      end_results: [{ event_id: 'End_1', name: '采购申请已批准' }],
+      start: { event_id: 'StartEvent_1', name: '开始', event_type: 'NONE' },
+      end_results: [{ event_id: 'EndEvent_1', name: '结束' }],
       performance_indicators: [],
     },
     activities: [
@@ -65,16 +65,11 @@ function v2Payload() {
       nodes: [
         { node_id: 'StartEvent_1', node_type: 'START_EVENT', name: '开始', lane_id: null },
         { node_id: 'Task_Review', node_type: 'MAIN_TASK', name: '审核采购申请', lane_id: 'Lane_Applicant' },
-        { node_id: 'Task_Approve', node_type: 'MAIN_TASK', name: '批准采购', lane_id: 'Lane_Manager' },
-        { node_id: 'Task_Rework', node_type: 'MAIN_TASK', name: '退回修改', lane_id: 'Lane_Manager' },
         { node_id: 'EndEvent_1', node_type: 'END_EVENT', name: '结束', lane_id: null },
       ],
       flows: [
-        { flow_id: 'Flow_Start_Review', source_ref: 'StartEvent_1', target_ref: 'Task_Review' },
-        { flow_id: 'Flow_Review_Approve', source_ref: 'Task_Review', target_ref: 'Task_Approve' },
-        { flow_id: 'Flow_Review_Rework', source_ref: 'Task_Review', target_ref: 'Task_Rework' },
-        { flow_id: 'Flow_Rework_Review', source_ref: 'Task_Rework', target_ref: 'Task_Review' },
-        { flow_id: 'Flow_Approve_End', source_ref: 'Task_Approve', target_ref: 'EndEvent_1' },
+        { flow_id: 'Flow_Start_Review', source_ref: 'StartEvent_1', target_ref: 'Task_Review', condition: null },
+        { flow_id: 'Flow_Review_End', source_ref: 'Task_Review', target_ref: 'EndEvent_1', condition: null },
       ],
       task_bindings: [
         { activity_id: 'Activity_Review', main_task_id: 'Task_Review', confirmation_task_id: null },

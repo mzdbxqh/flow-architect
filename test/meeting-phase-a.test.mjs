@@ -108,7 +108,7 @@ describe('Phase A: 浏览器打包确定性编译器', () => {
         is_leaf: true,
         description: '',
         purpose: '',
-        owner: '',
+        owner: 'Role-owner',
         parent_process_name: null,
         inputs: [],
         outputs: [],
@@ -119,8 +119,13 @@ describe('Phase A: 浏览器打包确定性编译器', () => {
       activities: [],
       diagram: {
         lanes: [],
-        nodes: [],
-        flows: [],
+        nodes: [
+          { node_id: 'Start_1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+          { node_id: 'End_1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+        ],
+        flows: [
+          { flow_id: 'Flow_1', source_ref: 'Start_1', target_ref: 'End_1', condition: null },
+        ],
         task_bindings: [],
         layout_version: '2.0.0',
       },
@@ -228,9 +233,31 @@ describe('Phase A: 浏览器打包确定性编译器', () => {
     // 验证 store 被恢复
     const snapshotAfter = store.snapshot();
     assert.deepEqual(snapshotAfter, snapshotBefore);
+    assert.equal(store.dirty, false, '回滚后应恢复变更前 dirty 状态');
 
     // 验证 bpmn-js 被恢复（importXML 被调用两次：一次失败，一次回滚）
     assert.equal(modeler.importXML.mock.callCount(), 1);
+  });
+
+  it('预快照失败时 applying 也必须复位', async () => {
+    modeler.saveXML = mock.fn(() => Promise.reject(new Error('无法保存快照')));
+    const controller = new AutoLayoutController({ store, modeler, compileBpmn });
+    await assert.rejects(
+      () => controller.applyStructureChange(() => {}, '预快照失败'),
+      /FA-DRAFT-LAYOUT-001.*无法保存快照/,
+    );
+    assert.equal(controller.applying, false);
+  });
+
+  it('回滚导入失败时返回组合错误而不是静默继续', async () => {
+    const failingCompileBpmn = createMockCompileBpmn(true);
+    modeler.importXML = mock.fn(() => Promise.reject(new Error('无法恢复画布')));
+    const controller = new AutoLayoutController({ store, modeler, compileBpmn: failingCompileBpmn });
+    await assert.rejects(
+      () => controller.applyStructureChange(() => store.markDirty(), '回滚失败'),
+      /FA-DRAFT-LAYOUT-001.*业务规则验证失败.*回滚失败.*无法恢复画布/,
+    );
+    assert.equal(controller.applying, false);
   });
 
   it('同一结构变更执行两次独立运行，产生字节一致 XML/DI', async () => {
@@ -253,7 +280,7 @@ describe('Phase A: 浏览器打包确定性编译器', () => {
         is_leaf: true,
         description: '',
         purpose: '',
-        owner: '',
+        owner: 'Role-owner',
         parent_process_name: null,
         inputs: [],
         outputs: [],
@@ -264,8 +291,13 @@ describe('Phase A: 浏览器打包确定性编译器', () => {
       activities: [],
       diagram: {
         lanes: [],
-        nodes: [],
-        flows: [],
+        nodes: [
+          { node_id: 'Start_1', node_type: 'START_EVENT', name: '开始', lane_id: null },
+          { node_id: 'End_1', node_type: 'END_EVENT', name: '结束', lane_id: null },
+        ],
+        flows: [
+          { flow_id: 'Flow_1', source_ref: 'Start_1', target_ref: 'End_1', condition: null },
+        ],
         task_bindings: [],
         layout_version: '2.0.0',
       },
@@ -306,5 +338,27 @@ describe('Phase A: 浏览器打包确定性编译器', () => {
 
     // 验证 compileBpmn 被调用
     assert.equal(compileBpmn.mock.callCount(), 1);
+  });
+
+  it('非末端流程导出保留合法空 BPMN 字符串且不调用编译器', async () => {
+    const nonLeaf = store.snapshot();
+    nonLeaf.process_card.level = 'L3';
+    nonLeaf.process_card.is_leaf = false;
+    nonLeaf.activities = [];
+    nonLeaf.diagram = {
+      lanes: [], nodes: [], flows: [], task_bindings: [], layout_version: '2.0.0',
+    };
+    store.restore(nonLeaf);
+    const payload = store.snapshot();
+    payload.metadata = {
+      schema_version: '2.0.0', package_id: 'test', process_id: 'Process_1',
+      title: '测试流程', revision: 'r01', based_on_revision: null,
+      runtime_version: '2.0.0', content_hash: `sha256:${'0'.repeat(64)}`,
+    };
+    payload.bpmn_xml = '<bpmn:definitions></bpmn:definitions>';
+    const exportController = new ExportController({ modeler, payload, store, compileBpmn });
+    const exported = await exportController.currentPayload();
+    assert.equal(exported.bpmn_xml, payload.bpmn_xml);
+    assert.equal(compileBpmn.mock.callCount(), 0);
   });
 });

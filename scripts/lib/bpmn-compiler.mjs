@@ -373,8 +373,9 @@ function generateBpmnXml(draft, layout) {
   lines.push('  xmlns:flowArchitect="http://flow-architect.io/schema/2024/01"');
 
   // 条件需要 xsi 命名空间
-  const hasCondition = flows.some(f => f.condition);
-  if (hasCondition) {
+  const needsXsi = flows.some(f => f.condition)
+    || process_card.start?.event_type === 'CONDITIONAL';
+  if (needsXsi) {
     lines.push('  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"');
   }
 
@@ -422,7 +423,13 @@ function generateBpmnXml(draft, layout) {
 
   // 只使用 draft 中的 flows 计算 incoming/outgoing
   for (const node of nodes) {
-    const nodeLines = generateNodeXml(node, flows, diagram.task_bindings, activities);
+    const nodeLines = generateNodeXml(
+      node,
+      flows,
+      diagram.task_bindings,
+      activities,
+      node.node_type === 'START_EVENT' ? process_card.start?.event_type : null,
+    );
     lines.push(...nodeLines);
   }
 
@@ -447,7 +454,7 @@ function generateBpmnXml(draft, layout) {
   return lines.join('\n');
 }
 
-function generateNodeXml(node, flows, taskBindings = [], activities = []) {
+function generateNodeXml(node, flows, taskBindings = [], activities = [], startEventType = null) {
   const lines = [];
   const tag = mapNodeTypeToBpmnTag(node.node_type);
   if (!tag) return lines;
@@ -456,7 +463,7 @@ function generateNodeXml(node, flows, taskBindings = [], activities = []) {
   const outgoing = flows.filter(f => f.source_ref === node.node_id);
 
   // 是否需要子元素（eventDefinition）
-  const eventDef = getEventDefinitionXml(node.node_type, node.name);
+  const eventDef = getEventDefinitionXml(node.node_type, node.name, startEventType);
 
   // 查找节点的 activity binding
   const binding = taskBindings.find(b => b.main_task_id === node.node_id || b.confirmation_task_id === node.node_id);
@@ -493,7 +500,17 @@ function generateNodeXml(node, flows, taskBindings = [], activities = []) {
   return lines;
 }
 
-function getEventDefinitionXml(nodeType, name) {
+function getEventDefinitionXml(nodeType, name, startEventType = null) {
+  if (nodeType === 'START_EVENT') {
+    switch (startEventType) {
+      case 'MESSAGE': return '<bpmn:messageEventDefinition />';
+      case 'TIMER': return '<bpmn:timerEventDefinition />';
+      case 'SIGNAL': return '<bpmn:signalEventDefinition />';
+      case 'CONDITIONAL':
+        return '<bpmn:conditionalEventDefinition><bpmn:condition xsi:type="bpmn:tFormalExpression">true</bpmn:condition></bpmn:conditionalEventDefinition>';
+      default: return null;
+    }
+  }
   switch (nodeType) {
     case 'INTERMEDIATE_MESSAGE_CATCH':
     case 'INTERMEDIATE_MESSAGE_THROW':

@@ -170,6 +170,12 @@ describe('BPMN Namespace Validation', () => {
       // 无条件流时不应声明 xsi 命名空间
       assert.ok(!bpmn.includes('xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'),
         '无条件流时不应声明 xmlns:xsi 命名空间');
+
+      draft.process_card.start.event_type = 'CONDITIONAL';
+      const conditionalBpmn = compileBpmn(draft).xml;
+      assert.ok(conditionalBpmn.includes('<bpmn:conditionalEventDefinition>'));
+      assert.ok(conditionalBpmn.includes('xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'),
+        '条件开始事件使用 xsi:type 时必须声明 xmlns:xsi');
     });
 
     it('生成的 BPMN 应能被 BPMN 读取器解析且无未绑定前缀', async () => {

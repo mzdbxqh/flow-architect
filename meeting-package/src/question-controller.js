@@ -25,11 +25,11 @@ export class QuestionController {
     this.overlayIds = [];
     this.root.replaceChildren(...this.questions.map(q => this.#questionNode(q)));
     for (const q of this.questions.filter(q => q.status === 'OPEN')) {
-      for (const elementId of (q.target_paths || q.element_ids || [])) {
+      for (const elementId of q.target_paths) {
         if (!registry.get(elementId)) continue;
         this.overlayIds.push(overlays.add(elementId, 'fa-question', {
           position: { top: -10, right: -10 },
-          html: `<button type="button" class="fa-question-badge" data-overlay-question-id="${q.question_id || q.id}" aria-label="打开问题 ${q.question_id || q.id}">?</button>`,
+          html: `<button type="button" class="fa-question-badge" data-overlay-question-id="${q.question_id}" aria-label="打开问题 ${q.question_id}">?</button>`,
         }));
       }
     }
@@ -44,15 +44,14 @@ export class QuestionController {
   }
 
   selectQuestion(id) {
-    const q = this.questions.find(item => (item.question_id || item.id) === id);
+    const q = this.questions.find(item => item.question_id === id);
     if (!q) return;
     const canvas = this.modeler.get('canvas');
     const registry = this.modeler.get('elementRegistry');
     this.clearHighlights();
     document.querySelectorAll('[aria-current]').forEach(n => n.removeAttribute('aria-current'));
     document.querySelector(`[data-question-id="${CSS.escape(id)}"]`)?.setAttribute('aria-current', 'true');
-    const paths = q.target_paths || q.element_ids || [];
-    const newHighlighted = paths.filter(elementId => registry.get(elementId));
+    const newHighlighted = q.target_paths.filter(elementId => registry.get(elementId));
     for (const elementId of newHighlighted) {
       canvas.addMarker(elementId, 'fa-question-highlight');
     }
@@ -60,27 +59,27 @@ export class QuestionController {
   }
 
   setStatus(id, status) {
-    const q = this.questions.find(item => (item.question_id || item.id) === id);
+    const q = this.questions.find(item => item.question_id === id);
     q.status = status;
     this.onChange(this.questions);
     this.render();
   }
 
   setAnswer(id, answer) {
-    const q = this.questions.find(item => (item.question_id || item.id) === id);
+    const q = this.questions.find(item => item.question_id === id);
     q.answer = answer;
     this.onChange(this.questions);
   }
 
   addQuestion({ id, text, elementIds }) {
-    if (this.questions.some(q => (q.question_id || q.id) === id)) throw new Error(`问题 ID 已存在：${id}`);
+    if (this.questions.some(q => q.question_id === id)) throw new Error(`问题 ID 已存在：${id}`);
     this.questions.push({ question_id: id, text, target_paths: elementIds, status: 'OPEN', answer: '' });
     this.onChange(this.questions);
     this.render();
   }
 
   #questionNode(q) {
-    const qid = q.question_id || q.id;
+    const qid = q.question_id;
     const item = document.createElement('article');
     item.dataset.questionId = qid;
     const title = document.createElement('button');

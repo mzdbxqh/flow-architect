@@ -33,8 +33,8 @@ function v2Payload() {
       parent_process_name: '采购管理',
       inputs: ['采购申请'],
       outputs: ['审批结果'],
-      start: { event_id: 'Start_1', name: '收到采购申请', event_type: 'NONE' },
-      end_results: [{ event_id: 'End_1', name: '采购申请已批准' }],
+      start: { event_id: 'StartEvent_1', name: '开始', event_type: 'NONE' },
+      end_results: [{ event_id: 'EndEvent_1', name: '结束' }],
       performance_indicators: [],
     },
     activities: [
@@ -65,16 +65,11 @@ function v2Payload() {
       nodes: [
         { node_id: 'StartEvent_1', node_type: 'START_EVENT', name: '开始', lane_id: null },
         { node_id: 'Task_Review', node_type: 'MAIN_TASK', name: '审核采购申请', lane_id: 'Lane_Applicant' },
-        { node_id: 'Task_Approve', node_type: 'MAIN_TASK', name: '批准采购', lane_id: 'Lane_Manager' },
-        { node_id: 'Task_Rework', node_type: 'MAIN_TASK', name: '退回修改', lane_id: 'Lane_Manager' },
         { node_id: 'EndEvent_1', node_type: 'END_EVENT', name: '结束', lane_id: null },
       ],
       flows: [
-        { flow_id: 'Flow_Start_Review', source_ref: 'StartEvent_1', target_ref: 'Task_Review' },
-        { flow_id: 'Flow_Review_Approve', source_ref: 'Task_Review', target_ref: 'Task_Approve' },
-        { flow_id: 'Flow_Review_Rework', source_ref: 'Task_Review', target_ref: 'Task_Rework' },
-        { flow_id: 'Flow_Rework_Review', source_ref: 'Task_Rework', target_ref: 'Task_Review' },
-        { flow_id: 'Flow_Approve_End', source_ref: 'Task_Approve', target_ref: 'EndEvent_1' },
+        { flow_id: 'Flow_Start_Review', source_ref: 'StartEvent_1', target_ref: 'Task_Review', condition: null },
+        { flow_id: 'Flow_Review_End', source_ref: 'Task_Review', target_ref: 'EndEvent_1', condition: null },
       ],
       task_bindings: [
         { activity_id: 'Activity_Review', main_task_id: 'Task_Review', confirmation_task_id: null },
@@ -121,40 +116,27 @@ async function openV2Fixture(t, payloadOverride) {
 
 // --- Limited palette tests ---
 
-test('default bpmn-js palette is not visible', async t => {
+test('limited palette is visible with the exact supported action set', async t => {
   const { page } = await openV2Fixture(t);
-  // The default bpmn-js palette should be hidden or replaced
-  const defaultPalette = page.locator('.djs-palette');
-  const count = await defaultPalette.count();
-  if (count > 0) {
-    // If palette exists, it should be hidden or have limited entries
-    const isHidden = await defaultPalette.evaluate(el =>
-      getComputedStyle(el).display === 'none' || !el.offsetHeight);
-    assert.ok(isHidden, 'Default palette should be hidden');
-  }
+  await page.locator('.djs-palette').waitFor({ state: 'visible', timeout: 1000 });
+  const actions = await page.locator('.djs-palette [data-action]:visible').evaluateAll(
+    entries => entries.map(entry => entry.dataset.action).sort(),
+  );
+  assert.deepEqual(actions, [
+    'connect', 'create.and', 'create.confirmation-task', 'create.end',
+    'create.intermediate', 'create.l5-task', 'create.lane', 'create.or',
+    'create.start', 'create.xor', 'delete', 'hand-tool', 'lasso-tool',
+  ]);
 });
 
-test('limited palette has L5 task, confirmation, gateways, events, connect, delete', async t => {
+test('limited palette does not expose unsupported service task creation', async t => {
   const { page } = await openV2Fixture(t);
-  // Check that the limited palette entries are available via the palette API
-  const entries = await page.evaluate(() => {
-    const palette = window.__FLOW_ARCHITECT__.modeler.get('palette');
-    // Trigger palette population by calling getEntries
-    const container = document.querySelector('.djs-palette');
-    if (!container) return [];
-    return [...container.querySelectorAll('[data-action]')].map(el => ({
-      action: el.dataset.action,
-      title: el.title || el.getAttribute('aria-label'),
-    }));
-  });
-  // At minimum, should have hand, lasso, connect, delete
-  const actions = entries.map(e => e.action);
-  assert.ok(actions.length >= 4, `Expected at least 4 palette entries, got ${actions.length}`);
+  assert.equal(await page.locator('.djs-palette [data-action="create.service-task"]:visible').count(), 0);
 });
 
 // --- L5 activity sync tests ---
 
-test('new L5 from activity table does not appear in BPMN until sync', async t => {
+test('new L5 from activity table synchronizes the business contract immediately', async t => {
   const { page } = await openV2Fixture(t);
   // Go to activity table and add a new activity
   await page.getByRole('tab', { name: /活动一览表/ }).click();

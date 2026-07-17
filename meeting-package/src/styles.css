@@ -434,12 +434,36 @@ body {
   font-size: 15px;
 }
 
-/* Hide bpmn-js professional UI chrome: palette, context pad, search, popup */
-.djs-palette,
+/* Keep only the limited business palette visible; hide professional UI chrome. */
 .djs-context-pad,
 .djs-popup,
 .djs-search,
 .bpmn-icon-group,
 .djs-overlay-context-pad {
   display: none !important;
+}
+
+.djs-palette {
+  display: block !important;
+}
+
+.djs-palette .entry,
+.djs-palette .separator {
+  display: none !important;
+}
+
+.djs-palette .entry[data-action="hand-tool"],
+.djs-palette .entry[data-action="lasso-tool"],
+.djs-palette .entry[data-action="create.l5-task"],
+.djs-palette .entry[data-action="create.confirmation-task"],
+.djs-palette .entry[data-action="create.xor"],
+.djs-palette .entry[data-action="create.and"],
+.djs-palette .entry[data-action="create.or"],
+.djs-palette .entry[data-action="create.start"],
+.djs-palette .entry[data-action="create.intermediate"],
+.djs-palette .entry[data-action="create.end"],
+.djs-palette .entry[data-action="create.lane"],
+.djs-palette .entry[data-action="connect"],
+.djs-palette .entry[data-action="delete"] {
+  display: flex !important;
 }

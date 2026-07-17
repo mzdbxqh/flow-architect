@@ -1,8 +1,8 @@
 /**
  * 业务合同结构命令
  *
- * 确定性命令模块，接收 draft 快照并返回新 draft。
- * 命令不直接访问 DOM/modeler，仅操作业务合同。
+ * 确定性命令模块：从 DraftStore 读取快照，在克隆上修改后一次性恢复。
+ * 命令不直接访问 DOM/modeler，仅操作业务合同；调用结果由自动布局事务负责提交或回滚。
  *
  * ID 分配规则：从当前已有稳定 ID 集合确定性地产生最小可用后缀。
  */
@@ -63,20 +63,41 @@ function generateFlowId(snapshot, usedIds) {
   return newId;
 }
 
-/**
- * 获取节点的主责角色
- */
-function getAccountableRole(snapshot, nodeId) {
-  const node = snapshot.diagram.nodes.find(n => n.node_id === nodeId);
-  if (!node || !node.activity_id) return null;
+function generateLaneId(snapshot) {
+  return nextAvailableId(new Set(snapshot.diagram.lanes.map(l => l.lane_id)), 'Lane');
+}
 
-  const activity = snapshot.activities.find(a => a.activity_id === node.activity_id);
-  if (!activity) return null;
-
-  if (activity.responsibility_model === 'OARP') {
-    return activity.role_assignments.find(r => r.responsibility === 'O') || null;
+function bypassNodes(snapshot, nodeIds) {
+  const ids = nodeIds instanceof Set ? nodeIds : new Set(nodeIds);
+  const incoming = snapshot.diagram.flows.filter(
+    flow => ids.has(flow.target_ref) && !ids.has(flow.source_ref),
+  );
+  const outgoing = snapshot.diagram.flows.filter(
+    flow => ids.has(flow.source_ref) && !ids.has(flow.target_ref),
+  );
+  const usedIds = new Set();
+  snapshot.diagram.flows = snapshot.diagram.flows.filter(
+    flow => !ids.has(flow.source_ref) && !ids.has(flow.target_ref),
+  );
+  for (const sourceFlow of incoming) {
+    for (const targetFlow of outgoing) {
+      if (sourceFlow.source_ref === targetFlow.target_ref) continue;
+      if (snapshot.diagram.flows.some(
+        flow => flow.source_ref === sourceFlow.source_ref
+          && flow.target_ref === targetFlow.target_ref,
+      )) continue;
+      snapshot.diagram.flows.push({
+        flow_id: generateFlowId(snapshot, usedIds),
+        source_ref: sourceFlow.source_ref,
+        target_ref: targetFlow.target_ref,
+        condition: targetFlow.condition || sourceFlow.condition || null,
+      });
+    }
   }
-  return activity.role_assignments.find(r => r.responsibility === 'R') || null;
+}
+
+function bypassNode(snapshot, nodeId) {
+  bypassNodes(snapshot, new Set([nodeId]));
 }
 
 /**
@@ -149,7 +170,6 @@ export function insertL5After(store, selectedNodeId, activitySeed) {
     node_type: 'MAIN_TASK',
     name: activitySeed.name,
     lane_id,
-    activity_id,
   };
 
   // 5. 创建 binding
@@ -232,7 +252,6 @@ export function appendGatewayBranch(store, selectedNodeId, gatewayType, branches
     node_type: gatewayNodeType,
     name: `网关 ${gatewayType}`,
     lane_id: lane_id || null,
-    activity_id: null,
   };
 
   // 3. 创建分支 Task 和活动
@@ -250,7 +269,6 @@ export function appendGatewayBranch(store, selectedNodeId, gatewayType, branches
       node_type: 'MAIN_TASK',
       name: branch.label,
       lane_id: lane_id || null,
-      activity_id,
     });
 
     branchActivities.push({
@@ -299,7 +317,7 @@ export function appendGatewayBranch(store, selectedNodeId, gatewayType, branches
       flow_id: generateFlowId(snapshot, usedIds),
       source_ref: gateway_id,
       target_ref: branchTaskIds[i],
-      condition: branch.condition || null,
+      condition: gatewayType === 'AND' ? null : (branch.condition ? { ...branch.condition, label: branch.condition.label || branch.label } : null),
     };
     newFlows.push(flowFromGateway);
   }
@@ -349,7 +367,15 @@ export function deleteNode(store, nodeId) {
     throw new Error(`节点不存在：${nodeId}`);
   }
 
-  const deleted = [nodeId];
+  if (node.node_type === 'START_EVENT') {
+    throw new Error('开始事件由流程卡片维护，不允许删除');
+  }
+  if (node.node_type === 'END_EVENT'
+    && snapshot.diagram.nodes.filter(item => item.node_type === 'END_EVENT').length <= 1) {
+    throw new Error('流程必须保留至少一个结束事件');
+  }
+
+  const deletedIds = new Set([nodeId]);
 
   // 1. 如果是主 Task，删除关联的活动、binding 和 confirmation
   if (node.node_type === 'MAIN_TASK') {
@@ -364,10 +390,7 @@ export function deleteNode(store, nodeId) {
 
       // 如果有确认 Task，也删除
       if (binding.confirmation_task_id) {
-        snapshot.diagram.nodes = snapshot.diagram.nodes.filter(
-          n => n.node_id !== binding.confirmation_task_id
-        );
-        deleted.push(binding.confirmation_task_id);
+        deletedIds.add(binding.confirmation_task_id);
       }
     }
   }
@@ -385,17 +408,22 @@ export function deleteNode(store, nodeId) {
     }
   }
 
-  // 3. 删除节点
-  snapshot.diagram.nodes = snapshot.diagram.nodes.filter(n => n.node_id !== nodeId);
+  // 3. 删除前旁路重连外部前驱与后继
+  bypassNodes(snapshot, deletedIds);
 
-  // 4. 删除相关 flow
-  snapshot.diagram.flows = snapshot.diagram.flows.filter(
-    f => f.source_ref !== nodeId && f.target_ref !== nodeId
+  // 4. 删除节点并同步流程级结束结果
+  snapshot.diagram.nodes = snapshot.diagram.nodes.filter(
+    item => !deletedIds.has(item.node_id),
   );
+  if (node.node_type === 'END_EVENT') {
+    snapshot.process_card.end_results = snapshot.process_card.end_results.filter(
+      result => result.event_id !== nodeId,
+    );
+  }
 
   store.restore(snapshot);
 
-  return { deleted };
+  return { deleted: [...deletedIds] };
 }
 
 /**
@@ -414,16 +442,14 @@ export function moveActivityToAccountableLane(store, activityId) {
   }
 
   // 1. 获取主责角色
-  let accountableRole;
-  if (activity.responsibility_model === 'OARP') {
-    accountableRole = activity.role_assignments.find(r => r.responsibility === 'O');
-  } else {
-    accountableRole = activity.role_assignments.find(r => r.responsibility === 'R');
+  const accountableCode = activity.responsibility_model === 'OARP' ? 'O' : 'R';
+  const accountableRoles = activity.role_assignments.filter(
+    role => role.responsibility === accountableCode,
+  );
+  if (accountableRoles.length !== 1) {
+    throw new Error(`活动必须恰有一个 ${accountableCode} 主责角色，当前 ${accountableRoles.length} 个`);
   }
-
-  if (!accountableRole) {
-    throw new Error('活动没有主责角色');
-  }
+  const [accountableRole] = accountableRoles;
 
   // 2. 查找对应泳道
   const targetLane = snapshot.diagram.lanes.find(l => l.role_id === accountableRole.role_id);
@@ -440,12 +466,15 @@ export function moveActivityToAccountableLane(store, activityId) {
   const old_lane_id = mainTask.lane_id;
   mainTask.lane_id = targetLane.lane_id;
 
-  // 4. 更新确认 Task 的泳道（如果有）
+  // 4. 确认从 Task 始终留在确认角色对应的泳道
   const binding = snapshot.diagram.task_bindings.find(b => b.activity_id === activityId);
   if (binding && binding.confirmation_task_id) {
     const confirmTask = snapshot.diagram.nodes.find(n => n.node_id === binding.confirmation_task_id);
     if (confirmTask) {
-      confirmTask.lane_id = targetLane.lane_id;
+      const confirmRoleId = activity.confirmation?.confirm_role_id;
+      const confirmLane = snapshot.diagram.lanes.find(l => l.role_id === confirmRoleId);
+      if (!confirmLane) throw new Error(`没有确认角色对应泳道：${confirmRoleId}`);
+      confirmTask.lane_id = confirmLane.lane_id;
     }
   }
 
@@ -466,9 +495,17 @@ export function moveActivityToAccountableLane(store, activityId) {
  */
 export function addLane(store, laneSeed) {
   const snapshot = store.snapshot();
+  const lane_id = laneSeed.lane_id || generateLaneId(snapshot);
+
+  if (snapshot.diagram.lanes.some(lane => lane.lane_id === lane_id)) {
+    throw new Error(`泳道 ID 已存在：${lane_id}`);
+  }
+  if (snapshot.diagram.lanes.some(lane => lane.role_id === laneSeed.role_id)) {
+    throw new Error(`角色泳道已存在：${laneSeed.role_id}`);
+  }
 
   const lane = {
-    lane_id: laneSeed.lane_id,
+    lane_id,
     name: laneSeed.name,
     role_id: laneSeed.role_id,
   };
@@ -476,7 +513,7 @@ export function addLane(store, laneSeed) {
   snapshot.diagram.lanes.push(lane);
   store.restore(snapshot);
 
-  return { lane_id: laneSeed.lane_id };
+  return { lane_id };
 }
 
 /**
@@ -492,16 +529,17 @@ export function addLane(store, laneSeed) {
  */
 export function addIntermediateEventAfter(store, selectedNodeId, eventSeed) {
   const snapshot = store.snapshot();
+  const usedIds = new Set();
+  const node_id = eventSeed.node_id || generateNodeId(snapshot, 'Intermediate', usedIds);
 
   const lane_id = snapshot.diagram.nodes.find(n => n.node_id === selectedNodeId)?.lane_id;
 
   // 1. 创建中间事件节点
   const eventNode = {
-    node_id: eventSeed.node_id,
+    node_id,
     node_type: eventSeed.event_type,
     name: eventSeed.name,
     lane_id: lane_id || null,
-    activity_id: null,
   };
 
   // 2. 重连流
@@ -510,9 +548,9 @@ export function addIntermediateEventAfter(store, selectedNodeId, eventSeed) {
 
   // selected -> event
   const flowToEvent = {
-    flow_id: generateFlowId(snapshot),
+    flow_id: generateFlowId(snapshot, usedIds),
     source_ref: selectedNodeId,
-    target_ref: eventSeed.node_id,
+    target_ref: node_id,
     condition: null,
   };
   newFlows.push(flowToEvent);
@@ -520,8 +558,8 @@ export function addIntermediateEventAfter(store, selectedNodeId, eventSeed) {
   // event -> oldTargets
   for (const oldFlow of oldOutgoingFlows) {
     const flowFromEvent = {
-      flow_id: generateFlowId(snapshot),
-      source_ref: eventSeed.node_id,
+      flow_id: generateFlowId(snapshot, usedIds),
+      source_ref: node_id,
       target_ref: oldFlow.target_ref,
       condition: oldFlow.condition,
     };
@@ -536,7 +574,7 @@ export function addIntermediateEventAfter(store, selectedNodeId, eventSeed) {
 
   store.restore(newSnapshot);
 
-  return { node_id: eventSeed.node_id };
+  return { node_id };
 }
 
 /**
@@ -551,30 +589,30 @@ export function addIntermediateEventAfter(store, selectedNodeId, eventSeed) {
  */
 export function addEndResultAfter(store, selectedNodeId, endSeed) {
   const snapshot = store.snapshot();
+  const event_id = endSeed.event_id || generateNodeId(snapshot, 'End');
 
   const lane_id = snapshot.diagram.nodes.find(n => n.node_id === selectedNodeId)?.lane_id;
 
   // 1. 创建结束事件节点
   const endNode = {
-    node_id: endSeed.event_id,
+    node_id: event_id,
     node_type: 'END_EVENT',
     name: endSeed.name,
     lane_id: lane_id || null,
-    activity_id: null,
   };
 
   // 2. 重连流：selected -> end
   const flowToEnd = {
     flow_id: generateFlowId(snapshot),
     source_ref: selectedNodeId,
-    target_ref: endSeed.event_id,
+    target_ref: event_id,
     condition: null,
   };
 
   // 3. 更新快照（原子操作：新对象一次性替换）
   const newSnapshot = structuredClone(snapshot);
   newSnapshot.process_card.end_results.push({
-    event_id: endSeed.event_id,
+    event_id,
     name: endSeed.name,
   });
   newSnapshot.diagram.nodes.push(endNode);
@@ -582,7 +620,43 @@ export function addEndResultAfter(store, selectedNodeId, endSeed) {
 
   store.restore(newSnapshot);
 
-  return { event_id: endSeed.event_id };
+  return { event_id };
+}
+
+/** 同步流程卡片起点与唯一 START_EVENT。 */
+export function updateStartEvent(store, start) {
+  const snapshot = store.snapshot();
+  const startNodes = snapshot.diagram.nodes.filter(node => node.node_type === 'START_EVENT');
+  if (startNodes.length !== 1) {
+    throw new Error(`FA-DRAFT-CARD-002: 流程必须恰好一个开始事件，当前 ${startNodes.length} 个`);
+  }
+  const startNode = startNodes[0];
+  const newSnapshot = structuredClone(snapshot);
+  newSnapshot.process_card.start = {
+    ...structuredClone(start),
+    event_id: startNode.node_id,
+  };
+  const target = newSnapshot.diagram.nodes.find(node => node.node_id === startNode.node_id);
+  target.name = start.name;
+  store.restore(newSnapshot);
+  return { event_id: startNode.node_id };
+}
+
+/** 同步业务终点名称与对应 END_EVENT。 */
+export function renameEndResult(store, eventId, name) {
+  const snapshot = store.snapshot();
+  const result = snapshot.process_card.end_results.find(item => item.event_id === eventId);
+  const node = snapshot.diagram.nodes.find(
+    item => item.node_id === eventId && item.node_type === 'END_EVENT',
+  );
+  if (!result || !node) {
+    throw new Error(`FA-DRAFT-CARD-003: 业务终点与结束事件不一致：${eventId}`);
+  }
+  const newSnapshot = structuredClone(snapshot);
+  newSnapshot.process_card.end_results.find(item => item.event_id === eventId).name = name;
+  newSnapshot.diagram.nodes.find(item => item.node_id === eventId).name = name;
+  store.restore(newSnapshot);
+  return { event_id: eventId };
 }
 
 /**
@@ -596,6 +670,33 @@ export function addEndResultAfter(store, selectedNodeId, endSeed) {
  */
 export function connectNodes(store, sourceRef, targetRef, condition) {
   const snapshot = store.snapshot();
+
+  if (!snapshot.diagram.nodes.some(node => node.node_id === sourceRef)) {
+    throw new Error(`源节点不存在：${sourceRef}`);
+  }
+  if (!snapshot.diagram.nodes.some(node => node.node_id === targetRef)) {
+    throw new Error(`目标节点不存在：${targetRef}`);
+  }
+  if (snapshot.diagram.flows.some(
+    flow => flow.source_ref === sourceRef && flow.target_ref === targetRef,
+  )) {
+    throw new Error(`顺序流已存在：${sourceRef} → ${targetRef}`);
+  }
+
+  // F3: 顺序流结构门禁
+  if (sourceRef === targetRef) {
+    throw new Error('FA-DRAFT-FLOW-001: 不允许创建自环连接');
+  }
+
+  const sourceNode = snapshot.diagram.nodes.find(n => n.node_id === sourceRef);
+  const targetNode = snapshot.diagram.nodes.find(n => n.node_id === targetRef);
+
+  if (sourceNode.node_type === 'END_EVENT') {
+    throw new Error('FA-DRAFT-FLOW-001: 不允许从结束事件出发创建连接');
+  }
+  if (targetNode.node_type === 'START_EVENT') {
+    throw new Error('FA-DRAFT-FLOW-001: 不允许指向开始事件创建连接');
+  }
 
   const flow_id = generateFlowId(snapshot);
 
@@ -621,7 +722,7 @@ export function connectNodes(store, sourceRef, targetRef, condition) {
  * @param {string} confirmRoleId - 确认角色 ID
  * @returns {{ confirmation_task_id: string }}
  */
-export function addConfirmationTask(store, activityId, confirmRoleId) {
+export function addConfirmationTask(store, activityId, declaration) {
   const snapshot = store.snapshot();
   const activity = snapshot.activities.find(a => a.activity_id === activityId);
 
@@ -630,8 +731,21 @@ export function addConfirmationTask(store, activityId, confirmRoleId) {
   }
 
   // 1. 验证三条件（FA-DRAFT-CONFIRM-001）
+  const {
+    confirm_role_id: confirmRoleId,
+    co_completes: coCompletes,
+    confirm_bears_final_responsibility: bearsFinalResponsibility,
+    no_formal_approval_meeting: noFormalApprovalMeeting,
+  } = declaration || {};
+
   if (!confirmRoleId) {
     throw new Error('FA-DRAFT-CONFIRM-001: 确认角色不能为空');
+  }
+  if (coCompletes !== true || bearsFinalResponsibility !== true || noFormalApprovalMeeting !== true) {
+    throw new Error('FA-DRAFT-CONFIRM-001: 确认从 Task 的三个条件必须全部满足，否则请创建独立审批 L5 活动');
+  }
+  if (activity.confirmation) {
+    throw new Error('FA-DRAFT-CONFIRM-001: 该活动已存在确认从 Task');
   }
 
   // 获取主责角色
@@ -651,17 +765,18 @@ export function addConfirmationTask(store, activityId, confirmRoleId) {
   // 2. 生成 ID
   const confirmation_task_id = generateNodeId(snapshot, 'ConfirmTask');
 
-  // 3. 获取主 Task 的泳道
-  const mainTask = snapshot.diagram.nodes.find(n => n.node_id === activity.main_task_id);
-  const lane_id = mainTask?.lane_id;
+  // 3. 确认从 Task 放在确认角色对应的泳道
+  const confirmLane = snapshot.diagram.lanes.find(l => l.role_id === confirmRoleId);
+  if (!confirmLane) {
+    throw new Error(`FA-DRAFT-CONFIRM-001: 没有确认角色对应泳道：${confirmRoleId}`);
+  }
 
   // 4. 创建确认 Task 节点
   const confirmTaskNode = {
     node_id: confirmation_task_id,
     node_type: 'CONFIRMATION_TASK',
     name: `确认：${activity.name}`,
-    lane_id: lane_id || null,
-    activity_id: activityId,
+    lane_id: confirmLane.lane_id,
   };
 
   // 5. 更新快照（原子操作：新对象一次性替换）
@@ -670,9 +785,9 @@ export function addConfirmationTask(store, activityId, confirmRoleId) {
   newActivity.confirmation = {
     confirmation_task_id,
     confirm_role_id: confirmRoleId,
-    co_completes: false,
-    confirm_bears_final_responsibility: false,
-    no_formal_approval_meeting: false,
+    co_completes: coCompletes,
+    confirm_bears_final_responsibility: bearsFinalResponsibility,
+    no_formal_approval_meeting: noFormalApprovalMeeting,
   };
 
   // 6. 更新 binding
@@ -681,7 +796,30 @@ export function addConfirmationTask(store, activityId, confirmRoleId) {
     newBinding.confirmation_task_id = confirmation_task_id;
   }
 
-  // 7. 更新快照
+  // 7. 将确认从 Task 串行插入主 Task 之后
+  const oldOutgoingFlows = newSnapshot.diagram.flows.filter(
+    flow => flow.source_ref === activity.main_task_id,
+  );
+  const usedIds = new Set();
+  newSnapshot.diagram.flows = newSnapshot.diagram.flows.filter(
+    flow => flow.source_ref !== activity.main_task_id,
+  );
+  newSnapshot.diagram.flows.push({
+    flow_id: generateFlowId(newSnapshot, usedIds),
+    source_ref: activity.main_task_id,
+    target_ref: confirmation_task_id,
+    condition: null,
+  });
+  for (const oldFlow of oldOutgoingFlows) {
+    newSnapshot.diagram.flows.push({
+      flow_id: generateFlowId(newSnapshot, usedIds),
+      source_ref: confirmation_task_id,
+      target_ref: oldFlow.target_ref,
+      condition: oldFlow.condition,
+    });
+  }
+
+  // 8. 更新快照
   newSnapshot.diagram.nodes.push(confirmTaskNode);
   store.restore(newSnapshot);
 
@@ -712,14 +850,12 @@ export function removeConfirmationTask(store, activityId) {
   // 原子操作：新对象一次性替换
   const newSnapshot = structuredClone(snapshot);
 
-  // 1. 删除确认 Task 节点
+  // 1. 旁路确认 Task，恢复主 Task 到后继节点的连接
+  bypassNode(newSnapshot, confirmation_task_id);
+
+  // 2. 删除确认 Task 节点
   newSnapshot.diagram.nodes = newSnapshot.diagram.nodes.filter(
     n => n.node_id !== confirmation_task_id
-  );
-
-  // 2. 删除相关 flow
-  newSnapshot.diagram.flows = newSnapshot.diagram.flows.filter(
-    f => f.source_ref !== confirmation_task_id && f.target_ref !== confirmation_task_id
   );
 
   // 3. 清空 confirmation

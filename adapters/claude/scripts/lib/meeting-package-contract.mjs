@@ -12,6 +12,14 @@ function getValidators() {
   if (validators) return validators;
   const Ajv = requireRuntimePackage('core', 'ajv/dist/2020.js');
   const ajv = new Ajv({ allErrors: true });
+  for (const name of [
+    'process-card.schema.json',
+    'activity-catalog.schema.json',
+    'diagram-draft.schema.json',
+    'field-provenance.schema.json',
+  ]) {
+    ajv.addSchema(JSON.parse(fs.readFileSync(path.join(SCHEMA_DIR, name), 'utf8')));
+  }
   validators = {
     questions: ajv.compile(JSON.parse(fs.readFileSync(
       path.join(SCHEMA_DIR, 'clarification-questions.schema.json'), 'utf8'))),
@@ -19,6 +27,8 @@ function getValidators() {
       path.join(SCHEMA_DIR, 'meeting-package-metadata.schema.json'), 'utf8'))),
     payload: ajv.compile(JSON.parse(fs.readFileSync(
       path.join(SCHEMA_DIR, 'meeting-package-payload.schema.json'), 'utf8'))),
+    draft: ajv.compile(JSON.parse(fs.readFileSync(
+      path.join(SCHEMA_DIR, 'process-draft.schema.json'), 'utf8'))),
   };
   return validators;
 }
@@ -31,6 +41,7 @@ function result(validate, value) {
 export const validateQuestions = value => result(getValidators().questions, value);
 export const validateMetadata = value => result(getValidators().metadata, value);
 export const validatePayload = value => result(getValidators().payload, value);
+export const validateMeetingDraft = value => result(getValidators().draft, value);
 
 export function canonicalQuestions(questions) {
   return questions.map(q => ({
@@ -86,16 +97,19 @@ export function computeContentHash(processCard, activities, diagram, bpmnXml, qu
  * @returns {object} Complete V2 payload
  */
 export function createMeetingPayload({ draft, bpmnXml, metadata }) {
-  const normalizedQuestions = canonicalQuestions(draft.questions || []);
+  const d = validateMeetingDraft(draft);
+  if (!d.valid) throw new Error(`流程草稿不符合 schema: ${JSON.stringify(d.errors)}`);
+
+  const normalizedQuestions = canonicalQuestions(draft.questions);
 
   const contentHash = computeContentHash(
     draft.process_card,
-    draft.activities || [],
-    draft.diagram || { lanes: [], nodes: [], flows: [], task_bindings: [], layout_version: '2.0.0' },
+    draft.activities,
+    draft.diagram,
     bpmnXml,
     normalizedQuestions,
-    draft.provenance || {},
-    draft.source_summary || { total_blocks: 0, formats: [], evidence_refs: [] },
+    draft.provenance,
+    draft.source_summary,
   );
 
   const completeMetadata = {
@@ -114,12 +128,12 @@ export function createMeetingPayload({ draft, bpmnXml, metadata }) {
   const payload = {
     metadata: completeMetadata,
     process_card: draft.process_card,
-    activities: draft.activities || [],
-    diagram: draft.diagram || { lanes: [], nodes: [], flows: [], task_bindings: [], layout_version: '2.0.0' },
+    activities: draft.activities,
+    diagram: draft.diagram,
     bpmn_xml: bpmnXml,
     questions: normalizedQuestions,
-    provenance: draft.provenance || {},
-    source_summary: draft.source_summary || { total_blocks: 0, formats: [], evidence_refs: [] },
+    provenance: draft.provenance,
+    source_summary: draft.source_summary,
   };
 
   const p = validatePayload(payload);

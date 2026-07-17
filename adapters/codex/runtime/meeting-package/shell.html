@@ -17,8 +17,6 @@
         <button type="button" id="fa-insert-task" aria-label="后插活动">后插活动</button>
         <button type="button" id="fa-add-gateway" aria-label="增加判断">增加判断</button>
         <button type="button" id="fa-delete" aria-label="删除活动">删除活动</button>
-        <button type="button" id="fa-undo" aria-label="撤销">撤销</button>
-        <button type="button" id="fa-redo" aria-label="重做">重做</button>
       </nav>
       <nav id="fa-export-controls">
         <button type="button" id="fa-export-html" aria-label="导出新版本">导出新版本</button>
@@ -66,6 +64,16 @@
         <label>是分支活动<input type="text" id="fa-gateway-yes" aria-label="是分支活动" required></label>
         <label>否分支活动<input type="text" id="fa-gateway-no" aria-label="否分支活动" required></label>
         <menu><button type="button" id="fa-gateway-cancel">取消</button><button type="submit" id="fa-gateway-confirm">确认新增判断</button></menu>
+      </form>
+    </dialog>
+    <dialog id="fa-confirmation-dialog">
+      <form method="dialog">
+        <p>只有三项业务条件全部满足时，才能把内部确认建模为同一 L5 的确认从 Task；否则请创建独立审批活动。</p>
+        <label>确认角色 ID<input type="text" id="fa-confirmation-role" aria-label="确认角色 ID" required></label>
+        <label><input type="checkbox" id="fa-confirmation-co-completes" aria-label="与主任务共同完成">与主任务共同完成</label>
+        <label><input type="checkbox" id="fa-confirmation-final-responsibility" aria-label="确认者承担最终责任">确认者承担最终责任</label>
+        <label><input type="checkbox" id="fa-confirmation-no-meeting" aria-label="不存在正式审批会议">不存在正式审批会议</label>
+        <menu><button type="button" id="fa-confirmation-cancel">取消</button><button type="submit" id="fa-confirmation-confirm">确认新增内部确认</button></menu>
       </form>
     </dialog>
     <dialog id="fa-delete-confirm-dialog">

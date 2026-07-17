@@ -12,7 +12,7 @@ For installation and usage instructions, see [INSTALL.md](INSTALL.md) or the [Ch
 | `flow-architect-flow-review-integrated` | Joint review of process architecture and diagrams |
 | `flow-architect-flow-review-architecture` | Review L4/L5/L6/SOP layered architecture only |
 | `flow-architect-flow-review-diagram` | Review BPMN, Mermaid, SVG, PNG, or PDF diagrams only |
-| `flow-architect-build-meeting-package` | Build offline HTML discussion package from BPMN + questions JSON |
+| `flow-architect-build-meeting-package` | Build an offline editable HTML discussion package from one complete V2 process draft |
 | `flow-architect-draft-process` | Generate L5 BPMN process drafts from multiple source materials (deterministic, zero-LLM extraction and generation) |
 | `flow-architect-help` | Show capabilities, runtime status, examples, and diagnostics |
 | `flow-architect-setup` | Initialize core and user-selected optional runtime components |
@@ -46,9 +46,9 @@ Phase 2 adds `flow-architect-draft-process`, a **creation** skill that generates
 
 ## Process Draft — Meeting Workflow
 
-**Before the meeting:** Generate the draft from source materials, producing BPMN, questions JSON, and an offline HTML discussion package.
+**Before the meeting:** Generate one V2 process draft. The deterministic compiler turns that business contract into BPMN XML/DI and an offline HTML discussion package.
 
-**During the meeting:** Open the HTML in a browser (no network required). Edit process elements, answer questions, and mark confidence. Export a new revision at any time.
+**During the meeting:** Open the HTML in a browser (no network required). View and edit the process diagram, process card, activity catalog, and confirmation questions in one file. Structural changes are re-laid out deterministically after each operation. Export a new revision at any time.
 
 **After the meeting:** Extract the exported HTML revision using `extract-meeting-package.mjs`, compare it against the original draft with `compare-package-revisions.mjs`, and feed the confirmed changes back as the next iteration's input.
 
@@ -71,12 +71,11 @@ Only per-batch semantic interpretation (fragment production) may invoke an LLM w
 
 ## Offline Meeting Package
 
-Build an offline HTML discussion package from BPMN XML and questions JSON:
+Build an offline HTML discussion package from one complete V2 process draft:
 
 ```bash
 node scripts/build-single-diagram-html.mjs \
-  --bpmn ./process.bpmn \
-  --questions ./questions.json \
+  --draft ./process-draft.json \
   --title "Procurement Approval" \
   --revision r01 \
   --package-id procurement-approval \
@@ -84,27 +83,14 @@ node scripts/build-single-diagram-html.mjs \
   --output procurement-r01.html
 ```
 
-When the BPMN contains multiple processes, you must specify which one to build:
-
-```bash
-node scripts/build-single-diagram-html.mjs \
-  --bpmn ./multi-process.bpmn \
-  --questions ./questions.json \
-  --title "Order Process" \
-  --revision r01 \
-  --package-id order-process \
-  --process-id Process_Order \
-  --run-dir ./runs/meeting-package \
-  --output order-r01.html
-```
-
-When the BPMN contains exactly one process, `--process-id` can be omitted and is auto-inferred.
+The V2 draft is the single business-data source and includes `process_card`, `activities`, `diagram`, and `questions`. BPMN XML and DI are compiled deterministically; the command does not accept model-generated coordinates.
 
 The generated HTML:
 - Opens and edits offline without network access
+- Shows and edits the process diagram, process card, and activity catalog together
 - Supports bidirectional navigation between questions and process elements
-- Supports undo, redo, and business-friendly editing
-- Exports new HTML versions, BPMN, SVG, and questions JSON
+- Uses a limited BPMN toolbox and deterministic full re-layout after structural operations
+- Exports new HTML versions, BPMN, SVG, questions JSON, and the complete V2 JSON
 
 ## Confidence Degradation
 

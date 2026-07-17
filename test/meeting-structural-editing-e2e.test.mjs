@@ -71,7 +71,7 @@ function minimalPayload() {
       ],
       nodes: [
         { node_id: 'Start_1', node_type: 'START_EVENT', name: '开始', lane_id: null },
-        { node_id: 'Task_1', node_type: 'MAIN_TASK', name: '初始活动', lane_id: 'Lane_A', activity_id: 'Activity_1' },
+        { node_id: 'Task_1', node_type: 'MAIN_TASK', name: '初始活动', lane_id: 'Lane_A' },
         { node_id: 'End_1', node_type: 'END_EVENT', name: '结束', lane_id: null },
       ],
       flows: [
@@ -144,7 +144,6 @@ function readSnapshot(page) {
         node_type: n.node_type,
         name: n.name,
         lane_id: n.lane_id,
-        activity_id: n.activity_id,
       })),
       bindingCount: s.diagram.task_bindings.length,
       bindings: s.diagram.task_bindings.map(b => ({
@@ -186,7 +185,8 @@ test('Step 1: 活动表新增 L5 活动，断言 activities/nodes/bindings 各 +
     n.node_type === 'MAIN_TASK' && n.node_id !== 'Task_1'
   );
   assert.equal(newTasks.length, 1, '新增 MAIN_TASK 应为 1');
-  assert.ok(newTasks[0].activity_id, '新 Task 应绑定活动');
+  assert.ok(after.bindings.some(binding => binding.main_task_id === newTasks[0].node_id),
+    '新 Task 应通过 task_binding 绑定活动');
   assert.ok(after.bpmnXmlLength > 0, 'bpmn_xml 应被更新');
 
   // 切回流程图验证图上同步
@@ -406,6 +406,11 @@ test('Step 6: 删除主 Task 后活动和 binding 同步删除', async t => {
     !after.nodes.find(n => n.node_id === 'Task_1'),
     'Task_1 应被删除'
   );
+  const reconnected = await page.evaluate(() =>
+    window.__FLOW_ARCHITECT__.store.snapshot().diagram.flows.some(
+      flow => flow.source_ref === 'Start_1' && flow.target_ref === 'End_1',
+    ));
+  assert.equal(reconnected, true, '删除主 Task 后应保持起点到终点可达');
 
   // bpmn_xml 应被更新且不包含已删除的 Task
   const bpmnXml = await page.evaluate(() =>
@@ -429,6 +434,16 @@ test('Step 7: 导出 r02 重开后状态完整保留', async t => {
 
   const snapBefore = await readSnapshot(page);
   assert.equal(snapBefore.activityCount, 2, '应有 2 个活动');
+
+  const exportProbe = await page.evaluate(async () => {
+    try {
+      await window.__FLOW_ARCHITECT__.exportController.currentPayload();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error.message };
+    }
+  });
+  assert.equal(exportProbe.ok, true, `导出前完整门禁失败：${exportProbe.message || ''}`);
 
   // Step B: 导出 r02
   await page.getByRole('tab', { name: /流程图/ }).click();
@@ -504,4 +519,7 @@ test('所有结构操作后 bpmn_xml 可通过 compileBpmn 重新编译', async 
   assert.equal(result.activityCount, 2);
   assert.ok(result.nodeCount >= 4, '节点数应 >= 4（Start + Task1 + 新Task + End）');
   assert.equal(result.bindingCount, 2);
+  const snapshot = await page.evaluate(() => window.__FLOW_ARCHITECT__.store.snapshot());
+  assert.equal(snapshot.bpmn_xml, compileBpmn(snapshot).xml,
+    'store.bpmn_xml 必须与同一快照重新编译的规范 XML 字节一致');
 });

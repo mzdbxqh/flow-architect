@@ -4,6 +4,7 @@ import { DraftStore } from '../meeting-package/src/draft-store.js';
 
 function minimalV2Payload() {
   return {
+    schema_version: '2.0.0',
     metadata: {
       schema_version: '2.0.0',
       package_id: 'test',
@@ -244,4 +245,12 @@ test('DraftStore can add and remove end_results', () => {
 test('DraftStore restore rejects invalid payload structure', () => {
   const store = new DraftStore({ payload: minimalV2Payload() });
   assert.throws(() => store.restore({}), /schema|process_card|缺少|required/i);
+});
+
+test('DraftStore rejects missing V2 provenance and source_summary', () => {
+  for (const field of ['provenance', 'source_summary']) {
+    const invalid = minimalV2Payload();
+    delete invalid[field];
+    assert.throws(() => new DraftStore({ payload: invalid }), new RegExp(field));
+  }
 });

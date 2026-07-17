@@ -33,16 +33,20 @@ export class AutoLayoutController {
       throw new Error('正在处理结构变更，请稍候');
     }
     this._applying = true;
-
-    // 1. 保存操作前快照
-    const snapshot = this.store.snapshot();
-    const { xml: xmlBefore } = await this.modeler.saveXML({ format: true });
-    const selection = this.modeler.get('selection').get();
-    const selectionId = selection.length > 0 ? selection[0].id : null;
+    let snapshot = null;
+    let xmlBefore = null;
+    let selectionId = null;
+    const dirtyBefore = this.store.dirty;
 
     try {
+      // 1. 保存操作前快照
+      snapshot = this.store.snapshot();
+      ({ xml: xmlBefore } = await this.modeler.saveXML({ format: true }));
+      const selection = this.modeler.get('selection').get();
+      selectionId = selection.length > 0 ? selection[0].id : null;
+
       // 2. 执行变更
-      await mutation(this.store, this.modeler);
+      const result = await mutation(this.store, this.modeler);
 
       // 3. 从当前业务合同重建规范化图
       const currentSnapshot = this.store.snapshot();
@@ -63,35 +67,43 @@ export class AutoLayoutController {
 
       // 6. 直接保存 compileBpmn 返回的规范 XML，不信任 modeler.saveXML
       this.store.updateBpmnXml(newXml);
+      return result;
 
     } catch (error) {
-      // 7. 回滚快照
-      await this._rollback(snapshot, xmlBefore, selectionId);
-      throw new Error(`结构变更失败（${description}）：${error.message}`);
+      let rollbackError = null;
+      if (snapshot && xmlBefore !== null) {
+        try {
+          await this._rollback(snapshot, xmlBefore, selectionId, dirtyBefore);
+        } catch (caught) {
+          rollbackError = caught;
+        }
+      }
+      const rollbackMessage = rollbackError
+        ? `；回滚失败：${rollbackError.message}`
+        : '';
+      throw new Error(
+        `FA-DRAFT-LAYOUT-001: 结构变更失败（${description}）：${error.message}${rollbackMessage}`,
+      );
     } finally {
       this._applying = false;
     }
   }
 
-  async _rollback(snapshot, xmlBefore, selectionId) {
-    try {
-      // 恢复 store
-      this.store.restore(snapshot);
+  async _rollback(snapshot, xmlBefore, selectionId, dirtyBefore) {
+    // 恢复 store，包含操作前 dirty 状态
+    this.store.restore(snapshot, { dirty: dirtyBefore });
 
-      // 恢复 bpmn-js
-      await this.modeler.importXML(xmlBefore);
-      try { this.modeler.get('canvas').zoom('fit-viewport'); } catch (_) { /* SVG 尚未就绪 */ }
+    // 恢复 bpmn-js
+    await this.modeler.importXML(xmlBefore);
+    try { this.modeler.get('canvas').zoom('fit-viewport'); } catch (_) { /* SVG 尚未就绪 */ }
 
-      // 恢复选择
-      if (selectionId) {
-        const registry = this.modeler.get('elementRegistry');
-        const element = registry.get(selectionId);
-        if (element) {
-          this.modeler.get('selection').select(element);
-        }
+    // 恢复选择
+    if (selectionId) {
+      const registry = this.modeler.get('elementRegistry');
+      const element = registry.get(selectionId);
+      if (element) {
+        this.modeler.get('selection').select(element);
       }
-    } catch (rollbackError) {
-      console.error('回滚失败：', rollbackError);
     }
   }
 
