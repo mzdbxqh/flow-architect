@@ -23,6 +23,7 @@ import { extractArtifactEvidence } from '../scripts/lib/source-evidence-extracto
 import { normalizeEvidenceToMarkdown } from '../scripts/lib/markdown-normalizer.mjs';
 import { buildEvidenceBatches } from '../scripts/lib/evidence-batching.mjs';
 import { validateEvidenceBatch, validateEvidenceBlock, validateEvidenceIndex } from '../scripts/lib/process-draft-contract.mjs';
+import { validateContract } from '../scripts/lib/contract-validation.mjs';
 import {
   createDrawingmlFlowFixture,
   createDrawingmlOnlyFixture,
@@ -45,13 +46,6 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/**
- * 断言集合非空（规避扫描正则中的 length 比较模式）
- */
-function assertNonEmpty(val, msg) {
-  const n = typeof val === 'string' || Array.isArray(val) ? val.length : val;
-  assert.notStrictEqual(n, 0, msg || 'expected non-empty');
-}
 
 // 已提交 fixture 文件的 SHA-256（STORE 压缩，确定性生成）
 const COMMITTED_FIXTURE_SHAS = {
@@ -170,6 +164,10 @@ describe('DrawingML 提取器', () => {
       assert.equal(a.sha256.length, 64);
       assert.equal(typeof a.size_bytes, 'number');
       assert.equal(a.size_bytes > 0, true);
+
+      // 调用正式 Schema 验证
+      const result = validateContract('input-manifest', manifest);
+      assert.deepEqual(result, { valid: true, errors: null }, '纯表格 manifest should be valid');
     });
 
     it('纯原生图 → DIAGRAM / STRUCTURED / 0.9 / [DRAWINGML_STRUCTURE] / null', async () => {
@@ -187,6 +185,10 @@ describe('DrawingML 提取器', () => {
       assert.equal(a.confidence, 0.9);
       assert.deepEqual(a.capabilities, ['DRAWINGML_STRUCTURE']);
       assert.equal(a.degradation_reason, null);
+
+      // 调用正式 Schema 验证
+      const result = validateContract('input-manifest', manifest);
+      assert.deepEqual(result, { valid: true, errors: null }, '纯原生图 manifest should be valid');
     });
 
     it('表格+原生图 → MIXED / STRUCTURED / 0.9 / [XLSX_TABLE,DRAWINGML_STRUCTURE] / null', async () => {
@@ -204,6 +206,10 @@ describe('DrawingML 提取器', () => {
       assert.equal(a.confidence, 0.9);
       assert.deepEqual(a.capabilities, ['XLSX_TABLE', 'DRAWINGML_STRUCTURE']);
       assert.equal(a.degradation_reason, null);
+
+      // 调用正式 Schema 验证
+      const result = validateContract('input-manifest', manifest);
+      assert.deepEqual(result, { valid: true, errors: null }, '表格+原生图 manifest should be valid');
     });
 
     it('纯图片 → DIAGRAM / VISUAL_ONLY / 0.5 / [VISUAL_ONLY] / 固定降级原因', async () => {
@@ -220,9 +226,14 @@ describe('DrawingML 提取器', () => {
       assert.equal(a.parse_mode, 'VISUAL_ONLY');
       assert.equal(a.confidence, 0.5);
       assert.deepEqual(a.capabilities, ['VISUAL_ONLY']);
-      assert.equal(typeof a.degradation_reason, 'string');
-      assert.equal(typeof a.degradation_reason, "string");
-      assert.notEqual(a.degradation_reason, "");
+
+      // 精确断言降级原因
+      const expectedDegradation = 'XLSX contains only raster images, no editable shapes';
+      assert.equal(a.degradation_reason, expectedDegradation, '纯图片 degradation_reason should be fixed');
+
+      // 调用正式 Schema 验证
+      const result = validateContract('input-manifest', manifest);
+      assert.deepEqual(result, { valid: true, errors: null }, '纯图片 manifest should be valid');
     });
 
     it('表格+图片 → MIXED / SEMI_STRUCTURED / 0.5 / [XLSX_TABLE,VISUAL_ONLY] / 固定降级原因', async () => {
@@ -239,9 +250,14 @@ describe('DrawingML 提取器', () => {
       assert.equal(a.parse_mode, 'SEMI_STRUCTURED');
       assert.equal(a.confidence, 0.5);
       assert.deepEqual(a.capabilities, ['XLSX_TABLE', 'VISUAL_ONLY']);
-      assert.equal(typeof a.degradation_reason, 'string');
-      assert.equal(typeof a.degradation_reason, "string");
-      assert.notEqual(a.degradation_reason, "");
+
+      // 精确断言降级原因
+      const expectedDegradation = 'XLSX contains only raster images, no editable shapes';
+      assert.equal(a.degradation_reason, expectedDegradation, '表格+图片 degradation_reason should be fixed');
+
+      // 调用正式 Schema 验证
+      const result = validateContract('input-manifest', manifest);
+      assert.deepEqual(result, { valid: true, errors: null }, '表格+图片 manifest should be valid');
     });
   });
 
@@ -429,7 +445,10 @@ describe('DrawingML 提取器', () => {
       assert.equal(result.hasDrawingml, false);
       assert.equal(result.hasEditableShapes, false);
       const extWarnings = result.warnings.filter(w => w.code === 'DRAWINGML_EXTERNAL_TARGET');
-      assertNonEmpty(extWarnings, "Should have DRAWINGML_EXTERNAL_TARGET warning");
+      assert.equal(extWarnings.length, 1, 'Should have exactly 1 DRAWINGML_EXTERNAL_TARGET warning');
+      assert.equal(extWarnings[0].code, 'DRAWINGML_EXTERNAL_TARGET', 'Warning code should be DRAWINGML_EXTERNAL_TARGET');
+      assert.equal(typeof extWarnings[0].message, 'string', 'Warning message should be string');
+      assert.equal(extWarnings[0].message.includes('External TargetMode'), true, 'Warning should mention External TargetMode');
     });
 
     it('重复 relationship ID 必须 fail-closed 抛出错误', async () => {
@@ -466,7 +485,10 @@ describe('DrawingML 提取器', () => {
       const escapeWarnings = result.warnings.filter(w =>
         w.code === 'DRAWINGML_PATH_ESCAPE' || w.code === 'DRAWINGML_UNSAFE_TARGET'
       );
-      assertNonEmpty(escapeWarnings, "Should have path escape/unsafe target warning");
+      assert.equal(escapeWarnings.length, 1, 'Should have exactly 1 path escape/unsafe target warning');
+      assert.equal(escapeWarnings[0].code, 'DRAWINGML_PATH_ESCAPE', 'Warning code should be DRAWINGML_PATH_ESCAPE');
+      assert.equal(typeof escapeWarnings[0].message, 'string', 'Warning message should be string');
+      assert.equal(escapeWarnings[0].message.includes('escapes xl/ root'), true, 'Warning should mention path escape');
     });
 
     it('损坏的 drawing XML 必须产生稳定结果（空元素，无崩溃）', async () => {
@@ -484,7 +506,31 @@ describe('DrawingML 提取器', () => {
       const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
       const result = await extractDrawingml(buffer);
       const missingWarnings = result.warnings.filter(w => w.code === 'DRAWINGML_MISSING_DRAWING_REL');
-      assertNonEmpty(missingWarnings, "Should have DRAWINGML_MISSING_DRAWING_REL warning");
+      assert.equal(missingWarnings.length, 1, 'Should have exactly 1 DRAWINGML_MISSING_DRAWING_REL warning');
+      assert.equal(missingWarnings[0].code, 'DRAWINGML_MISSING_DRAWING_REL', 'Warning code should be DRAWINGML_MISSING_DRAWING_REL');
+      assert.equal(typeof missingWarnings[0].message, 'string', 'Warning message should be string');
+      assert.equal(missingWarnings[0].message.includes('No drawing relationship found'), true, 'Warning should mention missing relationship');
+    });
+
+    it('歧义 drawing fixture 必须选择第一个 drawing 并正常解析', async () => {
+      const fixture = createAmbiguousDrawingFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const result = await inspectDrawingmlPackage(buffer);
+      // 当有多个匹配的 drawing relationship 时，代码应该选择第一个并正常解析
+      assert.equal(result.hasDrawingml, true, 'Should detect drawing content');
+      assert.equal(result.hasEditableShapes, true, 'Should detect editable shapes');
+      assert.equal(result.sheets.length, 1, 'Should have 1 sheet');
+      assert.equal(result.sheets[0].has_drawing, true, 'Sheet should have drawing');
+    });
+
+    it('损坏的 drawing XML 必须产生稳定结果（空元素，无崩溃）', async () => {
+      const fixture = createCorruptedDrawingFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      // fast-xml-parser 对损坏 XML 静默返回空结果，不得崩溃
+      const result = await extractDrawingml(buffer);
+      assert.equal(result.elements.length, 0);
+      assert.equal(result.connectors.length, 0);
+      assert.equal(result.pictures.length, 0);
     });
 
     it('External TargetMode 的 workbook relationship 必须被过滤', async () => {
@@ -570,6 +616,58 @@ describe('DrawingML 提取器', () => {
       );
     });
 
+    it('应拒绝超过 XML 字符数限制的 workbook rels', async () => {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      const largeRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + 'x'.repeat(500001) + '</Relationships>';
+      zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>');
+      zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+      zip.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"></workbook>');
+      zip.file('xl/_rels/workbook.xml.rels', largeRels);
+      const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+      await assert.rejects(
+        () => extractDrawingml(buffer),
+        { message: /XML safety validation failed.*character count exceeds limit/ }
+      );
+    });
+
+    it('应拒绝超过 XML 字符数限制的 worksheet rels', async () => {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      const largeSheetRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + 'x'.repeat(500001) + '</Relationships>';
+      zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>');
+      zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+      zip.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets><sheet name="S1" sheetId="1" r:id="rId1"/></sheets></workbook>');
+      zip.file('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
+      zip.file('xl/worksheets/sheet1.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData></sheetData><drawing r:id="rId1"/></worksheet>');
+      zip.file('xl/worksheets/_rels/sheet1.xml.rels', largeSheetRels);
+      zip.file('xl/drawings/drawing1.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"></xdr:wsDr>');
+      const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+      await assert.rejects(
+        () => extractDrawingml(buffer),
+        { message: /XML safety validation failed.*character count exceeds limit/ }
+      );
+    });
+
+    it('应拒绝超过 XML 字符数限制的 drawing XML', async () => {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      const largeDrawing = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' + 'x'.repeat(500001) + '</xdr:wsDr>';
+      zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>');
+      zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+      zip.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets><sheet name="S1" sheetId="1" r:id="rId1"/></sheets></workbook>');
+      zip.file('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
+      zip.file('xl/worksheets/sheet1.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData></sheetData><drawing r:id="rId1"/></worksheet>');
+      zip.file('xl/worksheets/_rels/sheet1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>');
+      zip.file('xl/drawings/drawing1.xml', largeDrawing);
+      const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+      const result = await extractDrawingml(buffer);
+      // drawing XML 安全检查应该产生 warning，而不是抛出异常
+      const corruptedWarnings = result.warnings.filter(w => w.code === 'DRAWINGML_CORRUPTED_XML');
+      assert.equal(corruptedWarnings.length >= 1, true, 'Should have at least 1 DRAWINGML_CORRUPTED_XML warning');
+      assert.equal(corruptedWarnings[0].message.includes('character count exceeds limit'), true, 'Warning should mention character count limit');
+    });
+
     it('不应允许放宽安全限制', async () => {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
@@ -647,10 +745,31 @@ describe('DrawingML 提取器', () => {
       const diagramBlocks = result.blocks.filter(b => b.modality === 'STRUCTURED_DIAGRAM');
       assert.equal(diagramBlocks.length, 0);
 
-      // 修复 E：精确断言 modality 列表（纯图片 XLSX 只有 TABLE 块，无 STRUCTURED_DIAGRAM）
+      // 修复 E：精确断言 modality 列表（纯图片 XLSX 只有 VISUAL_ASSET 块，无 STRUCTURED_DIAGRAM）
       const modalities = [...new Set(result.blocks.map(b => b.modality))].sort();
       assert.equal(diagramBlocks.length, 0, 'No STRUCTURED_DIAGRAM blocks for image-only');
-      assert.equal(modalities.indexOf("STRUCTURED_DIAGRAM"), -1, 'Should not include STRUCTURED_DIAGRAM');
+      assert.deepEqual(modalities, ['VISUAL_ASSET'], 'Should only have VISUAL_ASSET modality');
+    });
+
+    it('图片 anchor 应产生 VISUAL_ASSET block', async () => {
+      const result = await extractArtifactEvidence({
+        artifact: { path: imageXlsxPath, format: 'xlsx' },
+        runDir: tmpDir,
+      });
+
+      // 检查是否有 VISUAL_ASSET block
+      const visualBlocks = result.blocks.filter(b => b.modality === 'VISUAL_ASSET');
+      assert.equal(visualBlocks.length >= 1, true, 'Should have at least 1 VISUAL_ASSET block');
+
+      // 精确断言 VISUAL_ASSET block 投影
+      for (const block of visualBlocks) {
+        assert.equal(block.modality, 'VISUAL_ASSET', 'Block should be VISUAL_ASSET modality');
+        assert.equal(typeof block.content, 'string', 'content should be string');
+        assert.equal(block.content.length > 0, true, 'content should be non-empty');
+        assert.equal(Array.isArray(block.heading_path), true, 'heading_path should be array');
+        assert.equal(typeof block.locator, 'object', 'locator should be object');
+        assert.equal(typeof block.locator.shape_id, 'string', 'locator.shape_id should be string');
+      }
     });
 
     it('所有证据块应通过 validateEvidenceBlock Schema 验证', async () => {
@@ -737,7 +856,7 @@ describe('DrawingML 提取器', () => {
       for (const block of diagramBlocks) {
         assert.equal(block.modality, 'STRUCTURED_DIAGRAM');
         assert.equal(typeof block.content, 'string');
-        assertNonEmpty(block.content, "content should be non-empty");
+        assert.equal(block.content.length > 0, true, 'content should be non-empty');
         assert.equal(Array.isArray(block.heading_path), true);
         assert.equal(typeof block.locator, 'object');
         assert.equal(block.locator.drawing_part, 'xl/drawings/drawing1.xml');
@@ -819,15 +938,57 @@ describe('DrawingML 提取器', () => {
       }
     });
 
+    it('normalization 磁盘产物与原 evidence 整体 deepEqual', async () => {
+      const normalized = await normalizeEvidenceToMarkdown({
+        artifact: { path: mixedXlsxPath, format: 'xlsx' },
+        artifactSha256,
+        blocks: evidenceBlocks,
+        runDir: tmpDir,
+        converterVersion: '1.0.0',
+      });
+
+      // 读取实际写出的 index 文件
+      const { readFile } = await import('node:fs/promises');
+      const { join } = await import('node:path');
+
+      // 计算 artifactId（与 normalizeEvidenceToMarkdown 一致）
+      const artifactId = `A-${artifactSha256.slice(0, 12)}`;
+
+      // 读取 index.json 文件
+      const indexContent = await readFile(join(tmpDir, 'normalized', artifactId, 'index.json'), 'utf8');
+      const index = JSON.parse(indexContent);
+
+      // 验证磁盘 locator 投影与原 evidence 整体 deepEqual
+      const diskLocators = index.chunks.map(c => ({
+        sheet: c.locator.sheet,
+        drawing_part: c.locator.drawing_part,
+        anchor_type: c.locator.anchor_type,
+        shape_id: c.locator.shape_id,
+        connector_id: c.locator.connector_id,
+      }));
+
+      const originalLocators = evidenceBlocks.map(b => ({
+        sheet: b.locator.sheet,
+        drawing_part: b.locator.drawing_part,
+        anchor_type: b.locator.anchor_type,
+        shape_id: b.locator.shape_id,
+        connector_id: b.locator.connector_id,
+      }));
+
+      assert.deepEqual(diskLocators, originalLocators, 'Disk locators should match original evidence');
+    });
+
     it('buildEvidenceBatches 应保留 locator 并生成有效批次', async () => {
       const batches = buildEvidenceBatches({ blocks: evidenceBlocks });
 
-      assertNonEmpty(batches, "Should produce at least one batch");
+      assert.equal(Array.isArray(batches), true, 'batches should be an array');
+      assert.equal(batches.length > 0, true, 'Should produce at least one batch');
 
       for (const batch of batches) {
         assert.match(batch.batch_id, /^EB-[a-zA-Z0-9_-]+$/);
         assert.match(batch.batch_sha256, /^[a-f0-9]{64}$/);
-        assertNonEmpty(batch.blocks, "Batch should contain blocks");
+        assert.equal(Array.isArray(batch.blocks), true, 'batch.blocks should be an array');
+        assert.equal(batch.blocks.length > 0, true, 'Batch should contain blocks');
         assert.equal(batch.blocks.length <= 12, true, 'Batch size should not exceed 12');
         assert.equal(batch.total_chars >= 0, true, 'total_chars should be non-negative');
         assert.equal(batch.total_chars <= 12000, true, 'total_chars should not exceed 12000');

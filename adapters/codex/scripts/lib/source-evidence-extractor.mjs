@@ -541,6 +541,33 @@ async function extractXlsx(filePath, fileContent, artifactSha256) {
         });
       }
 
+      // 为每个图片创建 VISUAL_ASSET 证据块
+      for (const picture of drawingResult.pictures) {
+        const locatorKey = `xlsx:picture:${picture.sheet}:${picture.drawing_part}:${picture.shape_id}`;
+        blocks.push({
+          block_id: generateBlockId(artifactSha256, locatorKey),
+          artifact_sha256: artifactSha256,
+          source_format: 'xlsx',
+          modality: 'VISUAL_ASSET',
+          locator: {
+            page: null,
+            slide: null,
+            sheet: picture.sheet,
+            range: null,
+            line_start: null,
+            line_end: null,
+            drawing_part: picture.drawing_part,
+            shape_id: picture.shape_id,
+            connector_id: null,
+            anchor_type: picture.anchor_type || null,
+          },
+          heading_path: [picture.sheet, picture.name || picture.shape_id],
+          content: JSON.stringify(picture),
+          asset_ref: picture.embed_ref || null,
+          content_sha256: contentHash(JSON.stringify(picture)),
+        });
+      }
+
       // 收集警告
       if (drawingResult.warnings && drawingResult.warnings.length > 0) {
         // 将警告添加到第一个块的 metadata 或单独处理

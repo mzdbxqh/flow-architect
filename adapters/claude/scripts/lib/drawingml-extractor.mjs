@@ -202,11 +202,12 @@ async function parseXml(xmlContent, partName, limits) {
  *
  * @param {string} relsXml
  * @param {string} [partName] - 用于错误消息的 part 名称
+ * @param {object} [limits] - 可选安全限制覆盖
  * @returns {Promise<Array<{ id: string, type: string, target: string, targetMode: string|null }>>}
  * @throws {Error} 如果存在重复 relationship ID
  */
-async function parseRelationships(relsXml, partName = 'rels') {
-  const parsed = await parseXml(relsXml, partName);
+async function parseRelationships(relsXml, partName = 'rels', limits) {
+  const parsed = await parseXml(relsXml, partName, limits);
   const rels = parsed?.Relationships?.Relationship || [];
   const relArray = Array.isArray(rels) ? rels : [rels];
 
@@ -597,8 +598,39 @@ function parseAnchor(anchor, anchorType, shapeIndex) {
  * @returns {Promise<{ elements: object[], connectors: object[], pictures: object[], warnings: string[] }>}
  */
 async function parseDrawingXml(drawingXml, drawingPart, limits) {
-  const parsed = await parseXml(drawingXml, drawingPart, limits);
+  let parsed;
+  try {
+    parsed = await parseXml(drawingXml, drawingPart, limits);
+  } catch (error) {
+    // XML 解析失败，产生 warning 并返回空结果
+    return {
+      elements: [],
+      connectors: [],
+      pictures: [],
+      warnings: [{
+        code: 'DRAWINGML_CORRUPTED_XML',
+        message: `Failed to parse drawing XML in ${drawingPart}: ${error.message}`,
+        target: drawingPart,
+      }],
+    };
+  }
+
   const wsDr = parsed?.['xdr:wsDr'] || parsed?.wsDr || {};
+
+  // 检查是否是有效的 DrawingML 结构
+  if (!wsDr || Object.keys(wsDr).length === 0 || (!wsDr['xdr:twoCellAnchor'] && !wsDr['xdr:oneCellAnchor'] && !wsDr['xdr:absoluteAnchor'])) {
+    // 不是有效的 DrawingML 结构，产生 warning
+    return {
+      elements: [],
+      connectors: [],
+      pictures: [],
+      warnings: [{
+        code: 'DRAWINGML_CORRUPTED_XML',
+        message: `Invalid DrawingML structure in ${drawingPart}: missing wsDr or anchor elements`,
+        target: drawingPart,
+      }],
+    };
+  }
 
   const allElements = [];
   const allConnectors = [];
@@ -673,7 +705,7 @@ export async function inspectDrawingmlPackage(buffer, options = {}) {
   }
 
   const workbookRelsXml = await zip.files[workbookRelsPath].async('string');
-  const workbookRels = await parseRelationships(workbookRelsXml, workbookRelsPath);
+  const workbookRels = await parseRelationships(workbookRelsXml, workbookRelsPath, limits);
 
   // 查找所有 worksheet（过滤外部 TargetMode）
   const worksheetRels = workbookRels.filter(r =>
@@ -716,7 +748,7 @@ export async function inspectDrawingmlPackage(buffer, options = {}) {
       const sheetRelsPath = `xl/worksheets/_rels/${wsRel.target.split('/').pop()}.rels`;
       if (zip.files[sheetRelsPath]) {
         const sheetRelsXml = await zip.files[sheetRelsPath].async('string');
-        const sheetRels = await parseRelationships(sheetRelsXml, sheetRelsPath);
+        const sheetRels = await parseRelationships(sheetRelsXml, sheetRelsPath, limits);
 
         // 找到匹配的 drawing relationship（唯一匹配，不静默接受重复 ID）
         const matchingDrels = sheetRels.filter(r => r.id === drawingRef && r.type.endsWith('/drawing'));
@@ -816,7 +848,7 @@ export async function extractDrawingml(buffer, options = {}) {
   }
 
   const workbookRelsXml = await zip.files[workbookRelsPath].async('string');
-  const workbookRels = await parseRelationships(workbookRelsXml, workbookRelsPath);
+  const workbookRels = await parseRelationships(workbookRelsXml, workbookRelsPath, limits);
 
   // 查找所有 worksheet（过滤外部 TargetMode）
   const worksheetRels = workbookRels.filter(r =>
@@ -843,7 +875,7 @@ export async function extractDrawingml(buffer, options = {}) {
       const sheetRelsPath = `xl/worksheets/_rels/${wsRel.target.split('/').pop()}.rels`;
       if (zip.files[sheetRelsPath]) {
         const sheetRelsXml = await zip.files[sheetRelsPath].async('string');
-        const sheetRels = await parseRelationships(sheetRelsXml, sheetRelsPath);
+        const sheetRels = await parseRelationships(sheetRelsXml, sheetRelsPath, limits);
 
         // 找到匹配的 drawing relationship（唯一匹配）
         const matchingDrels = sheetRels.filter(r => r.id === drawingRef && r.type.endsWith('/drawing'));
