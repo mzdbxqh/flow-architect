@@ -85,6 +85,7 @@ function loadRuleDocuments() {
   const files = [
     'l4-review.md', 'l5-review.md', 'l6-review.md', 'sop-review.md',
     'bpmn-review.md', 'hierarchy-review.md', 'consistency-review.md', 'visual-review.md',
+    'activity-bpmn-review.md',
   ];
   const docs = {};
   for (const f of files) {

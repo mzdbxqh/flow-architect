@@ -15,9 +15,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = join(__dirname, '..');
 
 describe('中文 Skill 合同', () => {
-  it('20 个 Skill 的 description 全部包含汉字', () => {
+  it('21 个 Skill 的 description 全部包含汉字', () => {
     const skills = loadAllSkills();
-    assert.equal(skills.length, 20, '应有 20 个 Skill');
+    assert.equal(skills.length, 21, '应有 21 个 Skill');
 
     for (const skill of skills) {
       const desc = extractFrontmatterField(skill.content, 'description');

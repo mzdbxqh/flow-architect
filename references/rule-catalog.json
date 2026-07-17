@@ -685,6 +685,87 @@
       "applicability": "图表中没有对应架构节点的元素可能表示未记录的流程。",
       "deterministic_check": true,
       "public_reference": "references/rules/consistency-review.md#FA-CONS-008"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-001",
+      "title": "泳道不得使用个人姓名",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "泳道必须表达业务角色，不得使用可识别的个人姓名作为角色或泳道名。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-001"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-002",
+      "title": "每个 L5 活动恰有一个 MAIN_TASK",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "每个 L5 活动必须恰好有一个 MAIN_TASK 节点绑定，三方 ID 和名称一致。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-002"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-003",
+      "title": "主 Task 泳道与 RASCI/R 或 OARP/O 一致",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "普通活动主 Task 位于 RASCI 的 R 泳道；评审/决策活动位于 OARP 的 O 泳道。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-003"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-004",
+      "title": "确认从 Task 三条件",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "确认从 Task 仅在三项声明全真、确认角色存在且不同于主责角色时成立。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-004"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-005",
+      "title": "正式审批不得作为确认从 Task",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "正式审批、正式评审会议或独立决策不得建模为确认从 Task，应为独立 L5。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-005"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-006",
+      "title": "XOR/OR 必须有条件或默认路径",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "XOR/OR 拆分的业务分支必须具有结构化条件或明确默认路径。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-006"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-007",
+      "title": "结束事件必须有业务结果名称",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "业务结束事件必须有可区分的业务结果名称，并与流程卡片终点集合一致。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-007"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-008",
+      "title": "Link Catch/Throw 成对",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "Link Catch/Throw 必须按名称或显式引用成对，方向正确且不得悬空。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-008"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-009",
+      "title": "同一 L5 不得映射并行主 Task",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "同一 L5 活动不得映射并行或多个主 Task；最多允许一个满足门禁的串行确认从 Task。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-009"
     }
   ]
 }

@@ -253,3 +253,25 @@ test('validStagesWithBlocker contains a BLOCKER finding', () => {
   const blocker = stages[0].findings.find((f) => f.severity === 'BLOCKER');
   assert.ok(blocker, 'Should have a BLOCKER finding');
 });
+
+// ── Cycle 4 BPMN 口径修正测试 ──
+
+import { reviewBpmn } from '../scripts/review-bpmn.mjs';
+
+test('None Start/End 不触发事件类型错误', () => {
+  const diagramModel = {
+    elements: [
+      { element_id: 'start_none', type: 'EVENT', sub_type: 'startEvent', name: '开始', parent_id: null, lane_id: null },
+      { element_id: 'task_1', type: 'TASK', name: '任务1', parent_id: null, lane_id: null },
+      { element_id: 'end_none', type: 'EVENT', sub_type: 'endEvent', name: '结束', parent_id: null, lane_id: null },
+    ],
+    flows: [
+      { flow_id: 'f1', type: 'SEQUENCE_FLOW', source_ref: 'start_none', target_ref: 'task_1' },
+      { flow_id: 'f2', type: 'SEQUENCE_FLOW', source_ref: 'task_1', target_ref: 'end_none' },
+    ],
+  };
+  const findings = reviewBpmn({ diagramModel });
+  // None Start/End 不应触发 FA-BPMN-003
+  const typeFindings = findings.filter(f => f.rule_id === 'FA-BPMN-003');
+  assert.equal(typeFindings.length, 0, `None Start/End should not trigger type error, got ${JSON.stringify(typeFindings)}`);
+});
