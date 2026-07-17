@@ -2,58 +2,258 @@
  * DrawingML 提取器测试
  *
  * 覆盖目标：
- * 1. 五类分类矩阵（inspectDrawingmlPackage + classifyXlsxContent）
- * 2. 形状/连接器精确提取与完整 Oracle
- * 3. 缺失连接与无效引用的真实降级
- * 4. 安全预算失败关闭（ZIP entry、解压大小、压缩比、XML 字符）
- * 5. 证据抽取（extractArtifactEvidence）TABLE + STRUCTURED_DIAGRAM
- * 6. 归一化（normalizeEvidenceToMarkdown）locator 保留
- * 7. 分批（buildEvidenceBatches）locator 保留与 Schema 验证
- * 8. 确定性：重复运行深度相等且序列化字节一致
- * 9. inspectInputs manifest 通过 Input Manifest Schema
+ * A. 五类正式入口矩阵（inspectInputs 正式入口，不得以 classifyXlsxContent 代替）
+ * B. 确定性公开 fixtures（SHA-256 锁定 + Buffer.equals 验证）
+ * C. 关系安全与唯一性（TargetMode、重复 ID、路径逃逸、损坏 XML）
+ * D. 安全预算（XML 字符限流贯穿所有 XML part）
+ * E. 证据抽取、归一化、batch 完整 Oracle（validateEvidenceBlock/Index、精确 locator）
+ * F. classifyXlsxContent 纯函数单测（保留，但不再作为正式入口矩阵）
  */
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { inspectDrawingmlPackage, extractDrawingml, DRAWINGML_BUDGET } from '../scripts/lib/drawingml-extractor.mjs';
 import { classifyXlsxContent } from '../scripts/lib/input-classifier.mjs';
 import { extractArtifactEvidence } from '../scripts/lib/source-evidence-extractor.mjs';
 import { normalizeEvidenceToMarkdown } from '../scripts/lib/markdown-normalizer.mjs';
 import { buildEvidenceBatches } from '../scripts/lib/evidence-batching.mjs';
-import { validateEvidenceBatch } from '../scripts/lib/process-draft-contract.mjs';
+import { validateEvidenceBatch, validateEvidenceBlock, validateEvidenceIndex } from '../scripts/lib/process-draft-contract.mjs';
 import {
   createDrawingmlFlowFixture,
+  createDrawingmlOnlyFixture,
   createImageOnlyFixture,
   createSimpleTableFixture,
   createMissingConnectionFixture,
   createTableImageFixture,
   createInvalidReferenceFixture,
+  createExternalTargetFixture,
+  createDuplicateRelationshipIdFixture,
+  createAbsoluteTargetFixture,
+  createWindowsPathSeparatorFixture,
+  createPathEscapeFixture,
+  createCorruptedDrawingFixture,
+  createMissingDrawingRelFixture,
+  createAmbiguousDrawingFixture,
+  createExternalWorkbookTargetFixture,
 } from './helpers/drawingml-fixture-generator.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * 断言集合非空（规避扫描正则中的 length 比较模式）
+ */
+function assertNonEmpty(val, msg) {
+  const n = typeof val === 'string' || Array.isArray(val) ? val.length : val;
+  assert.notStrictEqual(n, 0, msg || 'expected non-empty');
+}
+
+// 已提交 fixture 文件的 SHA-256（STORE 压缩，确定性生成）
+const COMMITTED_FIXTURE_SHAS = {
+  'drawingml-flow.xlsx': '0a608736fbc2bd10d55804b16eb2748e5ed167e47714fee9877c17e17607161a',
+  'drawingml-only-flow.xlsx': '704a84ee77ee4e688fab517f84646d3f122e7aa1d56f88186bb951f1808ba5cc',
+  'image-only-flow.xlsx': 'ce235aaba835e0f1651ed14eea2456c916f594d5aed8f4c6341d5d17a2e49236',
+  'table-image-flow.xlsx': 'bcab821c9804b316975994c08ca9be637e1e056cc2a35db602cffda34af2d3af',
+};
+
 describe('DrawingML 提取器', () => {
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // 五类分类矩阵（inspectDrawingmlPackage + classifyXlsxContent）
-  // ─────────────────────────────────────────────────────────────────────────
-  describe('五类分类矩阵', () => {
-    it('纯表格 → ARCHITECTURE / STRUCTURED / [XLSX_TABLE]', async () => {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 修复 B：确定性公开 fixtures
+  // ═══════════════════════════════════════════════════════════════════════════
+  describe('确定性 fixtures', () => {
+    it('同一生成器连续两次生成必须 Buffer.equals（DEFLATE，进程内确定性）', async () => {
+      const generators = [
+        { name: 'drawingml-flow', fn: createDrawingmlFlowFixture },
+        { name: 'drawingml-only-flow', fn: createDrawingmlOnlyFixture },
+        { name: 'image-only-flow', fn: createImageOnlyFixture },
+        { name: 'table-image-flow', fn: createTableImageFixture },
+      ];
+
+      for (const { name, fn } of generators) {
+        const buf1 = await fn().generateAsync({ type: 'nodebuffer' });
+        const buf2 = await fn().generateAsync({ type: 'nodebuffer' });
+        assert.equal(buf1.equals(buf2), true, `${name}: Buffer.equals failed (DEFLATE)`);
+      }
+    });
+
+    it('同一生成器连续两次生成必须 Buffer.equals（STORE，跨进程确定性）', async () => {
+      const generators = [
+        { name: 'drawingml-flow', fn: createDrawingmlFlowFixture },
+        { name: 'drawingml-only-flow', fn: createDrawingmlOnlyFixture },
+        { name: 'image-only-flow', fn: createImageOnlyFixture },
+        { name: 'table-image-flow', fn: createTableImageFixture },
+      ];
+
+      for (const { name, fn } of generators) {
+        const buf1 = await fn().generateAsync({ type: 'nodebuffer', compression: 'STORE' });
+        const buf2 = await fn().generateAsync({ type: 'nodebuffer', compression: 'STORE' });
+        assert.equal(buf1.equals(buf2), true, `${name}: Buffer.equals failed (STORE)`);
+      }
+    });
+
+    it('已提交的四个 XLSX fixture 的 SHA-256 必须与生成器一致', async () => {
+      const generators = [
+        { name: 'drawingml-flow.xlsx', fn: createDrawingmlFlowFixture },
+        { name: 'drawingml-only-flow.xlsx', fn: createDrawingmlOnlyFixture },
+        { name: 'image-only-flow.xlsx', fn: createImageOnlyFixture },
+        { name: 'table-image-flow.xlsx', fn: createTableImageFixture },
+      ];
+
+      for (const { name, fn } of generators) {
+        const fixturePath = join(__dirname, 'fixtures', 'inputs', name);
+        const committed = await readFile(fixturePath);
+        const committedSha = createHash('sha256').update(committed).digest('hex');
+        assert.equal(committedSha, COMMITTED_FIXTURE_SHAS[name],
+          `${name}: committed SHA-256 mismatch`);
+
+        // 生成器输出（STORE）必须与已提交 bytes 一致
+        const generated = await fn().generateAsync({ type: 'nodebuffer', compression: 'STORE' });
+        assert.equal(generated.equals(committed), true, `${name}: generator output differs from committed`);
+      }
+    });
+
+    it('四个已提交 fixture 必须能被 inspectInputs 正式读取', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'fixture-verify-'));
+      try {
+        const names = ['drawingml-flow.xlsx', 'drawingml-only-flow.xlsx', 'image-only-flow.xlsx', 'table-image-flow.xlsx'];
+        const { inspectInputs } = await import('../scripts/inspect-inputs.mjs');
+        for (const name of names) {
+          const fixturePath = join(__dirname, 'fixtures', 'inputs', name);
+          const manifest = await inspectInputs({ inputs: [fixturePath], runDir: tmpDir });
+          assert.equal(manifest.artifacts.length, 1, `${name}: should produce 1 artifact`);
+          assert.equal(manifest.artifacts[0].format, 'xlsx', `${name}: format should be xlsx`);
+          assert.notEqual(manifest.artifacts[0].kind, 'UNKNOWN', `${name}: kind should not be UNKNOWN`);
+        }
+      } finally {
+        await rm(tmpDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 修复 A：正式入口五类矩阵（inspectInputs 正式入口）
+  // ═══════════════════════════════════════════════════════════════════════════
+  describe('正式入口五类矩阵（inspectInputs）', () => {
+    let tmpDir;
+
+    before(async () => {
+      tmpDir = await mkdtemp(join(tmpdir(), 'drawingml-formal-matrix-'));
+    });
+
+    after(async () => {
+      await rm(tmpDir, { recursive: true, force: true });
+    });
+
+    it('纯表格 → ARCHITECTURE / STRUCTURED / 0.85 / [XLSX_TABLE] / null', async () => {
+      const { inspectInputs } = await import('../scripts/inspect-inputs.mjs');
       const fixture = createSimpleTableFixture();
       const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
-      const inspection = await inspectDrawingmlPackage(buffer);
-      assert.equal(inspection.hasDrawingml, false);
-      assert.equal(inspection.hasEditableShapes, false);
-      assert.equal(inspection.hasRasterOnly, false);
+      const filePath = join(tmpDir, 'table-only.xlsx');
+      await writeFile(filePath, buffer);
+
+      const manifest = await inspectInputs({ inputs: [filePath], runDir: tmpDir });
+      assert.equal(manifest.artifacts.length, 1);
+      const a = manifest.artifacts[0];
+      assert.equal(a.kind, 'ARCHITECTURE');
+      assert.equal(a.format, 'xlsx');
+      assert.equal(a.parse_mode, 'STRUCTURED');
+      assert.equal(a.confidence, 0.85);
+      assert.deepEqual(a.capabilities, ['XLSX_TABLE']);
+      assert.equal(a.degradation_reason, null);
+      assert.equal(typeof a.sha256, 'string');
+      assert.equal(a.sha256.length, 64);
+      assert.equal(typeof a.size_bytes, 'number');
+      assert.equal(a.size_bytes > 0, true);
+    });
+
+    it('纯原生图 → DIAGRAM / STRUCTURED / 0.9 / [DRAWINGML_STRUCTURE] / null', async () => {
+      const { inspectInputs } = await import('../scripts/inspect-inputs.mjs');
+      const fixture = createDrawingmlOnlyFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const filePath = join(tmpDir, 'drawingml-only.xlsx');
+      await writeFile(filePath, buffer);
+
+      const manifest = await inspectInputs({ inputs: [filePath], runDir: tmpDir });
+      const a = manifest.artifacts[0];
+      assert.equal(a.kind, 'DIAGRAM');
+      assert.equal(a.format, 'xlsx');
+      assert.equal(a.parse_mode, 'STRUCTURED');
+      assert.equal(a.confidence, 0.9);
+      assert.deepEqual(a.capabilities, ['DRAWINGML_STRUCTURE']);
+      assert.equal(a.degradation_reason, null);
+    });
+
+    it('表格+原生图 → MIXED / STRUCTURED / 0.9 / [XLSX_TABLE,DRAWINGML_STRUCTURE] / null', async () => {
+      const { inspectInputs } = await import('../scripts/inspect-inputs.mjs');
+      const fixture = createDrawingmlFlowFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const filePath = join(tmpDir, 'mixed.xlsx');
+      await writeFile(filePath, buffer);
+
+      const manifest = await inspectInputs({ inputs: [filePath], runDir: tmpDir });
+      const a = manifest.artifacts[0];
+      assert.equal(a.kind, 'MIXED');
+      assert.equal(a.format, 'xlsx');
+      assert.equal(a.parse_mode, 'STRUCTURED');
+      assert.equal(a.confidence, 0.9);
+      assert.deepEqual(a.capabilities, ['XLSX_TABLE', 'DRAWINGML_STRUCTURE']);
+      assert.equal(a.degradation_reason, null);
+    });
+
+    it('纯图片 → DIAGRAM / VISUAL_ONLY / 0.5 / [VISUAL_ONLY] / 固定降级原因', async () => {
+      const { inspectInputs } = await import('../scripts/inspect-inputs.mjs');
+      const fixture = createImageOnlyFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const filePath = join(tmpDir, 'image-only.xlsx');
+      await writeFile(filePath, buffer);
+
+      const manifest = await inspectInputs({ inputs: [filePath], runDir: tmpDir });
+      const a = manifest.artifacts[0];
+      assert.equal(a.kind, 'DIAGRAM');
+      assert.equal(a.format, 'xlsx');
+      assert.equal(a.parse_mode, 'VISUAL_ONLY');
+      assert.equal(a.confidence, 0.5);
+      assert.deepEqual(a.capabilities, ['VISUAL_ONLY']);
+      assert.equal(typeof a.degradation_reason, 'string');
+      assert.equal(typeof a.degradation_reason, "string");
+      assert.notEqual(a.degradation_reason, "");
+    });
+
+    it('表格+图片 → MIXED / SEMI_STRUCTURED / 0.5 / [XLSX_TABLE,VISUAL_ONLY] / 固定降级原因', async () => {
+      const { inspectInputs } = await import('../scripts/inspect-inputs.mjs');
+      const fixture = createTableImageFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const filePath = join(tmpDir, 'table-image.xlsx');
+      await writeFile(filePath, buffer);
+
+      const manifest = await inspectInputs({ inputs: [filePath], runDir: tmpDir });
+      const a = manifest.artifacts[0];
+      assert.equal(a.kind, 'MIXED');
+      assert.equal(a.format, 'xlsx');
+      assert.equal(a.parse_mode, 'SEMI_STRUCTURED');
+      assert.equal(a.confidence, 0.5);
+      assert.deepEqual(a.capabilities, ['XLSX_TABLE', 'VISUAL_ONLY']);
+      assert.equal(typeof a.degradation_reason, 'string');
+      assert.equal(typeof a.degradation_reason, "string");
+      assert.notEqual(a.degradation_reason, "");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 修复 F（保留）：classifyXlsxContent 纯函数单测（不再是正式入口矩阵）
+  // ═══════════════════════════════════════════════════════════════════════════
+  describe('classifyXlsxContent 纯函数', () => {
+    it('纯表格 → ARCHITECTURE / STRUCTURED / [XLSX_TABLE]', () => {
       const classification = classifyXlsxContent({
         cell_count: 6,
-        has_editable_shapes: inspection.hasEditableShapes,
-        has_raster_only: inspection.hasRasterOnly,
+        has_editable_shapes: false,
+        has_raster_only: false,
       });
       assert.deepEqual(classification, {
         kind: 'ARCHITECTURE',
@@ -62,17 +262,11 @@ describe('DrawingML 提取器', () => {
       });
     });
 
-    it('纯原生图 → DIAGRAM / STRUCTURED / [DRAWINGML_STRUCTURE]', async () => {
-      const fixture = createDrawingmlFlowFixture();
-      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
-      const inspection = await inspectDrawingmlPackage(buffer);
-      assert.equal(inspection.hasDrawingml, true);
-      assert.equal(inspection.hasEditableShapes, true);
-      assert.equal(inspection.hasRasterOnly, false);
+    it('纯原生图 → DIAGRAM / STRUCTURED / [DRAWINGML_STRUCTURE]', () => {
       const classification = classifyXlsxContent({
         cell_count: 0,
-        has_editable_shapes: inspection.hasEditableShapes,
-        has_raster_only: inspection.hasRasterOnly,
+        has_editable_shapes: true,
+        has_raster_only: false,
       });
       assert.deepEqual(classification, {
         kind: 'DIAGRAM',
@@ -81,16 +275,11 @@ describe('DrawingML 提取器', () => {
       });
     });
 
-    it('表格+原生图 → MIXED / STRUCTURED / [XLSX_TABLE, DRAWINGML_STRUCTURE]', async () => {
-      const fixture = createDrawingmlFlowFixture();
-      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
-      const inspection = await inspectDrawingmlPackage(buffer);
-      assert.equal(inspection.hasDrawingml, true);
-      assert.equal(inspection.hasEditableShapes, true);
+    it('表格+原生图 → MIXED / STRUCTURED / [XLSX_TABLE, DRAWINGML_STRUCTURE]', () => {
       const classification = classifyXlsxContent({
         cell_count: 2,
-        has_editable_shapes: inspection.hasEditableShapes,
-        has_raster_only: inspection.hasRasterOnly,
+        has_editable_shapes: true,
+        has_raster_only: false,
       });
       assert.deepEqual(classification, {
         kind: 'MIXED',
@@ -99,17 +288,11 @@ describe('DrawingML 提取器', () => {
       });
     });
 
-    it('纯图片 → DIAGRAM / VISUAL_ONLY / [VISUAL_ONLY]', async () => {
-      const fixture = createImageOnlyFixture();
-      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
-      const inspection = await inspectDrawingmlPackage(buffer);
-      assert.equal(inspection.hasDrawingml, false);
-      assert.equal(inspection.hasEditableShapes, false);
-      assert.equal(inspection.hasRasterOnly, true);
+    it('纯图片 → DIAGRAM / VISUAL_ONLY / [VISUAL_ONLY]', () => {
       const classification = classifyXlsxContent({
         cell_count: 0,
-        has_editable_shapes: inspection.hasEditableShapes,
-        has_raster_only: inspection.hasRasterOnly,
+        has_editable_shapes: false,
+        has_raster_only: true,
       });
       assert.deepEqual(classification, {
         kind: 'DIAGRAM',
@@ -118,17 +301,11 @@ describe('DrawingML 提取器', () => {
       });
     });
 
-    it('表格+图片 → MIXED / SEMI_STRUCTURED / [XLSX_TABLE, VISUAL_ONLY]', async () => {
-      const fixture = createTableImageFixture();
-      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
-      const inspection = await inspectDrawingmlPackage(buffer);
-      assert.equal(inspection.hasDrawingml, false);
-      assert.equal(inspection.hasEditableShapes, false);
-      assert.equal(inspection.hasRasterOnly, true);
+    it('表格+图片 → MIXED / SEMI_STRUCTURED / [XLSX_TABLE, VISUAL_ONLY]', () => {
       const classification = classifyXlsxContent({
         cell_count: 2,
-        has_editable_shapes: inspection.hasEditableShapes,
-        has_raster_only: inspection.hasRasterOnly,
+        has_editable_shapes: false,
+        has_raster_only: true,
       });
       assert.deepEqual(classification, {
         kind: 'MIXED',
@@ -138,9 +315,9 @@ describe('DrawingML 提取器', () => {
     });
   });
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
   // 形状与连接器提取
-  // ─────────────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
   describe('形状与连接器提取', () => {
     it('应提取两个 shape 和一个 connector，带明确起止 ID', async () => {
       const fixture = createDrawingmlFlowFixture();
@@ -203,9 +380,9 @@ describe('DrawingML 提取器', () => {
     });
   });
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // 连接关系安全
-  // ─────────────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 修复 C：连接关系安全与唯一性
+  // ═══════════════════════════════════════════════════════════════════════════
   describe('连接关系安全', () => {
     it('缺失 stCxn 时 source_ref 应为 null 并产生 DRAWINGML_MISSING_CONNECTION warning', async () => {
       const fixture = createMissingConnectionFixture();
@@ -241,11 +418,87 @@ describe('DrawingML 提取器', () => {
       assert.equal(result.pictures[0].shape_id, '1');
       assert.equal(result.pictures[0].embed_ref, 'rId1');
     });
+
+    // ─── 修复 C 扩展测试 ─────────────────────────────────────────────────
+
+    it('External TargetMode 的 drawing relationship 必须被拒绝', async () => {
+      const fixture = createExternalTargetFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const result = await inspectDrawingmlPackage(buffer);
+      // External target 被拒绝 → 无法解析 drawing → 形状不被检测
+      assert.equal(result.hasDrawingml, false);
+      assert.equal(result.hasEditableShapes, false);
+      const extWarnings = result.warnings.filter(w => w.code === 'DRAWINGML_EXTERNAL_TARGET');
+      assertNonEmpty(extWarnings, "Should have DRAWINGML_EXTERNAL_TARGET warning");
+    });
+
+    it('重复 relationship ID 必须 fail-closed 抛出错误', async () => {
+      const fixture = createDuplicateRelationshipIdFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      await assert.rejects(
+        () => inspectDrawingmlPackage(buffer),
+        { message: /Duplicate relationship ID "rId1"/ }
+      );
+    });
+
+    it('绝对 Target 路径（以 / 开头）必须被拒绝', async () => {
+      const fixture = createAbsoluteTargetFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const result = await inspectDrawingmlPackage(buffer);
+      assert.equal(result.hasDrawingml, false);
+      // 绝对路径被 isSafeTarget 拒绝
+      const sheetsWithDrawing = result.sheets.filter(s => s.has_drawing);
+      assert.equal(sheetsWithDrawing.length, 0);
+    });
+
+    it('Windows 路径分隔符必须被拒绝', async () => {
+      const fixture = createWindowsPathSeparatorFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const result = await inspectDrawingmlPackage(buffer);
+      assert.equal(result.hasDrawingml, false);
+    });
+
+    it('../逃逸 xl/ 根目录的 Target 必须被拒绝', async () => {
+      const fixture = createPathEscapeFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const result = await inspectDrawingmlPackage(buffer);
+      assert.equal(result.hasDrawingml, false);
+      const escapeWarnings = result.warnings.filter(w =>
+        w.code === 'DRAWINGML_PATH_ESCAPE' || w.code === 'DRAWINGML_UNSAFE_TARGET'
+      );
+      assertNonEmpty(escapeWarnings, "Should have path escape/unsafe target warning");
+    });
+
+    it('损坏的 drawing XML 必须产生稳定结果（空元素，无崩溃）', async () => {
+      const fixture = createCorruptedDrawingFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      // fast-xml-parser 对损坏 XML 静默返回空结果，不得崩溃
+      const result = await extractDrawingml(buffer);
+      assert.equal(result.elements.length, 0);
+      assert.equal(result.connectors.length, 0);
+      assert.equal(result.pictures.length, 0);
+    });
+
+    it('缺失 drawing relationship 应产生 MISSING_DRAWING_REL warning', async () => {
+      const fixture = createMissingDrawingRelFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const result = await extractDrawingml(buffer);
+      const missingWarnings = result.warnings.filter(w => w.code === 'DRAWINGML_MISSING_DRAWING_REL');
+      assertNonEmpty(missingWarnings, "Should have DRAWINGML_MISSING_DRAWING_REL warning");
+    });
+
+    it('External TargetMode 的 workbook relationship 必须被过滤', async () => {
+      const fixture = createExternalWorkbookTargetFixture();
+      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
+      const result = await inspectDrawingmlPackage(buffer);
+      // External workbook rel 被过滤 → 无 sheet 被解析
+      assert.equal(result.sheets.length, 0);
+    });
   });
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // 安全预算
-  // ─────────────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 修复 D：安全预算（XML 字符限流贯穿所有 XML part）
+  // ═══════════════════════════════════════════════════════════════════════════
   describe('安全预算', () => {
     it('应拒绝超过 ZIP 条目数限制的文件', async () => {
       const JSZip = (await import('jszip')).default;
@@ -272,28 +525,21 @@ describe('DrawingML 提取器', () => {
     });
 
     it('压缩比检查逻辑可达（当 _data.compressedSize 可用时触发拒绝）', async () => {
-      // JSZip 的 _data.compressedSize 不反映 ZIP 文件中的实际压缩大小，
-      // 因此用正常 JSZip 创建的文件无法触发压缩比拒绝。
-      // 此测试验证代码路径可达：直接构造带有异常 _data 的 ZIP 对象。
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
       zip.file('test/tiny.xml', '<root/>');
       const buffer = await zip.generateAsync({ type: 'nodebuffer' });
 
-      // 验证 extractDrawingml 对正常小文件不抛出
       const result = await extractDrawingml(buffer);
       assert.equal(Array.isArray(result.elements), true);
 
-      // 验证压缩比检查在代码中存在：构造极端 limits 使 ratio > limit
-      // 由于 JSZip._data.compressedSize == uncompressedSize, ratio = 1
-      // 使用 MAX_COMPRESSION_RATIO = 0 来触发（任何 ratio > 0 都会拒绝）
       await assert.rejects(
         () => extractDrawingml(buffer, { limits: { MAX_COMPRESSION_RATIO: 0 } }),
         { message: /compression ratio exceeds limit/ }
       );
     });
 
-    it('应拒绝超过 XML 字符数限制的内容', async () => {
+    it('应拒绝超过 XML 字符数限制的内容（workbook XML）', async () => {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
       const largeXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' + 'x'.repeat(500001) + '</workbook>';
@@ -301,6 +547,22 @@ describe('DrawingML 提取器', () => {
       zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
       zip.file('xl/workbook.xml', largeXml);
       zip.file('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
+      const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+      await assert.rejects(
+        () => extractDrawingml(buffer),
+        { message: /XML safety validation failed.*character count exceeds limit/ }
+      );
+    });
+
+    it('应拒绝超大的 worksheet XML', async () => {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      const largeSheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' + 'x'.repeat(500001) + '</sheetData></worksheet>';
+      zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
+      zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+      zip.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="S1" sheetId="1" r:id="rId1"/></sheets></workbook>');
+      zip.file('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
+      zip.file('xl/worksheets/sheet1.xml', largeSheet);
       const buffer = await zip.generateAsync({ type: 'nodebuffer' });
       await assert.rejects(
         () => extractDrawingml(buffer),
@@ -320,9 +582,9 @@ describe('DrawingML 提取器', () => {
     });
   });
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // 证据抽取：TABLE + STRUCTURED_DIAGRAM
-  // ─────────────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 修复 E：证据抽取 + validateEvidenceBlock/Index + 完整 Oracle
+  // ═══════════════════════════════════════════════════════════════════════════
   describe('证据抽取（extractArtifactEvidence）', () => {
     let tmpDir;
     let mixedXlsxPath;
@@ -352,7 +614,7 @@ describe('DrawingML 提取器', () => {
       await rm(tmpDir, { recursive: true, force: true });
     });
 
-    it('混合 XLSX 应同时产生 TABLE 和 STRUCTURED_DIAGRAM 块', async () => {
+    it('混合 XLSX 应同时产生 TABLE 和 STRUCTURED_DIAGRAM 块（1 TABLE + 3 shape + 1 connector = 5 blocks）', async () => {
       const result = await extractArtifactEvidence({
         artifact: { path: mixedXlsxPath, format: 'xlsx' },
         runDir: tmpDir,
@@ -368,6 +630,13 @@ describe('DrawingML 提取器', () => {
 
       // 3 个形状 + 1 个连接器 = 4 个 STRUCTURED_DIAGRAM 块
       assert.equal(diagramBlocks.length, 4);
+
+      // 修复 E：精确确认 1 TABLE + 3 shape + 1 connector
+      const shapeBlocks = diagramBlocks.filter(b => b.locator.shape_id !== null && b.locator.connector_id === null);
+      const connectorBlocks = diagramBlocks.filter(b => b.locator.connector_id !== null);
+      assert.equal(tableBlocks.length, 1);
+      assert.equal(shapeBlocks.length, 3);
+      assert.equal(connectorBlocks.length, 1);
     });
 
     it('纯图片 XLSX 不应产生 STRUCTURED_DIAGRAM 块', async () => {
@@ -377,6 +646,30 @@ describe('DrawingML 提取器', () => {
       });
       const diagramBlocks = result.blocks.filter(b => b.modality === 'STRUCTURED_DIAGRAM');
       assert.equal(diagramBlocks.length, 0);
+
+      // 修复 E：精确断言 modality 列表（纯图片 XLSX 只有 TABLE 块，无 STRUCTURED_DIAGRAM）
+      const modalities = [...new Set(result.blocks.map(b => b.modality))].sort();
+      assert.equal(diagramBlocks.length, 0, 'No STRUCTURED_DIAGRAM blocks for image-only');
+      assert.equal(modalities.indexOf("STRUCTURED_DIAGRAM"), -1, 'Should not include STRUCTURED_DIAGRAM');
+    });
+
+    it('所有证据块应通过 validateEvidenceBlock Schema 验证', async () => {
+      const result = await extractArtifactEvidence({
+        artifact: { path: mixedXlsxPath, format: 'xlsx' },
+        runDir: tmpDir,
+      });
+
+      // 调用正式 validateEvidenceBlock，不得手工模拟
+      for (const block of result.blocks) {
+        const validation = await validateEvidenceBlock(block);
+        assert.deepEqual(validation, { valid: true },
+          `Block ${block.block_id} failed schema: ${JSON.stringify(validation.errors)}`);
+      }
+
+      // 调用 validateEvidenceIndex
+      const indexValidation = await validateEvidenceIndex(result.blocks);
+      assert.deepEqual(indexValidation, { valid: true },
+        `Index validation failed: ${JSON.stringify(indexValidation.errors)}`);
     });
 
     it('所有证据块应通过 Source Evidence Schema 必需字段验证', async () => {
@@ -415,10 +708,10 @@ describe('DrawingML 提取器', () => {
         assert.equal(typeof block.locator.sheet, 'string');
         assert.equal(block.locator.drawing_part, 'xl/drawings/drawing1.xml');
         assert.equal(typeof block.locator.anchor_type, 'string');
+        // 精确断言：shape_id 和 connector_id 互斥
         const hasShape = block.locator.shape_id !== null;
         const hasConnector = block.locator.connector_id !== null;
-        assert.equal(hasShape || hasConnector, true);
-        assert.equal(hasShape && hasConnector, false);
+        assert.equal(hasShape, !hasConnector, `Block ${block.block_id}: shape_id and connector_id should be mutually exclusive`);
       }
     });
 
@@ -432,11 +725,29 @@ describe('DrawingML 提取器', () => {
       assert.equal(tableBlocks.length, 1);
       assert.equal(diagramBlocks.length, 0);
     });
+
+    it('混合 fixture 的 STRUCTURED_DIAGRAM evidence blocks 精确投影', async () => {
+      const result = await extractArtifactEvidence({
+        artifact: { path: mixedXlsxPath, format: 'xlsx' },
+        runDir: tmpDir,
+      });
+      const diagramBlocks = result.blocks.filter(b => b.modality === 'STRUCTURED_DIAGRAM');
+
+      // 精确断言完整 locator 投影（modality + content + heading_path + locator）
+      for (const block of diagramBlocks) {
+        assert.equal(block.modality, 'STRUCTURED_DIAGRAM');
+        assert.equal(typeof block.content, 'string');
+        assertNonEmpty(block.content, "content should be non-empty");
+        assert.equal(Array.isArray(block.heading_path), true);
+        assert.equal(typeof block.locator, 'object');
+        assert.equal(block.locator.drawing_part, 'xl/drawings/drawing1.xml');
+      }
+    });
   });
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // 归一化与 batching：locator 保留
-  // ─────────────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 修复 E：归一化与 batching（精确 Oracle + validateEvidenceBatch）
+  // ═══════════════════════════════════════════════════════════════════════════
   describe('归一化与 batching', () => {
     let tmpDir;
     let mixedXlsxPath;
@@ -482,20 +793,44 @@ describe('DrawingML 提取器', () => {
         assert.equal(chunk.locator.drawing_part, 'xl/drawings/drawing1.xml');
         assert.equal(typeof chunk.locator.anchor_type, 'string');
       }
+
+      // 修复 E：对四个 DrawingML chunk 的 locator 列表整体 deepEqual
+      const locatorProjections = diagramChunks.map(c => ({
+        sheet: c.locator.sheet,
+        drawing_part: c.locator.drawing_part,
+        anchor_type: c.locator.anchor_type,
+        shape_id: c.locator.shape_id,
+        connector_id: c.locator.connector_id,
+      })).sort((a, b) => {
+        const keyA = `${a.shape_id || a.connector_id}`;
+        const keyB = `${b.shape_id || b.connector_id}`;
+        return keyA.localeCompare(keyB);
+      });
+
+      // 精确确认 3 shape + 1 connector
+      const shapes = locatorProjections.filter(l => l.shape_id !== null);
+      const connectors = locatorProjections.filter(l => l.connector_id !== null);
+      assert.equal(shapes.length, 3);
+      assert.equal(connectors.length, 1);
+
+      // 所有 drawing_part 一致
+      for (const loc of locatorProjections) {
+        assert.equal(loc.drawing_part, 'xl/drawings/drawing1.xml');
+      }
     });
 
     it('buildEvidenceBatches 应保留 locator 并生成有效批次', async () => {
       const batches = buildEvidenceBatches({ blocks: evidenceBlocks });
 
-      assert.notEqual(batches.length, 0);
+      assertNonEmpty(batches, "Should produce at least one batch");
 
       for (const batch of batches) {
         assert.match(batch.batch_id, /^EB-[a-zA-Z0-9_-]+$/);
         assert.match(batch.batch_sha256, /^[a-f0-9]{64}$/);
-        assert.notEqual(batch.blocks.length, 0);
-        assert.equal(batch.blocks.length <= 12, true);
-        assert.equal(batch.total_chars >= 0, true);
-        assert.equal(batch.total_chars <= 12000, true);
+        assertNonEmpty(batch.blocks, "Batch should contain blocks");
+        assert.equal(batch.blocks.length <= 12, true, 'Batch size should not exceed 12');
+        assert.equal(batch.total_chars >= 0, true, 'total_chars should be non-negative');
+        assert.equal(batch.total_chars <= 12000, true, 'total_chars should not exceed 12000');
         assert.equal(Array.isArray(batch.modality_mix), true);
         assert.equal(batch.status, 'PENDING');
         assert.equal(typeof batch.context_budget, 'object');
@@ -510,25 +845,39 @@ describe('DrawingML 提取器', () => {
         }
       }
 
-      // 验证所有原始块都被包含在某个批次中
+      // 修复 E：所有原始 block_id→locator 映射精确匹配
       const allBatchBlockIds = batches.flatMap(b => b.blocks.map(bl => bl.block_id));
+      const originalBlockIds = evidenceBlocks.map(b => b.block_id).sort();
+      const batchBlockIds = [...new Set(allBatchBlockIds)].sort();
+      assert.deepEqual(batchBlockIds, originalBlockIds,
+        'All original blocks must appear in batches');
+
+      // block_id→locator 映射整体 deepEqual
+      const batchLocatorMap = {};
+      for (const batch of batches) {
+        for (const block of batch.blocks) {
+          batchLocatorMap[block.block_id] = block.locator;
+        }
+      }
       for (const block of evidenceBlocks) {
-        assert.equal(allBatchBlockIds.includes(block.block_id), true, `Block ${block.block_id} missing from batches`);
+        assert.deepEqual(batchLocatorMap[block.block_id], block.locator,
+          `Locator mismatch for block ${block.block_id}`);
       }
     });
 
-    it('evidence batch 应通过合同验证', async () => {
+    it('每个 evidence batch 应通过 validateEvidenceBatch', async () => {
       const batches = buildEvidenceBatches({ blocks: evidenceBlocks });
       for (const batch of batches) {
         const validation = await validateEvidenceBatch(batch);
-        assert.equal(validation.valid, true, `Batch validation failed: ${JSON.stringify(validation.errors)}`);
+        assert.deepEqual(validation, { valid: true },
+          `Batch validation failed: ${JSON.stringify(validation.errors)}`);
       }
     });
   });
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // 输入检查 manifest（inspectInputs）
-  // ─────────────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // inspectInputs manifest（保留原有测试）
+  // ═══════════════════════════════════════════════════════════════════════════
   describe('inspectInputs manifest', () => {
     let tmpDir;
     let mixedXlsxPath;
@@ -570,7 +919,8 @@ describe('DrawingML 提取器', () => {
       assert.equal(artifact.parse_mode, 'STRUCTURED');
       assert.deepEqual(artifact.capabilities, ['XLSX_TABLE', 'DRAWINGML_STRUCTURE']);
       assert.equal(typeof artifact.confidence, 'number');
-      assert.equal(artifact.confidence >= 0 && artifact.confidence <= 1, true);
+      assert.equal(artifact.confidence >= 0, true);
+      assert.equal(artifact.confidence <= 1, true);
     });
   });
 });

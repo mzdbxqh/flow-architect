@@ -6,23 +6,29 @@
  *
  * 所有输出确定性：相同字节输入重复调用必须深度相等且序列化结果字节一致。
  * 不读取当前时间、随机数或进程相关路径。
+ *
+ * 运行时依赖通过 ESM 顶层静态导入 requireRuntimePackage 加载，
+ * 无动态 CJS 加载、无模块路径内省。
  */
 
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import { dirname, normalize } from 'node:path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const require = createRequire(import.meta.url);
+import { normalize } from 'node:path';
+import { requireRuntimePackage } from './runtime-loader.mjs';
 
 /**
  * 加载 fast-xml-parser（通过 runtime loader 的显式依赖）
+ * @returns {Promise<object>}
  */
-function loadXmlParser() {
-  const { requireRuntimePackage } = require('./runtime-loader.mjs');
-  const fastXmlParser = requireRuntimePackage('core', 'fast-xml-parser');
+async function loadXmlParser() {
+  const fastXmlParser = await requireRuntimePackage('core', 'fast-xml-parser');
   return fastXmlParser.XMLParser || fastXmlParser.default?.XMLParser || fastXmlParser;
+}
+
+/**
+ * 加载 JSZip（通过 runtime loader 的显式依赖）
+ * @returns {Promise<object>}
+ */
+async function loadJszip() {
+  return requireRuntimePackage('xlsx', 'jszip');
 }
 
 /**
@@ -93,14 +99,6 @@ const XML_PARSER_OPTIONS = {
   processEntities: false,
   htmlEntities: false,
 };
-
-/**
- * 加载 JSZip（通过 runtime loader 的显式依赖）
- */
-function loadJszip() {
-  const { requireRuntimePackage } = require('./runtime-loader.mjs');
-  return requireRuntimePackage('xlsx', 'jszip');
-}
 
 /**
  * 检查 ZIP 包安全性
@@ -186,31 +184,52 @@ function validateXmlSafety(xmlContent, partName, limits) {
  * @param {string} xmlContent
  * @param {string} partName
  * @param {object} [limits] - 可选安全限制覆盖
- * @returns {object}
+ * @returns {Promise<object>}
  */
-function parseXml(xmlContent, partName, limits) {
+async function parseXml(xmlContent, partName, limits) {
   validateXmlSafety(xmlContent, partName, limits);
 
-  const XMLParser = loadXmlParser();
+  const XMLParser = await loadXmlParser();
   const parser = new XMLParser(XML_PARSER_OPTIONS);
   return parser.parse(xmlContent);
 }
 
 /**
  * 从 relationship 文件解析关系列表
+ *
+ * - 保留 TargetMode 属性
+ * - 检测重复 relationship ID 并抛出错误（fail-closed）
+ *
  * @param {string} relsXml
- * @returns {Array<{ id: string, type: string, target: string }>}
+ * @param {string} [partName] - 用于错误消息的 part 名称
+ * @returns {Promise<Array<{ id: string, type: string, target: string, targetMode: string|null }>>}
+ * @throws {Error} 如果存在重复 relationship ID
  */
-function parseRelationships(relsXml) {
-  const parsed = parseXml(relsXml, 'rels');
+async function parseRelationships(relsXml, partName = 'rels') {
+  const parsed = await parseXml(relsXml, partName);
   const rels = parsed?.Relationships?.Relationship || [];
   const relArray = Array.isArray(rels) ? rels : [rels];
 
-  return relArray.map(rel => ({
-    id: rel['@_Id'] || rel.Id || '',
-    type: rel['@_Type'] || rel.Type || '',
-    target: rel['@_Target'] || rel.Target || '',
-  }));
+  const seenIds = new Set();
+  const result = [];
+
+  for (const rel of relArray) {
+    const id = rel['@_Id'] || rel.Id || '';
+    if (id) {
+      if (seenIds.has(id)) {
+        throw new Error(`Duplicate relationship ID "${id}" in ${partName}`);
+      }
+      seenIds.add(id);
+    }
+    result.push({
+      id,
+      type: rel['@_Type'] || rel.Type || '',
+      target: rel['@_Target'] || rel.Target || '',
+      targetMode: rel['@_TargetMode'] || rel.TargetMode || null,
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -224,11 +243,54 @@ function isSafeTarget(target) {
   if (target.startsWith('/')) return false;
   // 不允许外部 URL
   if (target.startsWith('http://') || target.startsWith('https://') || target.startsWith('ftp://')) return false;
+  // 不允许外部 TargetMode
+  // （TargetMode="External" 在 parseRelationships 之后由调用方检查）
   // 检查是否包含危险的路径遍历序列
   // 注意：相对路径中的 ../ 是合法的，只要最终解析后不逃逸 xl/ 根目录
   // 我们在实际使用时会规范化路径并验证
   if (target.includes('\\')) return false; // Windows 路径分隔符
   return true;
+}
+
+/**
+ * 安全解析 relationship target 并检查逃逸
+ *
+ * @param {object} rel - relationship 对象
+ * @param {string} sheetDir - 当前 sheet 的目录
+ * @param {string} partName - 用于错误消息
+ * @param {string[]} warnings - 警告收集数组
+ * @returns {string|null} 安全的完整路径（xl/...）或 null
+ */
+function resolveRelationshipTarget(rel, sheetDir, partName, warnings) {
+  // External TargetMode → 拒绝
+  if (rel.targetMode === 'External') {
+    warnings.push({
+      code: 'DRAWINGML_EXTERNAL_TARGET',
+      message: `Relationship ${rel.id} in ${partName} has External TargetMode, rejected`,
+    });
+    return null;
+  }
+
+  if (!isSafeTarget(rel.target)) {
+    warnings.push({
+      code: 'DRAWINGML_UNSAFE_TARGET',
+      message: `Relationship ${rel.id} in ${partName} has unsafe target: ${rel.target}`,
+    });
+    return null;
+  }
+
+  const fullPath = `xl/${sheetDir}${rel.target}`;
+  const normalizedPath = normalize(fullPath).replace(/^\.\.\//, '');
+
+  if (!normalizedPath.startsWith('xl/') && !normalizedPath.startsWith('xl\\')) {
+    warnings.push({
+      code: 'DRAWINGML_PATH_ESCAPE',
+      message: `Relationship ${rel.id} target "${rel.target}" escapes xl/ root after normalization`,
+    });
+    return null;
+  }
+
+  return normalizedPath;
 }
 
 /**
@@ -531,10 +593,11 @@ function parseAnchor(anchor, anchorType, shapeIndex) {
  * 解析单个 drawing XML
  * @param {string} drawingXml
  * @param {string} drawingPart
- * @returns {{ elements: object[], connectors: object[], pictures: object[], warnings: string[] }}
+ * @param {object} [limits] - 可选安全限制覆盖
+ * @returns {Promise<{ elements: object[], connectors: object[], pictures: object[], warnings: string[] }>}
  */
-function parseDrawingXml(drawingXml, drawingPart) {
-  const parsed = parseXml(drawingXml, drawingPart);
+async function parseDrawingXml(drawingXml, drawingPart, limits) {
+  const parsed = await parseXml(drawingXml, drawingPart, limits);
   const wsDr = parsed?.['xdr:wsDr'] || parsed?.wsDr || {};
 
   const allElements = [];
@@ -593,7 +656,7 @@ function parseDrawingXml(drawingXml, drawingPart) {
  */
 export async function inspectDrawingmlPackage(buffer, options = {}) {
   const limits = options.limits;
-  const JSZip = loadJszip();
+  const JSZip = await loadJszip();
   const zip = await JSZip.loadAsync(buffer);
   const warnings = [];
 
@@ -610,11 +673,11 @@ export async function inspectDrawingmlPackage(buffer, options = {}) {
   }
 
   const workbookRelsXml = await zip.files[workbookRelsPath].async('string');
-  const workbookRels = parseRelationships(workbookRelsXml);
+  const workbookRels = await parseRelationships(workbookRelsXml, workbookRelsPath);
 
-  // 查找所有 worksheet
+  // 查找所有 worksheet（过滤外部 TargetMode）
   const worksheetRels = workbookRels.filter(r =>
-    r.type.endsWith('/worksheet') && isSafeTarget(r.target)
+    r.type.endsWith('/worksheet') && isSafeTarget(r.target) && r.targetMode !== 'External'
   );
 
   const sheets = [];
@@ -627,7 +690,7 @@ export async function inspectDrawingmlPackage(buffer, options = {}) {
     if (!zip.files[sheetPath]) continue;
 
     const sheetXml = await zip.files[sheetPath].async('string');
-    const parsed = parseXml(sheetXml, sheetPath);
+    const parsed = await parseXml(sheetXml, sheetPath, limits);
     const sheetData = parsed?.worksheet || {};
     const sheetName = sheetData.sheet?.['@_name'] || wsRel.target.replace('worksheets/', '').replace('.xml', '');
 
@@ -653,25 +716,31 @@ export async function inspectDrawingmlPackage(buffer, options = {}) {
       const sheetRelsPath = `xl/worksheets/_rels/${wsRel.target.split('/').pop()}.rels`;
       if (zip.files[sheetRelsPath]) {
         const sheetRelsXml = await zip.files[sheetRelsPath].async('string');
-        const sheetRels = parseRelationships(sheetRelsXml);
-        const drawingRel = sheetRels.find(r => r.id === drawingRef && r.type.endsWith('/drawing'));
+        const sheetRels = await parseRelationships(sheetRelsXml, sheetRelsPath);
 
-        if (drawingRel && isSafeTarget(drawingRel.target)) {
-          // 计算完整路径
-          const sheetDir = wsRel.target.replace(/[^/]+$/, '');
-          const fullPath = `xl/${sheetDir}${drawingRel.target}`;
-          // 规范化路径并验证不逃逸 xl/ 根目录
-          drawingPart = normalize(fullPath).replace(/^\.\.\//, '');
-          if (!drawingPart.startsWith('xl/') && !drawingPart.startsWith('xl\\')) {
-            // 路径逃逸了 xl/ 根目录，不安全
-            continue;
-          }
+        // 找到匹配的 drawing relationship（唯一匹配，不静默接受重复 ID）
+        const matchingDrels = sheetRels.filter(r => r.id === drawingRef && r.type.endsWith('/drawing'));
 
-          if (zip.files[drawingPart]) {
+        if (matchingDrels.length === 0) {
+          warnings.push({
+            code: 'DRAWINGML_MISSING_DRAWING_REL',
+            message: `No drawing relationship found for ref ${drawingRef} in ${sheetRelsPath}`,
+          });
+        } else if (matchingDrels.length > 1) {
+          warnings.push({
+            code: 'DRAWINGML_AMBIGUOUS_DRAWING_REL',
+            message: `Multiple drawing relationships match ref ${drawingRef} in ${sheetRelsPath}`,
+          });
+        } else {
+          const drawingRel = matchingDrels[0];
+          const resolvedPath = resolveRelationshipTarget(drawingRel, wsRel.target.replace(/[^/]+$/, ''), sheetRelsPath, warnings);
+
+          if (resolvedPath && zip.files[resolvedPath]) {
+            drawingPart = resolvedPath;
             hasDrawingInSheet = true;
 
             // 检查是否有可编辑形状
-            const drawingXml = await zip.files[drawingPart].async('string');
+            const drawingXml = await zip.files[resolvedPath].async('string');
             // 使用更精确的检查，避免误匹配 <xdr:spPr> 等
             const hasSp = /<xdr:sp[\s>]/.test(drawingXml) || /<sp[\s>]/.test(drawingXml);
             const hasCxnSp = /<xdr:cxnSp[\s>]/.test(drawingXml) || /<cxnSp[\s>]/.test(drawingXml);
@@ -686,6 +755,11 @@ export async function inspectDrawingmlPackage(buffer, options = {}) {
               hasEditableShapes = true;
             }
             if (hasRasterInSheet) hasRasterOnly = true;
+          } else if (resolvedPath) {
+            warnings.push({
+              code: 'DRAWINGML_MISSING_DRAWING_PART',
+              message: `Drawing part ${resolvedPath} not found in ZIP for sheet ${sheetName}`,
+            });
           }
         }
       }
@@ -713,7 +787,7 @@ export async function inspectDrawingmlPackage(buffer, options = {}) {
  */
 export async function extractDrawingml(buffer, options = {}) {
   const limits = options.limits;
-  const JSZip = loadJszip();
+  const JSZip = await loadJszip();
   const zip = await JSZip.loadAsync(buffer);
 
   // 安全检查
@@ -732,7 +806,7 @@ export async function extractDrawingml(buffer, options = {}) {
   const workbookPath = 'xl/workbook.xml';
   if (zip.files[workbookPath]) {
     const workbookXml = await zip.files[workbookPath].async('string');
-    validateXmlSafety(workbookXml, workbookPath);
+    validateXmlSafety(workbookXml, workbookPath, limits);
   }
 
   // 解析 workbook relationships
@@ -742,11 +816,11 @@ export async function extractDrawingml(buffer, options = {}) {
   }
 
   const workbookRelsXml = await zip.files[workbookRelsPath].async('string');
-  const workbookRels = parseRelationships(workbookRelsXml);
+  const workbookRels = await parseRelationships(workbookRelsXml, workbookRelsPath);
 
-  // 查找所有 worksheet
+  // 查找所有 worksheet（过滤外部 TargetMode）
   const worksheetRels = workbookRels.filter(r =>
-    r.type.endsWith('/worksheet') && isSafeTarget(r.target)
+    r.type.endsWith('/worksheet') && isSafeTarget(r.target) && r.targetMode !== 'External'
   );
 
   // 按 sheet 和 drawing part 排序，确保确定性
@@ -757,7 +831,7 @@ export async function extractDrawingml(buffer, options = {}) {
     if (!zip.files[sheetPath]) continue;
 
     const sheetXml = await zip.files[sheetPath].async('string');
-    const parsed = parseXml(sheetXml, sheetPath);
+    const parsed = await parseXml(sheetXml, sheetPath, limits);
     const sheetData = parsed?.worksheet || {};
     const sheetName = sheetData.sheet?.['@_name'] || wsRel.target.replace('worksheets/', '').replace('.xml', '');
 
@@ -769,23 +843,28 @@ export async function extractDrawingml(buffer, options = {}) {
       const sheetRelsPath = `xl/worksheets/_rels/${wsRel.target.split('/').pop()}.rels`;
       if (zip.files[sheetRelsPath]) {
         const sheetRelsXml = await zip.files[sheetRelsPath].async('string');
-        const sheetRels = parseRelationships(sheetRelsXml);
-        const drawingRel = sheetRels.find(r => r.id === drawingRef && r.type.endsWith('/drawing'));
+        const sheetRels = await parseRelationships(sheetRelsXml, sheetRelsPath);
 
-        if (drawingRel && isSafeTarget(drawingRel.target)) {
-          // 计算完整路径
-          const sheetDir = wsRel.target.replace(/[^/]+$/, '');
-          const fullPath = `xl/${sheetDir}${drawingRel.target}`;
-          // 规范化路径并验证不逃逸 xl/ 根目录
-          const normalizedDrawingPart = normalize(fullPath).replace(/^\.\.\//, '');
-          if (!normalizedDrawingPart.startsWith('xl/') && !normalizedDrawingPart.startsWith('xl\\')) {
-            // 路径逃逸了 xl/ 根目录，不安全
-            continue;
-          }
+        // 找到匹配的 drawing relationship（唯一匹配）
+        const matchingDrels = sheetRels.filter(r => r.id === drawingRef && r.type.endsWith('/drawing'));
 
-          if (zip.files[normalizedDrawingPart]) {
+        if (matchingDrels.length === 0) {
+          allWarnings.push({
+            code: 'DRAWINGML_MISSING_DRAWING_REL',
+            message: `No drawing relationship found for ref ${drawingRef} in ${sheetRelsPath}`,
+          });
+        } else if (matchingDrels.length > 1) {
+          allWarnings.push({
+            code: 'DRAWINGML_AMBIGUOUS_DRAWING_REL',
+            message: `Multiple drawing relationships match ref ${drawingRef} in ${sheetRelsPath}`,
+          });
+        } else {
+          const drawingRel = matchingDrels[0];
+          const normalizedDrawingPart = resolveRelationshipTarget(drawingRel, wsRel.target.replace(/[^/]+$/, ''), sheetRelsPath, allWarnings);
+
+          if (normalizedDrawingPart && zip.files[normalizedDrawingPart]) {
             const drawingXml = await zip.files[normalizedDrawingPart].async('string');
-            const result = parseDrawingXml(drawingXml, normalizedDrawingPart);
+            const result = await parseDrawingXml(drawingXml, normalizedDrawingPart, limits);
 
             // 为每个元素添加 locator 信息
             for (const element of result.elements) {
@@ -822,6 +901,11 @@ export async function extractDrawingml(buffer, options = {}) {
               element_count: result.elements.length,
               connector_count: result.connectors.length,
               picture_count: result.pictures.length,
+            });
+          } else if (normalizedDrawingPart) {
+            allWarnings.push({
+              code: 'DRAWINGML_MISSING_DRAWING_PART',
+              message: `Drawing part ${normalizedDrawingPart} not found in ZIP for sheet ${sheetName}`,
             });
           }
         }
