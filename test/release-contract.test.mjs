@@ -16,18 +16,18 @@ function json(relativePath) {
 
 const PRODUCT_DESCRIPTION = /review.*draft.*meeting package/i;
 
-test('v0.2.0 is consistent across package and every published manifest', () => {
-  assert.equal(json('package.json').version, '0.2.0');
+test('v0.3.0 is consistent across package and every published manifest', () => {
+  assert.equal(json('package.json').version, '0.3.0');
 
   for (const file of [
     '.codex-plugin/plugin.json',
     'adapters/codex/.codex-plugin/plugin.json',
     'adapters/claude/.claude-plugin/plugin.json',
   ]) {
-    assert.equal(json(file).version, '0.2.0', `${file} version must be 0.2.0`);
+    assert.equal(json(file).version, '0.3.0', `${file} version must be 0.3.0`);
   }
 
-  assert.equal(json('.claude-plugin/marketplace.json').plugins[0].version, '0.2.0');
+  assert.equal(json('.claude-plugin/marketplace.json').plugins[0].version, '0.3.0');
 });
 
 test('canonical and generated plugin descriptions cover review, draft and meeting package', () => {
@@ -56,7 +56,7 @@ test('canonical and generated Codex manifests declare exact Read and Write capab
   }
 });
 
-test('runtime 2.0.0 remains compatible with v0.1.2 caches and v0.2.0 plugin', () => {
+test('runtime 2.0.0 remains compatible with v0.1.2 caches and v0.3.0 plugin', () => {
   for (const file of [
     'runtime/manifest.json',
     'adapters/codex/runtime/manifest.json',
@@ -64,12 +64,12 @@ test('runtime 2.0.0 remains compatible with v0.1.2 caches and v0.2.0 plugin', ()
   ]) {
     const manifest = json(file);
     assert.equal(manifest.runtime_version, '2.0.0', file);
-    assert.equal(manifest.plugin_compatibility, '>=0.1.2 <0.3.0', file);
+    assert.equal(manifest.plugin_compatibility, '>=0.1.2 <0.4.0', file);
   }
 
   const manager = read('scripts/lib/runtime-manager.mjs');
   assert.doesNotMatch(manager, />=0\.1\.2 <0\.2\.0/);
-  assert.match(manager, /plugin_compatibility:\s*'>=0\.1\.2 <0\.3\.0'/);
+  assert.match(manager, /plugin_compatibility:\s*'>=0\.1\.2 <0\.4\.0'/);
 });
 
 test('process draft meeting package records runtime version rather than plugin version', () => {
@@ -95,7 +95,7 @@ test('help distinguishes read-only review from creation without contradicting it
 
 test('adapter generator is the version and capability source of truth', () => {
   const generator = read('scripts/build-adapters.mjs');
-  assert.match(generator, /const PLUGIN_VERSION = '0\.2\.0'/);
+  assert.match(generator, /const PLUGIN_VERSION = '0\.3\.0'/);
   assert.match(generator, /capabilities:\s*\['Read', 'Write'\]/);
   assert.doesNotMatch(generator, /Read-only process architecture/i);
 });

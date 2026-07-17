@@ -130,11 +130,11 @@ test('draft-process SKILL.md batch-too-large error must suggest splitting source
 });
 
 // ============================================================
-// 3. v0.2.0 产品描述 — 不得错误描述为"只读、不建模"
+// 3. v0.3.0 产品描述 — 不得错误描述为"只读、不建模"
 // ============================================================
 
-test('EN README must not describe the entire v0.2.0 product as read-only or no-modeling', () => {
-  // v0.2.0 includes creation skills (draft-process, build-meeting-package)
+test('EN README must not describe the entire v0.3.0 product as read-only or no-modeling', () => {
+  // v0.3.0 includes creation skills (draft-process, build-meeting-package)
   // so the entire product cannot be described as read-only
   const forbidden = [
     /Flow Architect is a read-only/i,
@@ -145,12 +145,12 @@ test('EN README must not describe the entire v0.2.0 product as read-only or no-m
   for (const re of forbidden) {
     assert.ok(
       !re.test(README_EN),
-      `EN README must not describe the entire v0.2.0 product as read-only (matched: ${re})`,
+      `EN README must not describe the entire v0.3.0 product as read-only (matched: ${re})`,
     );
   }
 });
 
-test('ZH README must not describe the entire v0.2.0 product as read-only or no-modeling', () => {
+test('ZH README must not describe the entire v0.3.0 product as read-only or no-modeling', () => {
   const forbidden = [
     /只读.*评审.*技能族/,
     /仅评审.*不创建/,
@@ -159,7 +159,7 @@ test('ZH README must not describe the entire v0.2.0 product as read-only or no-m
   for (const re of forbidden) {
     assert.ok(
       !re.test(README_ZH),
-      `ZH README must not describe the entire v0.2.0 product as read-only (matched: ${re})`,
+      `ZH README must not describe the entire v0.3.0 product as read-only (matched: ${re})`,
     );
   }
 });

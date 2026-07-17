@@ -9,7 +9,7 @@
       "name": "flow-architect",
       "source": "./adapters/claude",
       "description": "Process architecture review, draft, and meeting package skill family",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "author": {
         "name": "flow-architect contributors"
       },

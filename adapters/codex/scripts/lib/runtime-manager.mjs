@@ -443,7 +443,7 @@ export async function installRuntime(plan, options = {}) {
 
     const stateObj = {
       runtime_version: runtimeVersion,
-      plugin_compatibility: '>=0.1.2 <0.3.0',
+      plugin_compatibility: '>=0.1.2 <0.4.0',
       installed_at: timestamp,
       node_version: processInfo.nodeVersion || process.version,
       npm_version: processInfo.npmVersion || '',

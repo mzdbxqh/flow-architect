@@ -5,7 +5,7 @@ import os from 'node:os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PLUGIN_VERSION = '0.2.0';
+const PLUGIN_VERSION = '0.3.0';
 
 /**
  * Build adapter outputs for both Codex and Claude platforms.
