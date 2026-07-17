@@ -199,12 +199,15 @@ describe('5. xlsx runtime 精确依赖', () => {
     assert.equal(manifest.runtime_version, '2.0.0',
       'runtime manifest 版本应为 2.0.0');
 
-    // 精确组件名投影，替代弱 assert.ok 存在性检查
+    // 精确组件名完整数组 deepEqual，替代弱 assert.ok 存在性检查
     const componentNames = manifest.components.map(c => c.name);
-    assert.ok(componentNames.includes('xlsx'),
-      `manifest.components 缺少 xlsx，实际组件: [${componentNames.join(', ')}]`);
+    assert.deepEqual(
+      componentNames,
+      ['core', 'pdf', 'docx', 'xlsx', 'pptx'],
+      'manifest.components 应精确包含 [core, pdf, docx, xlsx, pptx]'
+    );
 
-    const xlsxComponent = manifest.components.find(c => c.name === 'xlsx');
+    const xlsxComponent = manifest.components[3];
 
     // 精确依赖对象 deepEqual
     assert.deepEqual(xlsxComponent.packages, {
