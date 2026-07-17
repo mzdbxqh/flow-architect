@@ -199,10 +199,14 @@ describe('5. xlsx runtime 精确依赖', () => {
     assert.equal(manifest.runtime_version, '2.0.0',
       'runtime manifest 版本应为 2.0.0');
 
-    const xlsxComponent = manifest.components.find(c => c.name === 'xlsx');
-    assert.ok(xlsxComponent, 'manifest 应包含 xlsx 组件');
+    // 精确组件名投影，替代弱 assert.ok 存在性检查
+    const componentNames = manifest.components.map(c => c.name);
+    assert.ok(componentNames.includes('xlsx'),
+      `manifest.components 缺少 xlsx，实际组件: [${componentNames.join(', ')}]`);
 
-    // 精确依赖对象 deepEqual，而非 ok 存在性检查
+    const xlsxComponent = manifest.components.find(c => c.name === 'xlsx');
+
+    // 精确依赖对象 deepEqual
     assert.deepEqual(xlsxComponent.packages, {
       exceljs: '4.4.0',
       jszip: '3.10.1',
@@ -321,4 +325,49 @@ describe('9. 公开边界泄漏检查', () => {
         `${file} 仍含私有内容: ${found.map(m => m.desc).join(', ')}`);
     });
   }
+});
+
+// ============================================================
+// 10. runtime-contract 错误码必须匹配实现
+// ============================================================
+
+describe('10. runtime-contract 错误码与实现一致', () => {
+  const RUNTIME_CONTRACT_PATHS = [
+    'references/runtime-contract.md',
+    'adapters/claude/references/runtime-contract.md',
+    'adapters/codex/references/runtime-contract.md',
+  ];
+
+  // 实现真实导出的错误码
+  const EXPECTED_ERROR_CODE = 'FLOW_ARCHITECT_RUNTIME_MISSING';
+
+  for (const relPath of RUNTIME_CONTRACT_PATHS) {
+    it(`${relPath} 错误码精确匹配 ${EXPECTED_ERROR_CODE}`, () => {
+      const content = read(relPath);
+      assert.match(content, new RegExp(EXPECTED_ERROR_CODE),
+        `${relPath} 应包含真实错误码 ${EXPECTED_ERROR_CODE}`);
+      assert.doesNotMatch(content, /RUNTIME_COMPONENT_MISSING/,
+        `${relPath} 仍含旧错误码 RUNTIME_COMPONENT_MISSING，应为 ${EXPECTED_ERROR_CODE}`);
+    });
+  }
+});
+
+// ============================================================
+// 11. canonical / Claude / Codex runtime-contract 字节一致
+// ============================================================
+
+describe('11. runtime-contract 三份副本字节一致', () => {
+  const canonical = read('references/runtime-contract.md');
+  const claude = read('adapters/claude/references/runtime-contract.md');
+  const codex = read('adapters/codex/references/runtime-contract.md');
+
+  it('canonical == claude adapter (字节一致)', () => {
+    assert.equal(canonical, claude,
+      'canonical 与 claude adapter 的 runtime-contract.md 内容不一致');
+  });
+
+  it('canonical == codex adapter (字节一致)', () => {
+    assert.equal(canonical, codex,
+      'canonical 与 codex adapter 的 runtime-contract.md 内容不一致');
+  });
 });
