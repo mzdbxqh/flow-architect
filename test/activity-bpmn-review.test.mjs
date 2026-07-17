@@ -142,12 +142,6 @@ async function assertFullyValid(draft, msg) {
   assert.deepEqual(result, { valid: true }, `${msg} - validateProcessDraft 失败: ${JSON.stringify(result)}`);
 }
 
-/** 断言某 findings 中包含指定 rule_id:target 的 finding */
-function assertHasFinding(findings, ruleId, target, msg) {
-  const key = `${ruleId}:${target}`;
-  const found = findings.some(f => f.rule_id === ruleId && f.target_refs[0] === target);
-  assert.ok(found, `${msg} - 缺少 finding ${key}，实际: ${oracle(findings)}`);
-}
 
 // ══════════════════════════════════════════════════════════════
 // 测试
@@ -205,6 +199,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         { role_id: 'Role-approver', responsibility: 'A' },
         { role_id: 'Role-purchaser', responsibility: 'S' },
       ];
+      assertSchemaValid(draft, '001 个人标识');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
@@ -234,6 +229,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         { role_id: 'Role-approver', responsibility: 'A' },
         { role_id: 'Role-purchaser', responsibility: 'S' },
       ];
+      assertSchemaValid(draft, 'Role-demand/需求方');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
@@ -250,6 +246,7 @@ describe('reviewActivityBpmn V2 合同', () => {
     it('活动无 binding 应触发 002', async () => {
       const draft = makeValidDraft();
       draft.diagram.task_bindings = [];
+      assertSchemaValid(draft, '002 无 binding');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
@@ -279,7 +276,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-002', 'Activity-submit', '缺少 MAIN_TASK node');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-002:Activity-submit'], '缺少 MAIN_TASK node');
       assertValidFindingSet(findings, '缺少 MAIN_TASK node');
     });
 
@@ -298,24 +295,33 @@ describe('reviewActivityBpmn V2 合同', () => {
         flow_id: 'Flow-4', source_ref: 'Task-submit2', target_ref: 'End-approved', condition: null,
       });
       draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+      assertSchemaValid(draft, '两个 binding');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-009', 'Activity-submit', '两个 binding 应触发 009');
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-002:Activity-submit',
+        'FA-ACT-BPMN-002:Task-submit2',
+        'FA-ACT-BPMN-009:Activity-submit',
+      ], '两个 binding');
       assertValidFindingSet(findings, '两个 binding');
     });
 
     it('三方不一致应触发 002', async () => {
       const draft = makeValidDraft();
       draft.diagram.task_bindings[0].main_task_id = 'Task-wrong';
+      assertSchemaValid(draft, '三方不一致');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-002', 'Activity-submit', '三方不一致');
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-002:Activity-submit',
+        'FA-ACT-BPMN-002:Task-submit',
+      ], '三方不一致');
       assertValidFindingSet(findings, '三方不一致');
     });
   });
@@ -326,6 +332,7 @@ describe('reviewActivityBpmn V2 合同', () => {
     it('RASCI/R 主 Task 不在 R 泳道应触发 003', async () => {
       const draft = makeValidDraft();
       draft.diagram.nodes.find(n => n.node_id === 'Task-submit').lane_id = 'Lane-approver';
+      assertSchemaValid(draft, '003 RASCI/R 主 Task 不在 R 泳道');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
@@ -338,12 +345,13 @@ describe('reviewActivityBpmn V2 合同', () => {
     it('角色无泳道时应触发 003', async () => {
       const draft = makeValidDraft();
       draft.diagram.lanes = [];
+      assertSchemaValid(draft, '003 角色无泳道');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-003', 'Activity-submit', '角色无泳道');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-003:Activity-submit'], '角色无泳道');
       assertValidFindingSet(findings, '角色无泳道');
     });
   });
@@ -377,7 +385,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 三条件不全');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-004:Activity-submit'], '004 三条件不全');
       assertValidFindingSet(findings, '004 三条件不全');
     });
 
@@ -407,7 +415,10 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 确认角色等于主责');
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-004:Activity-submit',
+        'FA-ACT-BPMN-004:Activity-submit',
+      ], '004 确认角色等于主责');
       assertValidFindingSet(findings, '004 确认角色等于主责');
     });
 
@@ -427,7 +438,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 confirmation 非空但 binding 为空');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-004:Activity-submit'], '004 confirmation 非空但 binding 为空');
       assertValidFindingSet(findings, '004 confirmation 非空但 binding 为空');
     });
 
@@ -448,7 +459,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 binding ID 存在但节点不存在');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-004:Activity-submit'], '004 binding ID 存在但节点不存在');
       assertValidFindingSet(findings, '004 binding ID 存在但节点不存在');
     });
 
@@ -471,7 +482,10 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 节点类型错误');
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-002:Task-confirm',
+        'FA-ACT-BPMN-004:Activity-submit',
+      ], '004 节点类型错误');
       assertValidFindingSet(findings, '004 节点类型错误');
     });
 
@@ -501,7 +515,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 三方不一致');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-004:Activity-submit'], '004 三方不一致');
       assertValidFindingSet(findings, '004 三方不一致');
     });
 
@@ -525,7 +539,10 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 缺少 MAIN->CONFIRM flow');
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-004:Activity-submit',
+        'FA-ACT-BPMN-004:Activity-submit',
+      ], '004 缺少 MAIN->CONFIRM flow');
       assertValidFindingSet(findings, '004 缺少 MAIN->CONFIRM flow');
     });
 
@@ -554,7 +571,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 确认 Task 无后续 flow');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-004:Activity-submit'], '004 确认 Task 无后续 flow');
       assertValidFindingSet(findings, '004 确认 Task 无后续 flow');
     });
 
@@ -578,7 +595,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 confirmation null 但 binding 非空');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-004:Activity-submit'], '004 confirmation null 但 binding 非空');
       assertValidFindingSet(findings, '004 confirmation null 但 binding 非空');
     });
 
@@ -598,8 +615,66 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-004', 'Activity-submit', '004 confirmation null 但节点残留');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-004:Activity-submit'], '004 confirmation null 但节点残留');
       assertValidFindingSet(findings, '004 confirmation null 但节点残留');
+    });
+
+    it('多活动残留归属：只能报告有直接前驱的活动', async () => {
+      const draft = makeValidDraft();
+      // 添加第二个活动 Activity-review
+      draft.activities.push({
+        activity_id: 'Activity-review',
+        name: '审核申请',
+        description: '审核采购申请',
+        activity_type: 'STANDARD',
+        responsibility_model: 'RASCI',
+        role_assignments: [
+          { role_id: 'Role-approver', responsibility: 'R' },
+        ],
+        tools: [],
+        inputs: ['已提交的采购申请'],
+        process_summary: '审核采购申请',
+        outputs: ['审核结果'],
+        completion_criteria: ['审核完成'],
+        references: [],
+        main_task_id: 'Task-review',
+        confirmation: null,
+        completeness: 'COMPLETE',
+      });
+      draft.diagram.nodes.push({
+        node_id: 'Task-review', node_type: 'MAIN_TASK', name: '审核申请', lane_id: 'Lane-approver',
+      });
+      draft.diagram.task_bindings.push({
+        activity_id: 'Activity-review', main_task_id: 'Task-review', confirmation_task_id: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Task-review', condition: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-4', source_ref: 'Task-review', target_ref: 'End-approved', condition: null,
+      });
+      draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+
+      // 添加一个未绑定的 CONFIRMATION_TASK，直接前驱是 Task-review（Activity-review 的主 Task）
+      draft.diagram.nodes.push({
+        node_id: 'Task-confirm-review', node_type: 'CONFIRMATION_TASK', name: '确认审核', lane_id: 'Lane-requester',
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-5', source_ref: 'Task-review', target_ref: 'Task-confirm-review', condition: null,
+      });
+
+      assertSchemaValid(draft, '多活动残留归属');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      // 只能报告 Activity-review（因为 Task-confirm-review 的直接前驱是 Task-review）
+      // 不能报告 Activity-submit（因为没有直接前驱关联）
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-004:Activity-review',
+      ], '多活动残留归属');
+      assertValidFindingSet(findings, '多活动残留归属');
     });
   });
 
@@ -628,12 +703,18 @@ describe('reviewActivityBpmn V2 合同', () => {
       draft.diagram.flows.push({
         flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Task-confirm', condition: null,
       });
+      assertSchemaValid(draft, '005 REVIEW_MEETING');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-005', 'Activity-submit', '005');
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-003:Activity-submit',
+        'FA-ACT-BPMN-004:Activity-submit',
+        'FA-ACT-BPMN-004:Activity-submit',
+        'FA-ACT-BPMN-005:Activity-submit',
+      ], '005');
       assertValidFindingSet(findings, '005');
     });
   });
@@ -652,6 +733,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         { flow_id: 'Flow-3', source_ref: 'Gw-xor', target_ref: 'End-approved', condition: null },
         { flow_id: 'Flow-4', source_ref: 'Gw-xor', target_ref: 'End-approved', condition: null },
       ];
+      assertSchemaValid(draft, '006 XOR 无条件');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
@@ -725,7 +807,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-007', 'End-extra', '007 结束事件不在 end_results');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-007:End-extra'], '007 结束事件不在 end_results');
       assertValidFindingSet(findings, '007 结束事件不在 end_results');
     });
 
@@ -738,7 +820,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-007', 'End-rejected', '007 图中缺少结束事件');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-007:End-rejected'], '007 图中缺少结束事件');
       assertValidFindingSet(findings, '007 图中缺少结束事件');
     });
 
@@ -768,6 +850,7 @@ describe('reviewActivityBpmn V2 合同', () => {
       draft.diagram.flows.push({
         flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Link-throw', condition: null,
       });
+      assertSchemaValid(draft, '008 LINK_THROW 无配对');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
@@ -794,6 +877,7 @@ describe('reviewActivityBpmn V2 合同', () => {
       draft.diagram.flows.push({
         flow_id: 'Flow-5', source_ref: 'Link-catch', target_ref: 'End-approved', condition: null,
       });
+      assertSchemaValid(draft, '008 成对 Link');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
@@ -819,12 +903,13 @@ describe('reviewActivityBpmn V2 合同', () => {
       draft.diagram.flows.push({
         flow_id: 'Flow-5', source_ref: 'Link-throw', target_ref: 'End-approved', condition: null,
       });
+      assertSchemaValid(draft, '008 Catch -> Throw');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-008', 'Link-throw', 'Catch -> Throw');
+      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-008:Link-throw'], 'Catch -> Throw');
       assertValidFindingSet(findings, 'Catch -> Throw');
     });
   });
@@ -847,12 +932,17 @@ describe('reviewActivityBpmn V2 合同', () => {
       draft.diagram.flows.push({
         flow_id: 'Flow-4', source_ref: 'Task-extra', target_ref: 'End-approved', condition: null,
       });
+      assertSchemaValid(draft, '009 多个主 Task');
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-009', 'Activity-submit', '多个主 Task 应触发 009');
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-002:Activity-submit',
+        'FA-ACT-BPMN-002:Task-extra',
+        'FA-ACT-BPMN-009:Activity-submit',
+      ], '多个主 Task');
       assertValidFindingSet(findings, '多个主 Task');
     });
 
@@ -890,7 +980,14 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-009', 'Activity-submit', '多个 confirmation 应触发 009');
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-002:Activity-submit',
+        'FA-ACT-BPMN-002:Task-submit',
+        'FA-ACT-BPMN-004:Activity-submit',
+        'FA-ACT-BPMN-004:Activity-submit',
+        'FA-ACT-BPMN-004:Activity-submit',
+        'FA-ACT-BPMN-009:Activity-submit',
+      ], '多个 confirmation');
       assertValidFindingSet(findings, '多个 confirmation');
     });
 
@@ -928,8 +1025,56 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assertHasFinding(findings, 'FA-ACT-BPMN-009', 'Activity-submit', 'AND 并行应触发 009');
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-004:Activity-submit',
+        'FA-ACT-BPMN-009:Activity-submit',
+      ], 'AND 并行');
       assertValidFindingSet(findings, 'AND 并行');
+    });
+
+    it('一个 binding confirmation + 一个从同一主 Task 直连的额外 confirmation node', async () => {
+      const draft = makeValidDraft();
+      draft.activities[0].confirmation = {
+        confirmation_task_id: 'Task-confirm-binding',
+        confirm_role_id: 'Role-approver',
+        co_completes: true,
+        confirm_bears_final_responsibility: true,
+        no_formal_approval_meeting: true,
+      };
+      draft.diagram.task_bindings[0].confirmation_task_id = 'Task-confirm-binding';
+      // 添加 binding 指定的 CONFIRMATION_TASK
+      draft.diagram.nodes.push({
+        node_id: 'Task-confirm-binding', node_type: 'CONFIRMATION_TASK', name: '确认A', lane_id: 'Lane-approver',
+      });
+      // 添加从同一主 Task 直连的额外 CONFIRMATION_TASK（未绑定）
+      draft.diagram.nodes.push({
+        node_id: 'Task-confirm-extra', node_type: 'CONFIRMATION_TASK', name: '确认B', lane_id: 'Lane-approver',
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Task-confirm-binding', condition: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-4', source_ref: 'Task-submit', target_ref: 'Task-confirm-extra', condition: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-5', source_ref: 'Task-confirm-binding', target_ref: 'End-approved', condition: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-6', source_ref: 'Task-confirm-extra', target_ref: 'End-approved', condition: null,
+      });
+      draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+      assertSchemaValid(draft, '009 一个 binding confirmation + 一个直连额外 confirmation');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      // 应该触发 009（多个确认 Task），以及 004（额外 CONFIRMATION_TASK 残留）
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-004:Activity-submit',
+        'FA-ACT-BPMN-009:Activity-submit',
+      ], '一个 binding confirmation + 一个直连额外 confirmation');
+      assertValidFindingSet(findings, '一个 binding confirmation + 一个直连额外 confirmation');
     });
   });
 });
@@ -1007,7 +1152,7 @@ describe('evaluateActivityBpmnStage', () => {
       diagramModel: draft.diagram,
     });
     assert.equal(result.status, 'SUCCEEDED');
-    assertHasFinding(result.findings, 'FA-ACT-BPMN-003', 'Activity-submit', 'stage with findings');
+    assert.deepEqual(oracle(result.findings), ['FA-ACT-BPMN-003:Activity-submit'], 'stage with findings');
     assertValidFindingSet(result.findings, 'stage with findings');
   });
 });

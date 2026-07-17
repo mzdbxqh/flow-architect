@@ -576,25 +576,63 @@ export function reviewActivityBpmn({
         }));
       }
 
-      // activity.confirmation 为 null 但存在未绑定的 CONFIRMATION_TASK 节点（残留）
-      const residualConfNodes = nodes.filter(n =>
-        n.node_type === 'CONFIRMATION_TASK' &&
-        !boundConfirmationNodeIds.has(n.node_id)
-      );
-      for (const residual of residualConfNodes) {
+      // 残留 CONFIRMATION_TASK 检测已移至循环外（基于直接入向 flow 关联活动）
+    }
+  }
+
+  // ── FA-ACT-BPMN-004 (残留): 基于直接入向 flow 关联到具体活动 ──
+  // 对每个未绑定的 CONFIRMATION_TASK 节点，检查其直接前驱是否为某 binding 的 main_task_id。
+  // 若是，唯一关联到该 binding 的活动；否则报告为孤立残留节点。
+  const residualConfNodes = nodes.filter(n =>
+    n.node_type === 'CONFIRMATION_TASK' &&
+    !boundConfirmationNodeIds.has(n.node_id)
+  );
+  for (const residual of residualConfNodes) {
+    // 查找该节点的直接前驱
+    const incomingFlows = flows.filter(f => f.target_ref === residual.node_id);
+    let associatedActivityId = null;
+
+    for (const flow of incomingFlows) {
+      // 直接前驱是否为某 binding 的 main_task_id
+      const matchingBinding = bindings.find(b => b.main_task_id === flow.source_ref);
+      if (matchingBinding) {
+        associatedActivityId = matchingBinding.activity_id;
+        break;
+      }
+    }
+
+    if (associatedActivityId) {
+      const activity = activities.find(a => a.activity_id === associatedActivityId);
+      if (activity) {
         findings.push(createReviewFinding({
           ruleId: 'FA-ACT-BPMN-004',
           category: 'ACTIVITY_BPMN',
           severity: 'BLOCKER',
           artifactId,
           targetRef: activity.activity_id,
-          observation: `活动 "${activity.name}" 的 confirmation 为 null 但图中存在未绑定的 CONFIRMATION_TASK 节点 "${residual.node_id}"`,
+          observation: `活动 "${activity.name}" 的主 Task 直接连接了未绑定的 CONFIRMATION_TASK 残留节点 "${residual.node_id}"`,
           expected: '无 confirmation 声明时不应有残留 CONFIRMATION_TASK',
-          actual: `存在 CONFIRMATION_TASK "${residual.node_id}"`,
-          recommendation: '删除残留的 CONFIRMATION_TASK 节点',
+          actual: `存在未绑定的 CONFIRMATION_TASK "${residual.node_id}"`,
+          recommendation: '删除残留的 CONFIRMATION_TASK 节点或补充 confirmation 声明',
           confidence: 1,
         }));
       }
+    } else {
+      // 无法归属到活动 → 以节点 ID 为 target 的孤立残留
+      findings.push(createReviewFinding({
+        ruleId: 'FA-ACT-BPMN-004',
+        category: 'ACTIVITY_BPMN',
+        severity: 'BLOCKER',
+        artifactId,
+        targetRef: residual.node_id,
+        locatorType: 'BPMN_ELEMENT',
+        locator: residual.node_id,
+        observation: `图中存在无法归属的孤立 CONFIRMATION_TASK 残留节点 "${residual.node_id}"`,
+        expected: '不应存在孤立的 CONFIRMATION_TASK 节点',
+        actual: `存在孤立 CONFIRMATION_TASK "${residual.node_id}"`,
+        recommendation: '删除孤立的 CONFIRMATION_TASK 节点或将其关联到正确的活动',
+        confidence: 1,
+      }));
     }
   }
 
@@ -917,7 +955,20 @@ export function reviewActivityBpmn({
   }
 
   // 多个 CONFIRMATION_TASK 绑定同一 activity
-  for (const [activityId, confTaskIds] of activityConfTasks) {
+  // 额外合并从主 Task 直接连出的 CONFIRMATION_TASK 图节点（009 覆盖图拓扑）
+  for (const [activityId, mainTaskIds] of activityMainTasks) {
+    const confTaskIds = activityConfTasks.get(activityId) || new Set();
+    // 合并从主 Task 直接连出的 CONFIRMATION_TASK 图节点
+    for (const mainTaskId of mainTaskIds) {
+      const outgoingFromMain = flows.filter(f => f.source_ref === mainTaskId);
+      for (const flow of outgoingFromMain) {
+        const targetNode = nodeById.get(flow.target_ref);
+        if (targetNode && targetNode.node_type === 'CONFIRMATION_TASK') {
+          confTaskIds.add(targetNode.node_id);
+        }
+      }
+    }
+    // 去重后多于一个确认 Task 时产生 009
     if (confTaskIds.size > 1) {
       const activity = activities.find(a => a.activity_id === activityId);
       findings.push(createReviewFinding({
@@ -926,7 +977,7 @@ export function reviewActivityBpmn({
         severity: 'BLOCKER',
         artifactId,
         targetRef: activityId,
-        observation: `活动 "${activity?.name || activityId}" 绑定了 ${confTaskIds.size} 个确认 Task: ${[...confTaskIds].join(', ')}`,
+        observation: `活动 "${activity?.name || activityId}" 有 ${confTaskIds.size} 个确认 Task: ${[...confTaskIds].join(', ')}`,
         expected: '同一 L5 活动最多一个 CONFIRMATION_TASK',
         actual: `${confTaskIds.size} 个 CONFIRMATION_TASK`,
         recommendation: '保留一个确认 Task，删除多余的',
