@@ -31,7 +31,7 @@ disallowedTools:
 ## 输出
 
 - findings 数组，符合 finding-set.schema.json 规范
-- 若活动表为空，返回 NEEDS_INPUT finding
+- 若活动表为空，返回 NEEDS_INPUT 状态，findings 为空数组
 
 ## 边界
 

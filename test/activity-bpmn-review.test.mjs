@@ -7,6 +7,7 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import { reviewActivityBpmn } from '../scripts/review-activity-bpmn.mjs';
 import { evaluateActivityBpmnStage } from '../scripts/review-activity-bpmn.mjs';
 import { validateProcessDraft } from '../scripts/lib/process-draft-contract.mjs';
+import { readFile as readFileAsync } from 'node:fs/promises';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const schemasDir = join(__dirname, '..', 'references', 'schemas');
@@ -158,13 +159,14 @@ describe('reviewActivityBpmn V2 合同', () => {
   // ── FA-ACT-BPMN-001: 泳道不得使用个人姓名 ──
 
   describe('FA-ACT-BPMN-001', () => {
-    it('明显个人姓名泳道应触发 001', async () => {
+    it('含 person_ 前缀的个人标识应触发 001', async () => {
       const draft = makeValidDraft();
-      // 更新泳道为个人姓名，同步更新活动 role_assignments 避免 003 干扰
+      // 使用 person_ 前缀的个人标识
       draft.diagram.lanes[0].name = '张三';
-      draft.diagram.lanes[0].role_id = 'Role-zhangsan';
+      draft.diagram.lanes[0].role_id = 'person_zhangsan';
+      // 同步活动 R 角色避免 003 干扰
       draft.activities[0].role_assignments = [
-        { role_id: 'Role-zhangsan', responsibility: 'R' },
+        { role_id: 'person_zhangsan', responsibility: 'R' },
         { role_id: 'Role-approver', responsibility: 'A' },
         { role_id: 'Role-purchaser', responsibility: 'S' },
       ];
@@ -174,7 +176,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         diagramModel: draft.diagram,
       });
       assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-001:Lane-requester']);
-      assertValidFindingSet(findings, '001 个人姓名');
+      assertValidFindingSet(findings, '001 个人标识');
       assertNoTargetRef(findings, '001');
     });
 
@@ -221,7 +223,11 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      assert.deepEqual(oracle(findings), ['FA-ACT-BPMN-002:Activity-submit']);
+      // 活动无 binding + MAIN_TASK 节点未被引用 = 两条 002
+      assert.deepEqual(oracle(findings), [
+        'FA-ACT-BPMN-002:Activity-submit',
+        'FA-ACT-BPMN-002:Task-submit',
+      ]);
       assertValidFindingSet(findings, '002 无主 Task');
     });
 
@@ -528,7 +534,7 @@ describe('reviewActivityBpmn V2 合同', () => {
       assertValidFindingSet(findings, '008');
     });
 
-    it('同名 Throw-Catch 成对时不触发 008', async () => {
+    it('同名 Throw-Catch 成对且有正确 flow 时不触发 008', async () => {
       const draft = makeValidDraft();
       draft.diagram.nodes.push({
         node_id: 'Link-throw', node_type: 'INTERMEDIATE_LINK_THROW', name: '跳转A', lane_id: 'Lane-requester',
@@ -540,7 +546,10 @@ describe('reviewActivityBpmn V2 合同', () => {
         flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Link-throw', condition: null,
       });
       draft.diagram.flows.push({
-        flow_id: 'Flow-4', source_ref: 'Link-catch', target_ref: 'End-approved', condition: null,
+        flow_id: 'Flow-4', source_ref: 'Link-throw', target_ref: 'Link-catch', condition: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-5', source_ref: 'Link-catch', target_ref: 'End-approved', condition: null,
       });
       const findings = reviewActivityBpmn({
         processCard: draft.process_card,
@@ -548,7 +557,7 @@ describe('reviewActivityBpmn V2 合同', () => {
         diagramModel: draft.diagram,
       });
       const f008 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-008');
-      assert.equal(f008.length, 0, `成对 Link 不应触发 008: ${JSON.stringify(oracle(findings))}`);
+      assert.equal(f008.length, 0, `成对 Link 且有正确 flow 不应触发 008: ${JSON.stringify(oracle(findings))}`);
     });
   });
 
@@ -576,14 +585,124 @@ describe('reviewActivityBpmn V2 合同', () => {
         activities: draft.activities,
         diagramModel: draft.diagram,
       });
-      // 应同时触发 002（binding ID 不一致 + 多个 binding）和 009（多个主 Task）
+      // 应同时触发 002（多个 binding + 反向检查）和 009（多个主 Task）
       const expected = [
         'FA-ACT-BPMN-002:Activity-submit',
-        'FA-ACT-BPMN-002:Activity-submit',
+        'FA-ACT-BPMN-002:Task-extra',
         'FA-ACT-BPMN-009:Activity-submit',
       ];
       assert.deepEqual(oracle(findings), expected);
       assertValidFindingSet(findings, '009');
+    });
+  });
+
+  // ── Fresh review 反例（当前提交的四个确定性失败） ──
+
+  describe('Fresh review 反例', () => {
+    it('Role-demand/需求方不应触发 001', async () => {
+      const draft = makeValidDraft();
+      draft.diagram.lanes[0].name = '需求方';
+      draft.diagram.lanes[0].role_id = 'Role-demand';
+      draft.activities[0].role_assignments = [
+        { role_id: 'Role-demand', responsibility: 'R' },
+        { role_id: 'Role-approver', responsibility: 'A' },
+        { role_id: 'Role-purchaser', responsibility: 'S' },
+      ];
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      const f001 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-001');
+      assert.equal(f001.length, 0, `Role-demand/需求方不应触发 001: ${JSON.stringify(oracle(f001))}`);
+      assertValidFindingSet(findings, 'Role-demand/需求方');
+    });
+
+    it('缺少 MAIN_TASK node 应触发 002', async () => {
+      const draft = makeValidDraft();
+      // activity.main_task_id 与 binding.main_task_id 都为 'Task'，但 nodes 中不存在 'Task'
+      draft.activities[0].main_task_id = 'Task';
+      draft.diagram.task_bindings[0].main_task_id = 'Task';
+      // 删除原有的 Task-submit 节点
+      draft.diagram.nodes = draft.diagram.nodes.filter(n => n.node_id !== 'Task-submit');
+      // 更新 flows 以避免悬空引用
+      draft.diagram.flows = [
+        { flow_id: 'Flow-1', source_ref: 'Start-request', target_ref: 'Task', condition: null },
+        { flow_id: 'Flow-2', source_ref: 'Task', target_ref: 'End-approved', condition: null },
+      ];
+      // 注意：此反例故意破坏基本引用，因此只断言 Schema valid，不调用 validateProcessDraft
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      const f002 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-002');
+      assert.ok(f002.length >= 1, `缺少 MAIN_TASK node 应触发 002: ${JSON.stringify(oracle(findings))}`);
+      assertValidFindingSet(findings, '缺少 MAIN_TASK node');
+    });
+
+    it('Conf-A vs Conf-B 应触发 004', async () => {
+      const draft = makeValidDraft();
+      // activity.confirmation.confirmation_task_id = 'Conf-A'
+      // binding.confirmation_task_id = 'Conf-B'
+      // 节点为 'Conf-B'
+      draft.activities[0].confirmation = {
+        confirmation_task_id: 'Conf-A',
+        confirm_role_id: 'Role-approver',
+        co_completes: true,
+        confirm_bears_final_responsibility: true,
+        no_formal_approval_meeting: true,
+      };
+      draft.diagram.task_bindings[0].confirmation_task_id = 'Conf-B';
+      draft.diagram.nodes.push({
+        node_id: 'Conf-B', node_type: 'CONFIRMATION_TASK', name: '确认采购', lane_id: 'Lane-approver',
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-3', source_ref: 'Task-submit', target_ref: 'Conf-B', condition: null,
+      });
+      draft.diagram.flows.push({
+        flow_id: 'Flow-4', source_ref: 'Conf-B', target_ref: 'End-approved', condition: null,
+      });
+      draft.diagram.flows = draft.diagram.flows.filter(f => f.flow_id !== 'Flow-2');
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      const f004 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-004');
+      assert.ok(f004.length >= 1, `Conf-A vs Conf-B 应触发 004: ${JSON.stringify(oracle(findings))}`);
+      assertValidFindingSet(findings, 'Conf-A vs Conf-B');
+    });
+
+    it('Catch -> Throw 应触发 008', async () => {
+      const draft = makeValidDraft();
+      // 同名 Link Throw/Catch 存在，但 flow 为 Catch -> Throw
+      draft.diagram.nodes.push({
+        node_id: 'Link-throw', node_type: 'INTERMEDIATE_LINK_THROW', name: '跳转A', lane_id: 'Lane-requester',
+      });
+      draft.diagram.nodes.push({
+        node_id: 'Link-catch', node_type: 'INTERMEDIATE_LINK_CATCH', name: '跳转A', lane_id: 'Lane-requester',
+      });
+      // flow 为 Catch -> Throw（反向）
+      draft.diagram.flows.push({
+        flow_id: 'Flow-3', source_ref: 'Link-catch', target_ref: 'Link-throw', condition: null,
+      });
+      // 添加从 Task-submit 到 Link-catch 的流
+      draft.diagram.flows.push({
+        flow_id: 'Flow-4', source_ref: 'Task-submit', target_ref: 'Link-catch', condition: null,
+      });
+      // 添加从 Link-throw 到 End-approved 的流
+      draft.diagram.flows.push({
+        flow_id: 'Flow-5', source_ref: 'Link-throw', target_ref: 'End-approved', condition: null,
+      });
+      const findings = reviewActivityBpmn({
+        processCard: draft.process_card,
+        activities: draft.activities,
+        diagramModel: draft.diagram,
+      });
+      const f008 = findings.filter(f => f.rule_id === 'FA-ACT-BPMN-008');
+      assert.ok(f008.length >= 1, `Catch -> Throw 应触发 008: ${JSON.stringify(oracle(findings))}`);
+      assertValidFindingSet(findings, 'Catch -> Throw');
     });
   });
 });
@@ -663,5 +782,55 @@ describe('evaluateActivityBpmnStage', () => {
     assert.equal(result.status, 'SUCCEEDED');
     assert.ok(result.findings.length > 0);
     assertValidFindingSet(result.findings, 'stage with findings');
+  });
+});
+
+// ── Skill/Worker 禁词测试 ──
+
+describe('Skill/Worker 禁词测试', () => {
+  const skillPath = join(__dirname, '..', 'skills', 'flow-architect-review-activity-bpmn', 'SKILL.md');
+  const workerPath = join(__dirname, '..', 'agents', 'flow-architect-review-activity-bpmn-worker.md');
+
+  it('Skill 文件不应包含 NEEDS_INPUT finding', async () => {
+    const content = await readFileAsync(skillPath, 'utf8');
+    assert.ok(!content.includes('NEEDS_INPUT finding'), 'Skill 文件不应包含 "NEEDS_INPUT finding"');
+    assert.ok(!content.includes('NEEDS_INPUT rule_id'), 'Skill 文件不应包含 "NEEDS_INPUT rule_id"');
+  });
+
+  it('Worker 文件不应包含 NEEDS_INPUT finding', async () => {
+    const content = await readFileAsync(workerPath, 'utf8');
+    assert.ok(!content.includes('NEEDS_INPUT finding'), 'Worker 文件不应包含 "NEEDS_INPUT finding"');
+    assert.ok(!content.includes('NEEDS_INPUT rule_id'), 'Worker 文件不应包含 "NEEDS_INPUT rule_id"');
+  });
+
+  it('Skill 文件不应包含 BPMN_LANE locator_type', async () => {
+    const content = await readFileAsync(skillPath, 'utf8');
+    assert.ok(!content.includes('BPMN_LANE'), 'Skill 文件不应包含 "BPMN_LANE" locator_type');
+  });
+
+  it('Worker 文件不应包含 BPMN_LANE locator_type', async () => {
+    const content = await readFileAsync(workerPath, 'utf8');
+    assert.ok(!content.includes('BPMN_LANE'), 'Worker 文件不应包含 "BPMN_LANE" locator_type');
+  });
+
+  it('Skill 文件不应包含单数 target_ref', async () => {
+    const content = await readFileAsync(skillPath, 'utf8');
+    // 检查是否包含 "target_ref" 但不包含 "target_refs"
+    const lines = content.split('\n');
+    for (const line of lines) {
+      if (line.includes('target_ref') && !line.includes('target_refs')) {
+        assert.fail(`Skill 文件包含单数 "target_ref": ${line.trim()}`);
+      }
+    }
+  });
+
+  it('Worker 文件不应包含单数 target_ref', async () => {
+    const content = await readFileAsync(workerPath, 'utf8');
+    const lines = content.split('\n');
+    for (const line of lines) {
+      if (line.includes('target_ref') && !line.includes('target_refs')) {
+        assert.fail(`Worker 文件包含单数 "target_ref": ${line.trim()}`);
+      }
+    }
   });
 });
