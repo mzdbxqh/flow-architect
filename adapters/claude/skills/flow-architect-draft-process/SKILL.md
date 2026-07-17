@@ -32,7 +32,7 @@ description: 当需要从多种来源材料（PDF、DOCX、XLSX、PPTX、Markdow
 | Markdown (.md) | ✅ 完整支持 | 按标题分块，保留行号 |
 | PDF (.pdf) | ✅ 完整支持 | 按页提取，低文本页标记为视觉 |
 | DOCX (.docx) | ✅ 完整支持 | 提取文字内容 |
-| XLSX (.xlsx) | ✅ 完整支持 | 按 sheet 提取表格 |
+| XLSX (.xlsx) | ✅ 完整支持 | 按实际 OOXML 内容动态分类，支持表格、原生 DrawingML、图片及混合输入；明确 ID 关系才形成连接，缺失或多义时 warning/降级，不按几何距离猜线 |
 | PPTX (.pptx) | ⚠️ 需要组件 | 需通过 `/flow-architect:setup` 或 `$flow-architect-setup` 安装 pptx 组件 |
 | PNG/JPEG (.png/.jpg) | ⚠️ 视觉资产 | 标记为视觉，不 OCR |
 | BPMN (.bpmn) | ✅ 完整支持 | 提取元素和流转 |

@@ -25,11 +25,11 @@ The default entry skill (`flow-architect`) inspects your input files, determines
 
 **Process diagrams:** BPMN 2.0 XML, Mermaid, SVG, PNG, JPEG, scanned PDF.
 
-## V1 Scope
+## Capability Boundary
 
-V1 review skills are **read-only**: they inspect existing artifacts and produce structured findings without modifying, creating, or fixing any user files.
+Review skills are **read-only**: they inspect existing artifacts and produce structured findings without modifying, creating, or fixing any user files.
 
-Phase 2 adds `flow-architect-draft-process`, a **creation** skill that generates process drafts from source materials. Draft generation is deterministic (zero LLM for extraction, batching, BPMN generation, and HTML packaging); LLM is only invoked during per-batch semantic interpretation. The two paths are complementary: drafts produce reviewable artifacts, and review skills evaluate them.
+Creation skills (`flow-architect-draft-process`, `flow-architect-build-meeting-package`) generate new artifacts in a user-authorized run directory, without modifying original inputs. Draft generation is deterministic (zero LLM for extraction, batching, BPMN generation, and HTML packaging); LLM is only invoked during per-batch semantic interpretation. The two paths are complementary: drafts produce reviewable artifacts, and review skills evaluate them.
 
 ## Process Draft — Format Support
 
@@ -38,7 +38,7 @@ Phase 2 adds `flow-architect-draft-process`, a **creation** skill that generates
 | Markdown (.md) | ✅ Full | Chunked by heading, line numbers preserved |
 | PDF (.pdf) | ✅ Full | Per-page extraction; low-text pages marked visual |
 | DOCX (.docx) | ✅ Full | Text extraction |
-| XLSX (.xlsx) | ✅ Full | Per-sheet table extraction |
+| XLSX (.xlsx) | ✅ Full | Dynamic classification based on actual OOXML content: supports tables, native DrawingML, images, and mixed inputs; explicit ID relationships form connections, missing or ambiguous relationships generate warnings/degradation, no geometric distance guessing |
 | PPTX (.pptx) | ⚠️ Requires component | Install via `/flow-architect:setup` or `$flow-architect-setup` |
 | PNG/JPEG | ⚠️ Visual asset | Marked visual, no OCR |
 | BPMN (.bpmn) | ✅ Full | Element and flow extraction |
