@@ -32,7 +32,17 @@ description: 当 Flow Architect 需要对输入文件进行清点、分类其工
    - 置信度（0.0 到 1.0）。
 3. 对 PDF 文件，分析每页文本密度以区分文本型 PDF 与扫描图像。
 4. 对 DOCX 文件，尝试提取文本以验证内容。
-5. 对 XLSX 文件，统计数据行并检查 VBA 宏（仅警告，绝不执行）。
+5. 对 XLSX 文件，按实际内容动态分类：
+   - 统计单元格数据行。
+   - 检查 VBA 宏（仅警告，绝不执行）。
+   - 检查 DrawingML 可编辑形状和连接器。
+   - 根据内容矩阵确定 kind、parse_mode 和 capabilities：
+     - 有单元格数据、无可编辑形状、无图片 → ARCHITECTURE / STRUCTURED / [XLSX_TABLE]
+     - 无单元格数据、有可编辑形状 → DIAGRAM / STRUCTURED / [DRAWINGML_STRUCTURE]
+     - 有单元格数据 + 有可编辑形状 → MIXED / STRUCTURED / [XLSX_TABLE, DRAWINGML_STRUCTURE]
+     - 仅有嵌入图片（无可编辑形状）→ DIAGRAM / VISUAL_ONLY / [VISUAL_ONLY]
+     - 有单元格数据 + 仅有图片 → MIXED / SEMI_STRUCTURED / [XLSX_TABLE, VISUAL_ONLY]
+   - 详细合同参见 `references/drawingml-input-contract.md`。
 6. 对图片文件（PNG、JPEG），将解析模式设为 VISUAL_ONLY。
 7. 将清单写入 `<runDir>/input/input-manifest.json`。
 

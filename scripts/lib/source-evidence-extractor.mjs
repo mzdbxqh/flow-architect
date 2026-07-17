@@ -16,17 +16,11 @@ const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
 
 /**
- * 加载 jszip — 通过 pnpm store 或 runtime manager 精确锁定
+ * 加载 jszip — 通过 runtime loader 显式加载
  */
 function loadJszip() {
-  // 优先使用 pnpm store 的 jszip@3.10.1
-  const pnpmJszip = join(__dirname, '../../node_modules/.pnpm/jszip@3.10.1/node_modules/jszip');
-  try {
-    return require(pnpmJszip);
-  } catch {
-    // 回退：直接 require（如果用户通过其他方式安装了 jszip）
-    return require('jszip');
-  }
+  const { requireRuntimePackage } = require('./runtime-loader.mjs');
+  return requireRuntimePackage('xlsx', 'jszip');
 }
 
 /**
@@ -490,7 +484,7 @@ async function extractXlsx(filePath, fileContent, artifactSha256) {
 
     // 提取 DrawingML 内容
     try {
-      const { extractDrawingml } = require('./drawingml-extractor.mjs');
+      const { extractDrawingml } = await import('./drawingml-extractor.mjs');
       const drawingResult = await extractDrawingml(fileContent);
 
       // 为每个元素创建 STRUCTURED_DIAGRAM 证据块

@@ -20,20 +20,13 @@ const require = createRequire(import.meta.url);
  * 加载 fast-xml-parser（通过 runtime loader 的显式依赖）
  */
 function loadXmlParser() {
-  try {
-    // 优先使用 runtime manager 加载
-    const { requireRuntimePackage } = require('./runtime-loader.mjs');
-    const fastXmlParser = requireRuntimePackage('core', 'fast-xml-parser');
-    return fastXmlParser.XMLParser || fastXmlParser.default?.XMLParser || fastXmlParser;
-  } catch {
-    // 回退：直接 require（开发环境）
-    const fastXmlParser = require('fast-xml-parser');
-    return fastXmlParser.XMLParser || fastXmlParser.default?.XMLParser || fastXmlParser;
-  }
+  const { requireRuntimePackage } = require('./runtime-loader.mjs');
+  const fastXmlParser = requireRuntimePackage('core', 'fast-xml-parser');
+  return fastXmlParser.XMLParser || fastXmlParser.default?.XMLParser || fastXmlParser;
 }
 
 /**
- * 安全预算常量
+ * 安全预算常量（生产硬上限）
  */
 export const DRAWINGML_BUDGET = {
   MAX_ZIP_ENTRIES: 1000,
@@ -43,6 +36,25 @@ export const DRAWINGML_BUDGET = {
   MAX_ANCHORS_PER_SHEET: 1000,
   MAX_SHAPES_PER_ANCHOR: 10,
 };
+
+/**
+ * 解析有效安全限制（只允许收紧，不允许放宽）
+ * @param {object} [override] - 可选覆盖值，每个值必须 <= 生产硬上限
+ * @returns {object} 有效限制
+ */
+function resolveLimits(override) {
+  if (!override) return DRAWINGML_BUDGET;
+  const result = { ...DRAWINGML_BUDGET };
+  for (const key of Object.keys(DRAWINGML_BUDGET)) {
+    if (override[key] !== undefined) {
+      if (override[key] > DRAWINGML_BUDGET[key]) {
+        throw new Error(`Cannot loosen security limit ${key}: ${override[key]} > ${DRAWINGML_BUDGET[key]}`);
+      }
+      result[key] = override[key];
+    }
+  }
+  return result;
+}
 
 /**
  * 预设几何类型映射
@@ -86,28 +98,24 @@ const XML_PARSER_OPTIONS = {
  * 加载 JSZip（通过 runtime loader 的显式依赖）
  */
 function loadJszip() {
-  try {
-    // 优先使用 runtime manager 加载
-    const { requireRuntimePackage } = require('./runtime-loader.mjs');
-    return requireRuntimePackage('xlsx', 'jszip');
-  } catch {
-    // 回退：直接 require（开发环境）
-    return require('jszip');
-  }
+  const { requireRuntimePackage } = require('./runtime-loader.mjs');
+  return requireRuntimePackage('xlsx', 'jszip');
 }
 
 /**
  * 检查 ZIP 包安全性
  * @param {JSZip} zip
+ * @param {object} [limits] - 可选安全限制覆盖
  * @returns {{ valid: boolean, errors: string[] }}
  */
-function validateZipSafety(zip) {
+function validateZipSafety(zip, limits) {
+  const budget = resolveLimits(limits);
   const errors = [];
   const entries = Object.keys(zip.files);
 
   // 条目数限制
-  if (entries.length > DRAWINGML_BUDGET.MAX_ZIP_ENTRIES) {
-    errors.push(`ZIP entry count exceeds limit: ${entries.length} > ${DRAWINGML_BUDGET.MAX_ZIP_ENTRIES}`);
+  if (entries.length > budget.MAX_ZIP_ENTRIES) {
+    errors.push(`ZIP entry count exceeds limit: ${entries.length} > ${budget.MAX_ZIP_ENTRIES}`);
   }
 
   // 检查每个条目
@@ -125,24 +133,24 @@ function validateZipSafety(zip) {
       const decompressedSize = zipEntry._data.uncompressedSize || 0;
       totalDecompressed += decompressedSize;
 
-      if (decompressedSize > DRAWINGML_BUDGET.MAX_DECOMPRESSED_SIZE) {
-        errors.push(`ZIP entry ${entry} decompressed size exceeds limit: ${decompressedSize} > ${DRAWINGML_BUDGET.MAX_DECOMPRESSED_SIZE}`);
+      if (decompressedSize > budget.MAX_DECOMPRESSED_SIZE) {
+        errors.push(`ZIP entry ${entry} decompressed size exceeds limit: ${decompressedSize} > ${budget.MAX_DECOMPRESSED_SIZE}`);
       }
 
       // 压缩比检查
       const compressedSize = zipEntry._data.compressedSize || decompressedSize;
       if (compressedSize > 0) {
         const ratio = decompressedSize / compressedSize;
-        if (ratio > DRAWINGML_BUDGET.MAX_COMPRESSION_RATIO) {
-          errors.push(`ZIP entry ${entry} compression ratio exceeds limit: ${ratio.toFixed(2)} > ${DRAWINGML_BUDGET.MAX_COMPRESSION_RATIO}`);
+        if (ratio > budget.MAX_COMPRESSION_RATIO) {
+          errors.push(`ZIP entry ${entry} compression ratio exceeds limit: ${ratio.toFixed(2)} > ${budget.MAX_COMPRESSION_RATIO}`);
         }
       }
     }
   }
 
   // 总解压大小限制
-  if (totalDecompressed > DRAWINGML_BUDGET.MAX_DECOMPRESSED_SIZE) {
-    errors.push(`Total decompressed size exceeds limit: ${totalDecompressed} > ${DRAWINGML_BUDGET.MAX_DECOMPRESSED_SIZE}`);
+  if (totalDecompressed > budget.MAX_DECOMPRESSED_SIZE) {
+    errors.push(`Total decompressed size exceeds limit: ${totalDecompressed} > ${budget.MAX_DECOMPRESSED_SIZE}`);
   }
 
   return { valid: errors.length === 0, errors };
@@ -152,13 +160,15 @@ function validateZipSafety(zip) {
  * 检查 XML 内容安全性
  * @param {string} xmlContent
  * @param {string} partName
+ * @param {object} [limits] - 可选安全限制覆盖
  * @throws {Error} 如果安全检查失败
  */
-function validateXmlSafety(xmlContent, partName) {
+function validateXmlSafety(xmlContent, partName, limits) {
+  const budget = resolveLimits(limits);
   const errors = [];
 
-  if (xmlContent.length > DRAWINGML_BUDGET.MAX_XML_CHARACTERS) {
-    errors.push(`XML ${partName} character count exceeds limit: ${xmlContent.length} > ${DRAWINGML_BUDGET.MAX_XML_CHARACTERS}`);
+  if (xmlContent.length > budget.MAX_XML_CHARACTERS) {
+    errors.push(`XML ${partName} character count exceeds limit: ${xmlContent.length} > ${budget.MAX_XML_CHARACTERS}`);
   }
 
   // 检查是否包含危险的外部实体声明
@@ -175,10 +185,11 @@ function validateXmlSafety(xmlContent, partName) {
  * 解析 XML 内容
  * @param {string} xmlContent
  * @param {string} partName
+ * @param {object} [limits] - 可选安全限制覆盖
  * @returns {object}
  */
-function parseXml(xmlContent, partName) {
-  validateXmlSafety(xmlContent, partName);
+function parseXml(xmlContent, partName, limits) {
+  validateXmlSafety(xmlContent, partName, limits);
 
   const XMLParser = loadXmlParser();
   const parser = new XMLParser(XML_PARSER_OPTIONS);
@@ -459,9 +470,9 @@ function parsePicture(pic) {
   const spPr = pic['xdr:spPr'] || pic.spPr || {};
   const xfrm = spPr['a:xfrm'] || spPr.xfrm || {};
 
-  // 提取图片引用
+  // 提取图片引用（兼容 r:embed 和 embed 两种属性名）
   const blip = blipFill['a:blip'] || blipFill.blip || {};
-  const embed = blip['@_embed'] || blip.embed || null;
+  const embed = blip['@_embed'] || blip['@_r:embed'] || blip.embed || blip['r:embed'] || null;
 
   return {
     shape_type: 'pic',
@@ -576,15 +587,18 @@ function parseDrawingXml(drawingXml, drawingPart) {
 /**
  * 检查 XLSX 包是否包含 DrawingML 内容
  * @param {Buffer} buffer
+ * @param {object} [options]
+ * @param {object} [options.limits] - 可选安全限制覆盖（只允许收紧）
  * @returns {Promise<{ hasDrawingml: boolean, hasEditableShapes: boolean, hasRasterOnly: boolean, sheets: object[], warnings: string[] }>}
  */
-export async function inspectDrawingmlPackage(buffer) {
+export async function inspectDrawingmlPackage(buffer, options = {}) {
+  const limits = options.limits;
   const JSZip = loadJszip();
   const zip = await JSZip.loadAsync(buffer);
   const warnings = [];
 
   // 安全检查
-  const safety = validateZipSafety(zip);
+  const safety = validateZipSafety(zip, limits);
   if (!safety.valid) {
     throw new Error(`ZIP safety validation failed: ${safety.errors.join('; ')}`);
   }
@@ -693,14 +707,17 @@ export async function inspectDrawingmlPackage(buffer) {
 /**
  * 提取 DrawingML 内容
  * @param {Buffer} buffer
+ * @param {object} [options]
+ * @param {object} [options.limits] - 可选安全限制覆盖（只允许收紧）
  * @returns {Promise<{ elements: object[], connectors: object[], metadata: object, warnings: string[] }>}
  */
-export async function extractDrawingml(buffer) {
+export async function extractDrawingml(buffer, options = {}) {
+  const limits = options.limits;
   const JSZip = loadJszip();
   const zip = await JSZip.loadAsync(buffer);
 
   // 安全检查
-  const safety = validateZipSafety(zip);
+  const safety = validateZipSafety(zip, limits);
   if (!safety.valid) {
     throw new Error(`ZIP safety validation failed: ${safety.errors.join('; ')}`);
   }
