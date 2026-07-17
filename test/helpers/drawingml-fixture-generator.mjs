@@ -844,33 +844,47 @@ export function createMissingDrawingRelFixture() {
 }
 
 /**
- * 生成包含两个同类型 drawing relationship 的 fixture
- * sheet 引用 rId1，但 rels 中有两个匹配的 drawing relationship
+ * 生成包含两个 drawing 引用的 fixture（多 drawing 歧义）
+ * sheet 内有两个 <drawing> 元素，各自映射到不同 drawing part
  */
 export function createAmbiguousDrawingFixture() {
   const zip = new JSZip();
 
   addMinimalXlsxSkeleton(zip, { hasDrawing: true });
 
+  // sheet 内有两个 drawing 引用
   addFileWithFixedDate(zip, 'xl/worksheets/sheet1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheetData/>
   <drawing r:id="rId1"/>
+  <drawing r:id="rId2"/>
 </worksheet>`);
 
-  // 两个 relationship 都是 rId1 且类型都是 drawing（歧义映射）
+  // 两个不同的 relationship ID 映射到不同的 drawing part
   addFileWithFixedDate(zip, 'xl/worksheets/_rels/sheet1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing2.xml"/>
 </Relationships>`);
 
+  // drawing1.xml
   addFileWithFixedDate(zip, 'xl/drawings/drawing1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
   <xdr:twoCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>2</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>2</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:sp macro=""><xdr:nvSpPr><xdr:cNvPr id="1" name="S1"/><xdr:cNvSpPr/></xdr:nvSpPr><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></xdr:spPr><xdr:txBody><a:bodyPr/><a:p><a:r><a:t>A</a:t></a:r></a:p></xdr:txBody></xdr:sp><xdr:clientData/></xdr:twoCellAnchor>
 </xdr:wsDr>`);
 
+  // drawing2.xml
+  addFileWithFixedDate(zip, 'xl/drawings/drawing2.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <xdr:twoCellAnchor><xdr:from><xdr:col>3</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>5</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>2</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:sp macro=""><xdr:nvSpPr><xdr:cNvPr id="2" name="S2"/><xdr:cNvSpPr/></xdr:nvSpPr><xdr:spPr><a:xfrm><a:off x="2743200" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></xdr:spPr><xdr:txBody><a:bodyPr/><a:p><a:r><a:t>B</a:t></a:r></a:p></xdr:txBody></xdr:sp><xdr:clientData/></xdr:twoCellAnchor>
+</xdr:wsDr>`);
+
   addFileWithFixedDate(zip, 'xl/drawings/_rels/drawing1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+</Relationships>`);
+
+  addFileWithFixedDate(zip, 'xl/drawings/_rels/drawing2.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 </Relationships>`);
 

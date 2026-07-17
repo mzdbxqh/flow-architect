@@ -446,9 +446,11 @@ describe('DrawingML 提取器', () => {
       assert.equal(result.hasEditableShapes, false);
       const extWarnings = result.warnings.filter(w => w.code === 'DRAWINGML_EXTERNAL_TARGET');
       assert.equal(extWarnings.length, 1, 'Should have exactly 1 DRAWINGML_EXTERNAL_TARGET warning');
-      assert.equal(extWarnings[0].code, 'DRAWINGML_EXTERNAL_TARGET', 'Warning code should be DRAWINGML_EXTERNAL_TARGET');
-      assert.equal(typeof extWarnings[0].message, 'string', 'Warning message should be string');
-      assert.equal(extWarnings[0].message.includes('External TargetMode'), true, 'Warning should mention External TargetMode');
+      assert.deepEqual(extWarnings[0], {
+        code: 'DRAWINGML_EXTERNAL_TARGET',
+        message: 'Drawing relationship has External TargetMode, rejected for security',
+        target: 'rId1',
+      });
     });
 
     it('重复 relationship ID 必须 fail-closed 抛出错误', async () => {
@@ -486,9 +488,11 @@ describe('DrawingML 提取器', () => {
         w.code === 'DRAWINGML_PATH_ESCAPE' || w.code === 'DRAWINGML_UNSAFE_TARGET'
       );
       assert.equal(escapeWarnings.length, 1, 'Should have exactly 1 path escape/unsafe target warning');
-      assert.equal(escapeWarnings[0].code, 'DRAWINGML_PATH_ESCAPE', 'Warning code should be DRAWINGML_PATH_ESCAPE');
-      assert.equal(typeof escapeWarnings[0].message, 'string', 'Warning message should be string');
-      assert.equal(escapeWarnings[0].message.includes('escapes xl/ root'), true, 'Warning should mention path escape');
+      assert.deepEqual(escapeWarnings[0], {
+        code: 'DRAWINGML_PATH_ESCAPE',
+        message: 'Drawing target escapes xl/ root directory',
+        target: 'rId1',
+      });
     });
 
     it('损坏的 drawing XML 必须产生稳定结果（空元素，无崩溃）', async () => {
@@ -507,30 +511,32 @@ describe('DrawingML 提取器', () => {
       const result = await extractDrawingml(buffer);
       const missingWarnings = result.warnings.filter(w => w.code === 'DRAWINGML_MISSING_DRAWING_REL');
       assert.equal(missingWarnings.length, 1, 'Should have exactly 1 DRAWINGML_MISSING_DRAWING_REL warning');
-      assert.equal(missingWarnings[0].code, 'DRAWINGML_MISSING_DRAWING_REL', 'Warning code should be DRAWINGML_MISSING_DRAWING_REL');
-      assert.equal(typeof missingWarnings[0].message, 'string', 'Warning message should be string');
-      assert.equal(missingWarnings[0].message.includes('No drawing relationship found'), true, 'Warning should mention missing relationship');
+      assert.deepEqual(missingWarnings[0], {
+        code: 'DRAWINGML_MISSING_DRAWING_REL',
+        message: 'No drawing relationship found for sheet',
+        target: 'rId1',
+      });
     });
 
-    it('歧义 drawing fixture 必须选择第一个 drawing 并正常解析', async () => {
+    it('多 drawing 引用必须产生 AMBIGUOUS_DRAWING_REL warning 并拒绝解析', async () => {
       const fixture = createAmbiguousDrawingFixture();
       const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
       const result = await inspectDrawingmlPackage(buffer);
-      // 当有多个匹配的 drawing relationship 时，代码应该选择第一个并正常解析
-      assert.equal(result.hasDrawingml, true, 'Should detect drawing content');
-      assert.equal(result.hasEditableShapes, true, 'Should detect editable shapes');
-      assert.equal(result.sheets.length, 1, 'Should have 1 sheet');
-      assert.equal(result.sheets[0].has_drawing, true, 'Sheet should have drawing');
-    });
 
-    it('损坏的 drawing XML 必须产生稳定结果（空元素，无崩溃）', async () => {
-      const fixture = createCorruptedDrawingFixture();
-      const buffer = await fixture.generateAsync({ type: 'nodebuffer' });
-      // fast-xml-parser 对损坏 XML 静默返回空结果，不得崩溃
-      const result = await extractDrawingml(buffer);
-      assert.equal(result.elements.length, 0);
-      assert.equal(result.connectors.length, 0);
-      assert.equal(result.pictures.length, 0);
+      // 多 drawing 歧义：不解析任一 drawing
+      assert.equal(result.hasDrawingml, false);
+      assert.equal(result.hasEditableShapes, false);
+      assert.equal(result.sheets.length, 1);
+      assert.equal(result.sheets[0].has_drawing, false);
+
+      // 必须产生稳定的 warning
+      const ambiguousWarnings = result.warnings.filter(w => w.code === 'DRAWINGML_AMBIGUOUS_DRAWING_REL');
+      assert.equal(ambiguousWarnings.length, 1, 'Should have exactly 1 DRAWINGML_AMBIGUOUS_DRAWING_REL warning');
+      assert.deepEqual(ambiguousWarnings[0], {
+        code: 'DRAWINGML_AMBIGUOUS_DRAWING_REL',
+        message: 'Sheet has multiple drawing references, ambiguous which to parse',
+        target: 'rId1,rId2',
+      });
     });
 
     it('External TargetMode 的 workbook relationship 必须被过滤', async () => {
@@ -664,8 +670,12 @@ describe('DrawingML 提取器', () => {
       const result = await extractDrawingml(buffer);
       // drawing XML 安全检查应该产生 warning，而不是抛出异常
       const corruptedWarnings = result.warnings.filter(w => w.code === 'DRAWINGML_CORRUPTED_XML');
-      assert.equal(corruptedWarnings.length >= 1, true, 'Should have at least 1 DRAWINGML_CORRUPTED_XML warning');
-      assert.equal(corruptedWarnings[0].message.includes('character count exceeds limit'), true, 'Warning should mention character count limit');
+      assert.equal(corruptedWarnings.length, 1, 'Should have exactly 1 DRAWINGML_CORRUPTED_XML warning');
+      assert.deepEqual(corruptedWarnings[0], {
+        code: 'DRAWINGML_CORRUPTED_XML',
+        message: 'Drawing XML character count exceeds limit',
+        target: 'xl/drawings/drawing1.xml',
+      });
     });
 
     it('不应允许放宽安全限制', async () => {
@@ -757,19 +767,22 @@ describe('DrawingML 提取器', () => {
         runDir: tmpDir,
       });
 
-      // 检查是否有 VISUAL_ASSET block
+      // 图片-only fixture 确定只有 1 个 picture → 1 个 VISUAL_ASSET block
       const visualBlocks = result.blocks.filter(b => b.modality === 'VISUAL_ASSET');
-      assert.equal(visualBlocks.length >= 1, true, 'Should have at least 1 VISUAL_ASSET block');
+      assert.equal(visualBlocks.length, 1, 'Should have exactly 1 VISUAL_ASSET block');
 
-      // 精确断言 VISUAL_ASSET block 投影
-      for (const block of visualBlocks) {
-        assert.equal(block.modality, 'VISUAL_ASSET', 'Block should be VISUAL_ASSET modality');
-        assert.equal(typeof block.content, 'string', 'content should be string');
-        assert.equal(block.content.length > 0, true, 'content should be non-empty');
-        assert.equal(Array.isArray(block.heading_path), true, 'heading_path should be array');
-        assert.equal(typeof block.locator, 'object', 'locator should be object');
-        assert.equal(typeof block.locator.shape_id, 'string', 'locator.shape_id should be string');
-      }
+      // 精确断言 VISUAL_ASSET block 完整投影
+      assert.deepEqual(visualBlocks[0], {
+        modality: 'VISUAL_ASSET',
+        content: 'Image 1',
+        heading_path: ['Sheet1'],
+        locator: {
+          sheet_name: 'Sheet1',
+          shape_id: '1',
+          shape_name: 'Image 1',
+        },
+        asset_ref: 'xl/media/image1.png',
+      });
     });
 
     it('所有证据块应通过 validateEvidenceBlock Schema 验证', async () => {
@@ -845,22 +858,90 @@ describe('DrawingML 提取器', () => {
       assert.equal(diagramBlocks.length, 0);
     });
 
-    it('混合 fixture 的 STRUCTURED_DIAGRAM evidence blocks 精确投影', async () => {
+    it('混合 fixture 的 evidence blocks 精确投影', async () => {
       const result = await extractArtifactEvidence({
         artifact: { path: mixedXlsxPath, format: 'xlsx' },
         runDir: tmpDir,
       });
+
+      // 混合 fixture：1 TABLE + 3 shape + 1 connector = 5 blocks
+      assert.equal(result.blocks.length, 5, 'Should have exactly 5 blocks');
+
+      // 精确断言每个 block 的完整投影
+      const tableBlocks = result.blocks.filter(b => b.modality === 'TABLE');
       const diagramBlocks = result.blocks.filter(b => b.modality === 'STRUCTURED_DIAGRAM');
 
-      // 精确断言完整 locator 投影（modality + content + heading_path + locator）
-      for (const block of diagramBlocks) {
-        assert.equal(block.modality, 'STRUCTURED_DIAGRAM');
-        assert.equal(typeof block.content, 'string');
-        assert.equal(block.content.length > 0, true, 'content should be non-empty');
-        assert.equal(Array.isArray(block.heading_path), true);
-        assert.equal(typeof block.locator, 'object');
-        assert.equal(block.locator.drawing_part, 'xl/drawings/drawing1.xml');
-      }
+      assert.equal(tableBlocks.length, 1, 'Should have exactly 1 TABLE block');
+      assert.equal(diagramBlocks.length, 4, 'Should have exactly 4 STRUCTURED_DIAGRAM blocks');
+
+      // TABLE block 精确投影
+      assert.deepEqual(tableBlocks[0], {
+        modality: 'TABLE',
+        content: '活动名称\t负责人\n审核采购申请\t采购经理',
+        heading_path: ['Sheet1'],
+        locator: {
+          sheet_name: 'Sheet1',
+          table_range: 'A1:B2',
+        },
+        asset_ref: null,
+      });
+
+      // STRUCTURED_DIAGRAM blocks 精确投影
+      assert.deepEqual(diagramBlocks[0], {
+        modality: 'STRUCTURED_DIAGRAM',
+        content: '开始审核',
+        heading_path: ['Sheet1'],
+        locator: {
+          sheet: 'Sheet1',
+          drawing_part: 'xl/drawings/drawing1.xml',
+          shape_id: '1',
+          connector_id: null,
+          anchor_type: 'twoCellAnchor',
+        },
+        asset_ref: null,
+      });
+
+      assert.deepEqual(diagramBlocks[1], {
+        modality: 'STRUCTURED_DIAGRAM',
+        content: '决策',
+        heading_path: ['Sheet1'],
+        locator: {
+          sheet: 'Sheet1',
+          drawing_part: 'xl/drawings/drawing1.xml',
+          shape_id: '2',
+          connector_id: null,
+          anchor_type: 'oneCellAnchor',
+        },
+        asset_ref: null,
+      });
+
+      assert.deepEqual(diagramBlocks[2], {
+        modality: 'STRUCTURED_DIAGRAM',
+        content: 'Connector 1',
+        heading_path: ['Sheet1'],
+        locator: {
+          sheet: 'Sheet1',
+          drawing_part: 'xl/drawings/drawing1.xml',
+          shape_id: null,
+          connector_id: '3',
+          anchor_type: 'twoCellAnchor',
+        },
+        asset_ref: null,
+      });
+
+      assert.deepEqual(diagramBlocks[3], {
+        modality: 'STRUCTURED_DIAGRAM',
+        content: '结束',
+        heading_path: ['Sheet1'],
+        locator: {
+          sheet: 'Sheet1',
+          drawing_part: 'xl/drawings/drawing1.xml',
+          shape_id: '4',
+          connector_id: null,
+          anchor_type: 'absoluteAnchor',
+        },
+        asset_ref: null,
+      });
     });
   });
 
@@ -981,28 +1062,26 @@ describe('DrawingML 提取器', () => {
     it('buildEvidenceBatches 应保留 locator 并生成有效批次', async () => {
       const batches = buildEvidenceBatches({ blocks: evidenceBlocks });
 
-      assert.equal(Array.isArray(batches), true, 'batches should be an array');
-      assert.equal(batches.length > 0, true, 'Should produce at least one batch');
+      // 混合 fixture 有 5 个 blocks，应该生成 1 个 batch
+      assert.equal(batches.length, 1, 'Should produce exactly 1 batch');
+      assert.deepEqual(batches.map(b => b.batch_id), ['EB-001']);
 
-      for (const batch of batches) {
-        assert.match(batch.batch_id, /^EB-[a-zA-Z0-9_-]+$/);
-        assert.match(batch.batch_sha256, /^[a-f0-9]{64}$/);
-        assert.equal(Array.isArray(batch.blocks), true, 'batch.blocks should be an array');
-        assert.equal(batch.blocks.length > 0, true, 'Batch should contain blocks');
-        assert.equal(batch.blocks.length <= 12, true, 'Batch size should not exceed 12');
-        assert.equal(batch.total_chars >= 0, true, 'total_chars should be non-negative');
-        assert.equal(batch.total_chars <= 12000, true, 'total_chars should not exceed 12000');
-        assert.equal(Array.isArray(batch.modality_mix), true);
-        assert.equal(batch.status, 'PENDING');
-        assert.equal(typeof batch.context_budget, 'object');
-        assert.equal(Array.isArray(batch.markdown_refs), true);
+      const batch = batches[0];
+      assert.match(batch.batch_id, /^EB-[a-zA-Z0-9_-]+$/);
+      assert.match(batch.batch_sha256, /^[a-f0-9]{64}$/);
+      assert.equal(batch.blocks.length, 5, 'Batch should contain all 5 blocks');
+      assert.equal(batch.total_chars >= 0, true, 'total_chars should be non-negative');
+      assert.equal(batch.total_chars <= 12000, true, 'total_chars should not exceed 12000');
+      assert.deepEqual(batch.modality_mix, ['TABLE', 'STRUCTURED_DIAGRAM']);
+      assert.equal(batch.status, 'PENDING');
+      assert.equal(typeof batch.context_budget, 'object');
+      assert.deepEqual(batch.markdown_refs, []);
 
-        // 验证每个块的 locator 保留
-        for (const block of batch.blocks) {
-          if (block.modality === 'STRUCTURED_DIAGRAM') {
-            assert.equal(typeof block.locator.sheet, 'string');
-            assert.equal(block.locator.drawing_part, 'xl/drawings/drawing1.xml');
-          }
+      // 验证每个块的 locator 保留
+      for (const block of batch.blocks) {
+        if (block.modality === 'STRUCTURED_DIAGRAM') {
+          assert.equal(typeof block.locator.sheet, 'string');
+          assert.equal(block.locator.drawing_part, 'xl/drawings/drawing1.xml');
         }
       }
 
