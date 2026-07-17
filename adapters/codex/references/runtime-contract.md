@@ -1,5 +1,31 @@
 # Flow Architect Runtime Contract
 
+## Runtime Components
+
+Flow Architect 使用组件化运行时，`runtime/manifest.json` 定义所有组件及其精确版本：
+
+| 组件 | 必装 | 包 | 精确版本 |
+|------|------|-----|----------|
+| `core` | ✅ | ajv, fast-xml-parser, yaml | 8.20.0, 4.5.7, 2.9.0 |
+| `pdf` | 否 | pdfjs-dist | 4.10.38 |
+| `docx` | 否 | mammoth | 1.12.0 |
+| `xlsx` | 否 | exceljs, jszip | 4.4.0, 3.10.1 |
+| `pptx` | 否 | jszip | 3.10.1 |
+
+### 隔离加载
+
+- 运行时安装在用户缓存目录（macOS `~/Library/Caches/flow-architect/`，Linux `~/.cache/flow-architect/`，Windows `%LOCALAPPDATA%\flow-architect\`），不写入插件目录或 Git 仓库。
+- 通过 `requireRuntimePackage(component, packageName)` 加载，不通过 pnpm store 私有路径或第三方包内部路径偷加载。
+- xlsx 组件显式声明 `jszip: 3.10.1`，不从 exceljs 内部加载 jszip。
+
+### 结构化缺失错误
+
+组件未安装时，脚本返回结构化错误而非崩溃：
+
+- 错误码：`RUNTIME_COMPONENT_MISSING`
+- 包含缺失组件名、所需包名和安装指令
+- 不静默降级或假装成功
+
 ## Run Directory Structure
 
 Every review run produces a directory with the following layout:
