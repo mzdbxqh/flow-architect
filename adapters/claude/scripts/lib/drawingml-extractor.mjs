@@ -268,6 +268,7 @@ function resolveRelationshipTarget(rel, sheetDir, partName, warnings) {
     warnings.push({
       code: 'DRAWINGML_EXTERNAL_TARGET',
       message: `Relationship ${rel.id} in ${partName} has External TargetMode, rejected`,
+      target: rel.id,
     });
     return null;
   }
@@ -287,6 +288,7 @@ function resolveRelationshipTarget(rel, sheetDir, partName, warnings) {
     warnings.push({
       code: 'DRAWINGML_PATH_ESCAPE',
       message: `Relationship ${rel.id} target "${rel.target}" escapes xl/ root after normalization`,
+      target: rel.id,
     });
     return null;
   }
@@ -743,6 +745,24 @@ export async function inspectDrawingmlPackage(buffer, options = {}) {
     let hasEditableInSheet = false;
     let hasRasterInSheet = false;
 
+    // 检查是否有多个 drawing 引用（歧义）
+    const drawings = Array.isArray(sheetData.drawing) ? sheetData.drawing : (sheetData.drawing ? [sheetData.drawing] : []);
+    if (drawings.length > 1) {
+      const drawingIds = drawings.map(d => d['@_r:id'] || d['r:id']).filter(Boolean);
+      warnings.push({
+        code: 'DRAWINGML_AMBIGUOUS_DRAWING_REL',
+        message: 'Sheet has multiple drawing references, ambiguous which to parse',
+        target: drawingIds.join(','),
+      });
+      // 歧义时跳过解析，但仍然记录 sheet
+      sheets.push({
+        name: sheetName,
+        has_drawing: false,
+        cell_count: cellCount,
+      });
+      continue;
+    }
+
     if (drawingRef) {
       // 解析 worksheet relationships
       const sheetRelsPath = `xl/worksheets/_rels/${wsRel.target.split('/').pop()}.rels`;
@@ -757,6 +777,7 @@ export async function inspectDrawingmlPackage(buffer, options = {}) {
           warnings.push({
             code: 'DRAWINGML_MISSING_DRAWING_REL',
             message: `No drawing relationship found for ref ${drawingRef} in ${sheetRelsPath}`,
+            target: drawingRef,
           });
         } else if (matchingDrels.length > 1) {
           warnings.push({
@@ -884,6 +905,7 @@ export async function extractDrawingml(buffer, options = {}) {
           allWarnings.push({
             code: 'DRAWINGML_MISSING_DRAWING_REL',
             message: `No drawing relationship found for ref ${drawingRef} in ${sheetRelsPath}`,
+            target: drawingRef,
           });
         } else if (matchingDrels.length > 1) {
           allWarnings.push({
