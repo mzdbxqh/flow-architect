@@ -591,25 +591,25 @@ describe('DrawingML 提取器', () => {
       );
     });
 
-    it('应拒绝超过 XML 字符数限制的内容（workbook XML）', async () => {
+    it('应拒绝超过 XML 字符数限制的 workbook.xml（收紧阈值注入）', async () => {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
-      const largeXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' + 'x'.repeat(500001) + '</workbook>';
+      const largeXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' + 'x'.repeat(1500) + '</workbook>';
       zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>');
       zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
       zip.file('xl/workbook.xml', largeXml);
       zip.file('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
       const buffer = await zip.generateAsync({ type: 'nodebuffer' });
       await assert.rejects(
-        () => extractDrawingml(buffer),
+        () => extractDrawingml(buffer, { limits: { MAX_XML_CHARACTERS: 1000 } }),
         { message: /XML safety validation failed.*character count exceeds limit/ }
       );
     });
 
-    it('应拒绝超大的 worksheet XML', async () => {
+    it('应拒绝超大的 worksheet.xml（收紧阈值注入）', async () => {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
-      const largeSheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' + 'x'.repeat(500001) + '</sheetData></worksheet>';
+      const largeSheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' + 'x'.repeat(1500) + '</sheetData></worksheet>';
       zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
       zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
       zip.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="S1" sheetId="1" r:id="rId1"/></sheets></workbook>');
@@ -617,30 +617,30 @@ describe('DrawingML 提取器', () => {
       zip.file('xl/worksheets/sheet1.xml', largeSheet);
       const buffer = await zip.generateAsync({ type: 'nodebuffer' });
       await assert.rejects(
-        () => extractDrawingml(buffer),
+        () => extractDrawingml(buffer, { limits: { MAX_XML_CHARACTERS: 1000 } }),
         { message: /XML safety validation failed.*character count exceeds limit/ }
       );
     });
 
-    it('应拒绝超过 XML 字符数限制的 workbook rels', async () => {
+    it('应拒绝超过 XML 字符数限制的 workbook.xml.rels（收紧阈值注入）', async () => {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
-      const largeRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + 'x'.repeat(500001) + '</Relationships>';
+      const largeRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + 'x'.repeat(1500) + '</Relationships>';
       zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>');
       zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
       zip.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"></workbook>');
       zip.file('xl/_rels/workbook.xml.rels', largeRels);
       const buffer = await zip.generateAsync({ type: 'nodebuffer' });
       await assert.rejects(
-        () => extractDrawingml(buffer),
+        () => extractDrawingml(buffer, { limits: { MAX_XML_CHARACTERS: 1000 } }),
         { message: /XML safety validation failed.*character count exceeds limit/ }
       );
     });
 
-    it('应拒绝超过 XML 字符数限制的 worksheet rels', async () => {
+    it('应拒绝超过 XML 字符数限制的 sheet1.xml.rels（收紧阈值注入）', async () => {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
-      const largeSheetRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + 'x'.repeat(500001) + '</Relationships>';
+      const largeSheetRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + 'x'.repeat(1500) + '</Relationships>';
       zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>');
       zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
       zip.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets><sheet name="S1" sheetId="1" r:id="rId1"/></sheets></workbook>');
@@ -650,15 +650,15 @@ describe('DrawingML 提取器', () => {
       zip.file('xl/drawings/drawing1.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"></xdr:wsDr>');
       const buffer = await zip.generateAsync({ type: 'nodebuffer' });
       await assert.rejects(
-        () => extractDrawingml(buffer),
+        () => extractDrawingml(buffer, { limits: { MAX_XML_CHARACTERS: 1000 } }),
         { message: /XML safety validation failed.*character count exceeds limit/ }
       );
     });
 
-    it('应拒绝超过 XML 字符数限制的 drawing XML', async () => {
+    it('应拒绝超过 XML 字符数限制的 drawing1.xml（收紧阈值注入）', async () => {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
-      const largeDrawing = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' + 'x'.repeat(500001) + '</xdr:wsDr>';
+      const largeDrawing = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' + 'x'.repeat(1500) + '</xdr:wsDr>';
       zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>');
       zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
       zip.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets><sheet name="S1" sheetId="1" r:id="rId1"/></sheets></workbook>');
@@ -667,12 +667,14 @@ describe('DrawingML 提取器', () => {
       zip.file('xl/worksheets/_rels/sheet1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>');
       zip.file('xl/drawings/drawing1.xml', largeDrawing);
       const buffer = await zip.generateAsync({ type: 'nodebuffer' });
-      const result = await extractDrawingml(buffer);
-      // drawing XML 安全检查应该产生 warning，而不是抛出异常
+      const result = await extractDrawingml(buffer, { limits: { MAX_XML_CHARACTERS: 1000 } });
       const corruptedWarnings = result.warnings.filter(w => w.code === 'DRAWINGML_CORRUPTED_XML');
-      assert.equal(corruptedWarnings.length, 1, 'Should have exactly 1 DRAWINGML_CORRUPTED_XML warning');
-      assert.equal(corruptedWarnings[0].code, 'DRAWINGML_CORRUPTED_XML');
-      assert.equal(corruptedWarnings[0].target, 'xl/drawings/drawing1.xml');
+      assert.equal(corruptedWarnings.length, 1);
+      assert.deepEqual(corruptedWarnings[0], {
+        code: 'DRAWINGML_CORRUPTED_XML',
+        message: 'Failed to parse drawing XML in xl/drawings/drawing1.xml: XML safety validation failed for xl/drawings/drawing1.xml: XML xl/drawings/drawing1.xml character count exceeds limit: 1799 > 1000',
+        target: 'xl/drawings/drawing1.xml',
+      });
     });
 
     it('不应允许放宽安全限制', async () => {
@@ -758,27 +760,38 @@ describe('DrawingML 提取器', () => {
       assert.deepEqual(modalities, ['VISUAL_ASSET'], 'Should only have VISUAL_ASSET modality');
     });
 
-    it('图片 anchor 应产生 VISUAL_ASSET block', async () => {
+    it('图片 anchor 应产生 VISUAL_ASSET block（完整固定投影 deepEqual）', async () => {
       const result = await extractArtifactEvidence({
         artifact: { path: imageXlsxPath, format: 'xlsx' },
         runDir: tmpDir,
       });
 
-      // 图片-only fixture 确定只有 1 个 picture → 1 个 VISUAL_ASSET block
-      const visualBlocks = result.blocks.filter(b => b.modality === 'VISUAL_ASSET');
-      assert.equal(visualBlocks.length, 1, 'Should have exactly 1 VISUAL_ASSET block');
+      // 图片-only fixture 确定只有 1 个 picture → 精确 1 个 block
+      assert.equal(result.blocks.length, 1);
 
-      // 精确断言 VISUAL_ASSET block 完整投影
-      const block = visualBlocks[0];
-      assert.equal(block.modality, 'VISUAL_ASSET');
-      assert.equal(block.source_format, 'xlsx');
-      assert.deepEqual(block.heading_path, ['sheet1', 'Image 1']);
-      assert.equal(block.asset_ref, 'rId1');
-      assert.equal(block.locator.sheet, 'sheet1');
-      assert.equal(block.locator.shape_id, '1');
-      assert.equal(block.locator.connector_id, null);
-      assert.equal(block.locator.anchor_type, 'absoluteAnchor');
-      assert.equal(block.locator.drawing_part, 'xl/drawings/drawing1.xml');
+      const { block_id, ...blockRest } = result.blocks[0];
+      assert.match(block_id, /^B-[a-zA-Z0-9_-]+$/);
+      assert.deepEqual(blockRest, {
+        artifact_sha256: 'ce235aaba835e0f1651ed14eea2456c916f594d5aed8f4c6341d5d17a2e49236',
+        source_format: 'xlsx',
+        modality: 'VISUAL_ASSET',
+        locator: {
+          page: null,
+          slide: null,
+          sheet: 'sheet1',
+          range: null,
+          line_start: null,
+          line_end: null,
+          drawing_part: 'xl/drawings/drawing1.xml',
+          shape_id: '1',
+          connector_id: null,
+          anchor_type: 'absoluteAnchor',
+        },
+        heading_path: ['sheet1', 'Image 1'],
+        content: '{"shape_type":"pic","shape_id":"1","name":"Image 1","embed_ref":"rId1","bounds":{"x":0,"y":0,"width":6,"height":3.5},"anchor_type":"absoluteAnchor","sheet":"sheet1","drawing_part":"xl/drawings/drawing1.xml"}',
+        asset_ref: 'rId1',
+        content_sha256: 'd3ffb87f053be49b473533b8d91f256e129b8476b94af75bc8ecb45ecf103a4e',
+      });
     });
 
     it('所有证据块应通过 validateEvidenceBlock Schema 验证', async () => {
@@ -854,62 +867,98 @@ describe('DrawingML 提取器', () => {
       assert.equal(diagramBlocks.length, 0);
     });
 
-    it('混合 fixture 的 evidence blocks 精确投影', async () => {
+    it('混合 fixture 的 evidence blocks 完整固定投影整体 deepEqual', async () => {
       const result = await extractArtifactEvidence({
         artifact: { path: mixedXlsxPath, format: 'xlsx' },
         runDir: tmpDir,
       });
 
-      // 混合 fixture：1 TABLE + 3 shape + 1 connector = 5 blocks
-      assert.equal(result.blocks.length, 5, 'Should have exactly 5 blocks');
+      const MIXED_SHA = '0a608736fbc2bd10d55804b16eb2748e5ed167e47714fee9877c17e17607161a';
 
-      // 精确断言每个 block 的完整投影
-      const tableBlocks = result.blocks.filter(b => b.modality === 'TABLE');
-      const diagramBlocks = result.blocks.filter(b => b.modality === 'STRUCTURED_DIAGRAM');
+      // 按 block_id 排序，逐个 strip block_id（动态值），对其余字段整体 deepEqual
+      const sorted = [...result.blocks].sort((a, b) => a.block_id.localeCompare(b.block_id));
+      for (const block of sorted) {
+        assert.match(block.block_id, /^B-[a-zA-Z0-9_-]+$/);
+      }
 
-      assert.equal(tableBlocks.length, 1, 'Should have exactly 1 TABLE block');
-      assert.equal(diagramBlocks.length, 4, 'Should have exactly 4 STRUCTURED_DIAGRAM blocks');
-
-      // TABLE block 精确投影
-      const table = tableBlocks[0];
-      assert.equal(table.modality, 'TABLE');
-      assert.equal(table.source_format, 'xlsx');
-      assert.deepEqual(table.heading_path, ['Sheet1']);
-      assert.equal(table.asset_ref, null);
-      assert.equal(table.locator.sheet, 'Sheet1');
-      assert.equal(table.locator.range, 'A1:B2');
-      assert.equal(table.locator.shape_id, null);
-      assert.equal(table.locator.connector_id, null);
-
-      // STRUCTURED_DIAGRAM blocks 精确投影
-      const shape1 = diagramBlocks.find(b => b.locator.shape_id === '1');
-      assert.equal(shape1.modality, 'STRUCTURED_DIAGRAM');
-      assert.equal(shape1.locator.sheet, 'sheet1');
-      assert.equal(shape1.locator.drawing_part, 'xl/drawings/drawing1.xml');
-      assert.equal(shape1.locator.shape_id, '1');
-      assert.equal(shape1.locator.connector_id, null);
-      assert.equal(shape1.locator.anchor_type, 'twoCellAnchor');
-
-      const shape2 = diagramBlocks.find(b => b.locator.shape_id === '2');
-      assert.equal(shape2.modality, 'STRUCTURED_DIAGRAM');
-      assert.equal(shape2.locator.sheet, 'sheet1');
-      assert.equal(shape2.locator.shape_id, '2');
-      assert.equal(shape2.locator.connector_id, null);
-      assert.equal(shape2.locator.anchor_type, 'oneCellAnchor');
-
-      const connector = diagramBlocks.find(b => b.locator.connector_id === '3');
-      assert.equal(connector.modality, 'STRUCTURED_DIAGRAM');
-      assert.equal(connector.locator.sheet, 'sheet1');
-      assert.equal(connector.locator.shape_id, null);
-      assert.equal(connector.locator.connector_id, '3');
-      assert.equal(connector.locator.anchor_type, 'twoCellAnchor');
-
-      const shape4 = diagramBlocks.find(b => b.locator.shape_id === '4');
-      assert.equal(shape4.modality, 'STRUCTURED_DIAGRAM');
-      assert.equal(shape4.locator.sheet, 'sheet1');
-      assert.equal(shape4.locator.shape_id, '4');
-      assert.equal(shape4.locator.connector_id, null);
-      assert.equal(shape4.locator.anchor_type, 'absoluteAnchor');
+      const projections = sorted.map(({ block_id, ...rest }) => rest);
+      assert.deepEqual(projections, [
+        {
+          artifact_sha256: MIXED_SHA,
+          source_format: 'xlsx',
+          modality: 'STRUCTURED_DIAGRAM',
+          locator: {
+            page: null, slide: null, sheet: 'sheet1', range: null,
+            line_start: null, line_end: null,
+            drawing_part: 'xl/drawings/drawing1.xml',
+            shape_id: '2', connector_id: null, anchor_type: 'oneCellAnchor',
+          },
+          heading_path: ['sheet1', 'Shape 2'],
+          content: '{"shape_type":"sp","shape_id":"2","name":"Shape 2","text":"决策","preset_geometry":"diamond","fill_color":"ED7D31","bounds":{"x":4,"y":0.16666666666666666,"width":2,"height":1},"anchor_type":"oneCellAnchor","sheet":"sheet1","drawing_part":"xl/drawings/drawing1.xml"}',
+          asset_ref: null,
+          content_sha256: '617739e875f8879aae9e1829f887be4ddca1e6d259d4099de26d50a040bf6999',
+        },
+        {
+          artifact_sha256: MIXED_SHA,
+          source_format: 'xlsx',
+          modality: 'STRUCTURED_DIAGRAM',
+          locator: {
+            page: null, slide: null, sheet: 'sheet1', range: null,
+            line_start: null, line_end: null,
+            drawing_part: 'xl/drawings/drawing1.xml',
+            shape_id: '1', connector_id: null, anchor_type: 'twoCellAnchor',
+          },
+          heading_path: ['sheet1', 'Shape 1'],
+          content: '{"shape_type":"sp","shape_id":"1","name":"Shape 1","text":"开始审核","preset_geometry":"roundRect","fill_color":"4472C4","bounds":{"x":0,"y":0.16666666666666666,"width":2,"height":1},"anchor_type":"twoCellAnchor","sheet":"sheet1","drawing_part":"xl/drawings/drawing1.xml"}',
+          asset_ref: null,
+          content_sha256: 'b6992084c23bd6d978c853a1f4593515edd07f4ec6c388801927eb4e3c10b86a',
+        },
+        {
+          artifact_sha256: MIXED_SHA,
+          source_format: 'xlsx',
+          modality: 'STRUCTURED_DIAGRAM',
+          locator: {
+            page: null, slide: null, sheet: 'sheet1', range: null,
+            line_start: null, line_end: null,
+            drawing_part: 'xl/drawings/drawing1.xml',
+            shape_id: '4', connector_id: null, anchor_type: 'absoluteAnchor',
+          },
+          heading_path: ['sheet1', 'Shape 3'],
+          content: '{"shape_type":"sp","shape_id":"4","name":"Shape 3","text":"结束","preset_geometry":"rect","fill_color":"70AD47","bounds":{"x":6,"y":0.16666666666666666,"width":2,"height":1},"anchor_type":"absoluteAnchor","sheet":"sheet1","drawing_part":"xl/drawings/drawing1.xml"}',
+          asset_ref: null,
+          content_sha256: '01a50adc80a4534d1e5d2552169c4a5fba9ca07091ae7a02f8895dea38ce3ead',
+        },
+        {
+          artifact_sha256: MIXED_SHA,
+          source_format: 'xlsx',
+          modality: 'STRUCTURED_DIAGRAM',
+          locator: {
+            page: null, slide: null, sheet: 'sheet1', range: null,
+            line_start: null, line_end: null,
+            drawing_part: 'xl/drawings/drawing1.xml',
+            shape_id: null, connector_id: '3', anchor_type: 'twoCellAnchor',
+          },
+          heading_path: ['sheet1', 'Connector 1'],
+          content: '{"shape_type":"cxnSp","shape_id":"3","name":"Connector 1","preset_geometry":"straightConnector1","bounds":{"x":2,"y":0.3333333333333333,"width":2,"height":0},"source_ref":"1","target_ref":"2","start_connection":{"shape_id":"1","connection_id":1},"end_connection":{"shape_id":"2","connection_id":0},"has_arrow":true,"arrow_type":"arrow","anchor_type":"twoCellAnchor","sheet":"sheet1","drawing_part":"xl/drawings/drawing1.xml","connector_id":"3"}',
+          asset_ref: null,
+          content_sha256: '04ecb23ea08cc8ab804df10c818bebb1f8733e5618c60c668c5ba1b89750fe77',
+        },
+        {
+          artifact_sha256: MIXED_SHA,
+          source_format: 'xlsx',
+          modality: 'TABLE',
+          locator: {
+            page: null, slide: null, sheet: 'Sheet1', range: 'A1:B2',
+            line_start: null, line_end: null,
+            drawing_part: null,
+            shape_id: null, connector_id: null, anchor_type: null,
+          },
+          heading_path: ['Sheet1'],
+          content: '活动名称\t负责人\n审核采购申请\t采购经理',
+          asset_ref: null,
+          content_sha256: '47549cbea572d039d0beb9b777f894ea46bed02f2fca16a26aab6c2ac968f806',
+        },
+      ]);
     });
   });
 
@@ -942,7 +991,7 @@ describe('DrawingML 提取器', () => {
       await rm(tmpDir, { recursive: true, force: true });
     });
 
-    it('normalizeEvidenceToMarkdown 应保留 locator 原样（含 drawing_part、shape_id）', async () => {
+    it('normalizeEvidenceToMarkdown 应保留所有 locator 原样（完整固定投影 deepEqual + .md chunk frontmatter 对比）', async () => {
       const normalized = await normalizeEvidenceToMarkdown({
         artifact: { path: mixedXlsxPath, format: 'xlsx' },
         artifactSha256,
@@ -953,37 +1002,49 @@ describe('DrawingML 提取器', () => {
 
       assert.equal(normalized.chunks.length, evidenceBlocks.length);
 
-      // 验证 STRUCTURED_DIAGRAM 块的 locator 完整保留
-      const diagramChunks = normalized.chunks.filter(c => c.modality === 'STRUCTURED_DIAGRAM');
-      assert.equal(diagramChunks.length, 4);
-      for (const chunk of diagramChunks) {
-        assert.equal(typeof chunk.locator.sheet, 'string');
-        assert.equal(chunk.locator.drawing_part, 'xl/drawings/drawing1.xml');
-        assert.equal(typeof chunk.locator.anchor_type, 'string');
+      // 五个 chunk 的 locator 完整固定数组 deepEqual（按 chunk_id 排序，匹配 block_id 排序）
+      const sortedChunks = [...normalized.chunks].sort((a, b) => a.chunk_id.localeCompare(b.chunk_id));
+      const allLocators = sortedChunks.map(c => c.locator);
+      assert.deepEqual(allLocators, [
+        { page: null, slide: null, sheet: 'sheet1', range: null, line_start: null, line_end: null, drawing_part: 'xl/drawings/drawing1.xml', shape_id: '1', connector_id: null, anchor_type: 'twoCellAnchor' },
+        { page: null, slide: null, sheet: 'sheet1', range: null, line_start: null, line_end: null, drawing_part: 'xl/drawings/drawing1.xml', shape_id: '2', connector_id: null, anchor_type: 'oneCellAnchor' },
+        { page: null, slide: null, sheet: 'sheet1', range: null, line_start: null, line_end: null, drawing_part: 'xl/drawings/drawing1.xml', shape_id: null, connector_id: '3', anchor_type: 'twoCellAnchor' },
+        { page: null, slide: null, sheet: 'Sheet1', range: 'A1:B2', line_start: null, line_end: null, drawing_part: null, shape_id: null, connector_id: null, anchor_type: null },
+        { page: null, slide: null, sheet: 'sheet1', range: null, line_start: null, line_end: null, drawing_part: 'xl/drawings/drawing1.xml', shape_id: '4', connector_id: null, anchor_type: 'absoluteAnchor' },
+      ]);
+
+      // 读取实际 .md chunk frontmatter，解析 locator 并与原 evidence locator 整体对比
+      const { readFile } = await import('node:fs/promises');
+      const { join } = await import('node:path');
+      const artifactId = `A-${artifactSha256.slice(0, 12)}`;
+      const normDir = join(tmpDir, 'normalized', artifactId);
+
+      // 构建 chunk_id → evidence block locator 映射
+      const chunkIdToEvidenceLocator = {};
+      for (let i = 0; i < normalized.chunks.length; i++) {
+        chunkIdToEvidenceLocator[normalized.chunks[i].chunk_id] = evidenceBlocks[i].locator;
       }
 
-      // 修复 E：对四个 DrawingML chunk 的 locator 列表整体 deepEqual
-      const locatorProjections = diagramChunks.map(c => ({
-        sheet: c.locator.sheet,
-        drawing_part: c.locator.drawing_part,
-        anchor_type: c.locator.anchor_type,
-        shape_id: c.locator.shape_id,
-        connector_id: c.locator.connector_id,
-      })).sort((a, b) => {
-        const keyA = `${a.shape_id || a.connector_id}`;
-        const keyB = `${b.shape_id || b.connector_id}`;
-        return keyA.localeCompare(keyB);
-      });
+      // 逐 .md 文件验证：解析 chunk_id，找到对应原 evidence locator，比较
+      for (let seq = 1; seq <= evidenceBlocks.length; seq++) {
+        const padded = String(seq).padStart(4, '0');
+        const mdContent = await readFile(join(normDir, `chunks/${padded}.md`), 'utf8');
+        const fmMatch = mdContent.match(/^---\n([\s\S]*?)\n---/);
+        assert.equal(Array.isArray(fmMatch), true, `Missing frontmatter in chunks/${padded}.md`);
 
-      // 精确确认 3 shape + 1 connector
-      const shapes = locatorProjections.filter(l => l.shape_id !== null);
-      const connectors = locatorProjections.filter(l => l.connector_id !== null);
-      assert.equal(shapes.length, 3);
-      assert.equal(connectors.length, 1);
+        const fmLines = fmMatch[1].split('\n');
+        const locatorLine = fmLines.find(l => l.startsWith('locator:'));
+        const chunkIdLine = fmLines.find(l => l.startsWith('chunk_id:'));
+        assert.equal(typeof locatorLine, 'string', `Missing locator in frontmatter of chunks/${padded}.md`);
+        assert.equal(typeof chunkIdLine, 'string', `Missing chunk_id in frontmatter of chunks/${padded}.md`);
 
-      // 所有 drawing_part 一致
-      for (const loc of locatorProjections) {
-        assert.equal(loc.drawing_part, 'xl/drawings/drawing1.xml');
+        const rawLocator = locatorLine.slice('locator:'.length).trim().replace(/^'|'$/g, '');
+        const fmLocator = JSON.parse(rawLocator);
+        const fmChunkId = chunkIdLine.slice('chunk_id:'.length).trim();
+        assert.equal(typeof chunkIdToEvidenceLocator[fmChunkId], 'object', `Unknown chunk_id ${fmChunkId} in chunks/${padded}.md`);
+        const expectedLocator = chunkIdToEvidenceLocator[fmChunkId];
+        assert.deepEqual(fmLocator, expectedLocator,
+          `chunks/${padded}.md frontmatter locator mismatch with original evidence`);
       }
     });
 
@@ -1027,47 +1088,42 @@ describe('DrawingML 提取器', () => {
       assert.deepEqual(diskLocators, originalLocators, 'Disk locators should match original evidence');
     });
 
-    it('buildEvidenceBatches 应保留 locator 并生成有效批次', async () => {
+    it('buildEvidenceBatches 完整固定投影整体 deepEqual（batch_id、modality_mix、markdown_refs、block_id→locator 映射、验证结果）', async () => {
       const batches = buildEvidenceBatches({ blocks: evidenceBlocks });
 
-      // 混合 fixture 有 5 个 blocks，应该生成 1 个 batch
-      assert.equal(batches.length, 1, 'Should produce exactly 1 batch');
-
+      // 完整 batch 投影（strip batch_sha256 因为内部 hash 顺序可能微变，单独验证格式）
+      assert.equal(batches.length, 1);
       const batch = batches[0];
       assert.match(batch.batch_id, /^EB-[a-zA-Z0-9_-]+$/);
       assert.match(batch.batch_sha256, /^[a-f0-9]{64}$/);
-      assert.equal(batch.blocks.length, 5, 'Batch should contain all 5 blocks');
-      assert.equal(batch.total_chars >= 0, true, 'total_chars should be non-negative');
-      assert.equal(batch.total_chars <= 12000, true, 'total_chars should not exceed 12000');
       assert.equal(batch.status, 'PENDING');
-      assert.equal(typeof batch.context_budget, 'object');
+      assert.equal(batch.total_chars, 1258);
 
-      // 验证每个块的 locator 保留
+      // modality_mix 整体 deepEqual
+      assert.deepEqual(batch.modality_mix, ['TABLE', 'STRUCTURED_DIAGRAM']);
+
+      // markdown_refs 整体 deepEqual
+      assert.deepEqual(batch.markdown_refs, []);
+
+      // block_id→locator 完整映射整体 deepEqual
+      const blockIdLocatorMap = {};
       for (const block of batch.blocks) {
-        if (block.modality === 'STRUCTURED_DIAGRAM') {
-          assert.equal(typeof block.locator.sheet, 'string');
-          assert.equal(block.locator.drawing_part, 'xl/drawings/drawing1.xml');
-        }
+        blockIdLocatorMap[block.block_id] = block.locator;
       }
+      assert.deepEqual(blockIdLocatorMap, {
+        'B-fe12d7424d3a': { page: null, slide: null, sheet: 'Sheet1', range: 'A1:B2', line_start: null, line_end: null, drawing_part: null, shape_id: null, connector_id: null, anchor_type: null },
+        'B-6ce9ee67784e': { page: null, slide: null, sheet: 'sheet1', range: null, line_start: null, line_end: null, drawing_part: 'xl/drawings/drawing1.xml', shape_id: '1', connector_id: null, anchor_type: 'twoCellAnchor' },
+        'B-4d1e01796e89': { page: null, slide: null, sheet: 'sheet1', range: null, line_start: null, line_end: null, drawing_part: 'xl/drawings/drawing1.xml', shape_id: '2', connector_id: null, anchor_type: 'oneCellAnchor' },
+        'B-bc345ed02601': { page: null, slide: null, sheet: 'sheet1', range: null, line_start: null, line_end: null, drawing_part: 'xl/drawings/drawing1.xml', shape_id: '4', connector_id: null, anchor_type: 'absoluteAnchor' },
+        'B-ef5bee75a93a': { page: null, slide: null, sheet: 'sheet1', range: null, line_start: null, line_end: null, drawing_part: 'xl/drawings/drawing1.xml', shape_id: null, connector_id: '3', anchor_type: 'twoCellAnchor' },
+      });
 
-      // 修复 E：所有原始 block_id→locator 映射精确匹配
-      const allBatchBlockIds = batches.flatMap(b => b.blocks.map(bl => bl.block_id));
-      const originalBlockIds = evidenceBlocks.map(b => b.block_id).sort();
-      const batchBlockIds = [...new Set(allBatchBlockIds)].sort();
-      assert.deepEqual(batchBlockIds, originalBlockIds,
-        'All original blocks must appear in batches');
-
-      // block_id→locator 映射整体 deepEqual
-      const batchLocatorMap = {};
-      for (const batch of batches) {
-        for (const block of batch.blocks) {
-          batchLocatorMap[block.block_id] = block.locator;
-        }
+      // 验证结果数组整体 deepEqual
+      const validationResults = [];
+      for (const b of batches) {
+        validationResults.push(await validateEvidenceBatch(b));
       }
-      for (const block of evidenceBlocks) {
-        assert.deepEqual(batchLocatorMap[block.block_id], block.locator,
-          `Locator mismatch for block ${block.block_id}`);
-      }
+      assert.deepEqual(validationResults, [{ valid: true }]);
     });
 
     it('每个 evidence batch 应通过 validateEvidenceBatch', async () => {
