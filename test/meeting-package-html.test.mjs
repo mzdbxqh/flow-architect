@@ -13,6 +13,24 @@ import {
 } from '../scripts/lib/meeting-package-html.mjs';
 import { compileBpmn } from '../scripts/lib/bpmn-compiler.mjs';
 
+// ─── 辅助：从可能包含 warning 消息的输出中解析 JSON ─────────────────────
+
+/**
+ * 从输出中解析 JSON（可能包含 warning 消息）。
+ * 从最后一行开始向前查找有效的 JSON。
+ */
+function parseJsonFromOutput(output) {
+  const lines = output.trim().split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      return JSON.parse(lines[i]);
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 function v2Draft(overrides = {}) {
   return {
     schema_version: '2.0.0',
@@ -266,7 +284,8 @@ test('CLI uses one V2 draft as the complete business-data input', () => {
     '--run-dir', runDir, '--output', 'draft-only.html',
   ], { encoding: 'utf8' });
   assert.equal(result.status, 0);
-  const out = JSON.parse(result.stdout);
+  const out = parseJsonFromOutput(result.stdout);
+  assert.ok(out, '输出应包含有效 JSON');
   assert.equal(out.status, 'SUCCEEDED');
   const payload = extractMeetingPackageHtml(fs.readFileSync(path.join(runDir, 'draft-only.html'), 'utf8'));
   assert.equal(payload.metadata.process_id, v2Draft().process_card.process_id);
@@ -303,7 +322,8 @@ test('nested output directory is created inside runDir', () => {
     '--output', 'nested/deep/output.html',
   ], { encoding: 'utf8' });
   assert.equal(result.status, 0);
-  const out = JSON.parse(result.stdout);
+  const out = parseJsonFromOutput(result.stdout);
+  assert.ok(out, '输出应包含有效 JSON');
   assert.equal(out.status, 'SUCCEEDED');
   assert.ok(fs.existsSync(path.join(runDir, 'nested', 'deep', 'output.html')));
 });

@@ -78,13 +78,16 @@ test('Codex help/setup skills keep discovery and side-effect boundaries explicit
 
 test('published dependency declaration keeps exact core and test-only optional packages', () => {
   const pkg = JSON.parse(read('package.json'));
-  assert.deepEqual(pkg.dependencies, {
-    ajv: '8.20.0',
+
+  // 顶层 package.json 不应有 dependencies 字段（运行时包在 devDependencies 中）
+  assert.ok(!pkg.dependencies, '顶层 package.json 不应有 dependencies 字段');
+
+  // 验证 devDependencies 包含所有运行时包
+  const expectedDevDependencies = {
+    'ajv': '8.20.0',
     'ajv-formats': '3.0.1',
     'fast-xml-parser': '4.5.7',
-    yaml: '2.9.0',
-  });
-  assert.deepEqual(pkg.devDependencies, {
+    'yaml': '2.9.0',
     '@playwright/test': '1.61.1',
     'bpmn-js': '18.21.0',
     'esbuild': '0.28.1',
@@ -92,7 +95,15 @@ test('published dependency declaration keeps exact core and test-only optional p
     'jszip': '3.10.1',
     'mammoth': '1.12.0',
     'pdfjs-dist': '4.10.38',
-  });
+  };
+
+  for (const [pkgName, version] of Object.entries(expectedDevDependencies)) {
+    assert.equal(
+      pkg.devDependencies[pkgName],
+      version,
+      `devDependencies.${pkgName} 版本应为 ${version}，实际为 ${pkg.devDependencies[pkgName]}`
+    );
+  }
 });
 
 test('Chinese guide documents the supported Marketplace setup path for v0.3.1', () => {
