@@ -676,3 +676,230 @@ test('不得修改生产 cache-only loader 的语义', () => {
     'loader 应使用 FLOW_ARCHITECT_RUNTIME_MISSING 错误码'
   );
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// --cwd 功能测试
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── 辅助：运行包装器并捕获输出 ──────────────────────────────────────────
+
+function runWrapper(args, { timeout = 180_000 } = {}) {
+  return spawnSync(process.execPath, [BOOTSTRAP_SCRIPT, ...args], {
+    cwd: ROOT,
+    env: { ...process.env },
+    shell: false,
+    timeout,
+    encoding: 'utf8',
+  });
+}
+
+// ─── 测试 14: --cwd <path> -- <command> 正确解析，子进程获得 FLOW_ARCHITECT_CACHE_DIR ─
+
+test('--cwd <path> -- <command> 正确解析，子进程获得 FLOW_ARCHITECT_CACHE_DIR', (t) => {
+  const tmpCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cwd-test-'));
+  t.after(() => fs.rmSync(tmpCwd, { recursive: true, force: true }));
+
+  // 子进程输出 cwd 和 FLOW_ARCHITECT_CACHE_DIR
+  const probe = `
+    process.stdout.write(JSON.stringify({
+      cwd: process.cwd(),
+      cacheDir: process.env.FLOW_ARCHITECT_CACHE_DIR || '',
+    }));
+  `;
+
+  const result = runWrapper(['--cwd', tmpCwd, '--', process.execPath, '--input-type=module', '-e', probe]);
+
+  assert.equal(result.status, 0, `包装器应成功退出: ${result.stderr}`);
+  const info = parseJsonFromOutput(result.stdout);
+  assert.ok(info, '子进程应输出有效 JSON');
+  // 处理 macOS 上 /private/var 和 /var 的符号链接差异
+  const expectedCwd = fs.realpathSync(tmpCwd);
+  const actualCwd = fs.realpathSync(info.cwd);
+  assert.equal(actualCwd, expectedCwd, '子进程 cwd 应为指定路径');
+  assert.ok(info.cacheDir.length > 0, '子进程应获得 FLOW_ARCHITECT_CACHE_DIR');
+});
+
+// ─── 测试 15: --cwd 相对路径相对于公开子仓解析 ─────────────────────────────
+
+test('--cwd 相对路径相对于公开子仓解析', () => {
+  // 用 ../.. 从 pluginRoot 回到父仓根目录
+  const expectedCwd = path.resolve(ROOT, '../..');
+
+  const probe = `
+    process.stdout.write(JSON.stringify({ cwd: process.cwd() }));
+  `;
+
+  const result = runWrapper(['--cwd', '../..', '--', process.execPath, '--input-type=module', '-e', probe]);
+
+  assert.equal(result.status, 0, `包装器应成功退出: ${result.stderr}`);
+  const info = parseJsonFromOutput(result.stdout);
+  assert.ok(info, '子进程应输出有效 JSON');
+  assert.equal(info.cwd, expectedCwd, '子进程 cwd 应为解析后的绝对路径');
+});
+
+// ─── 测试 16: 缺少 cwd 参数 → 非零退出并给出稳定错误 ────────────────────────
+
+test('缺少 cwd 参数时非零退出并给出稳定错误', () => {
+  const result = runWrapper(['--cwd']);
+
+  assert.notEqual(result.status, 0, '应非零退出');
+  const stderr = result.stderr || '';
+  assert.ok(
+    stderr.includes('缺少 --cwd 参数') || stderr.includes('--cwd requires'),
+    `应包含错误消息: ${stderr}`
+  );
+});
+
+// ─── 测试 17: 缺少 -- 分隔符 → 非零退出并给出稳定错误 ────────────────────────
+
+test('缺少 -- 分隔符时非零退出并给出稳定错误', (t) => {
+  const tmpCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cwd-nosep-'));
+  t.after(() => fs.rmSync(tmpCwd, { recursive: true, force: true }));
+
+  const result = runWrapper(['--cwd', tmpCwd]);
+
+  assert.notEqual(result.status, 0, '应非零退出');
+  const stderr = result.stderr || '';
+  assert.ok(
+    stderr.includes('缺少 -- 分隔符') || stderr.includes('missing -- separator'),
+    `应包含错误消息: ${stderr}`
+  );
+});
+
+// ─── 测试 18: 缺少命令 → 非零退出并给出稳定错误 ─────────────────────────────
+
+test('-- 后缺少命令时非零退出并给出稳定错误', (t) => {
+  const tmpCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cwd-nocmd-'));
+  t.after(() => fs.rmSync(tmpCwd, { recursive: true, force: true }));
+
+  const result = runWrapper(['--cwd', tmpCwd, '--']);
+
+  assert.notEqual(result.status, 0, '应非零退出');
+  const stderr = result.stderr || '';
+  assert.ok(
+    stderr.includes('缺少命令') || stderr.includes('missing command'),
+    `应包含错误消息: ${stderr}`
+  );
+});
+
+// ─── 测试 19: 子命令退出码透传 ─────────────────────────────────────────────
+
+test('子命令退出码应透传', (t) => {
+  const tmpCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cwd-exit-'));
+  t.after(() => fs.rmSync(tmpCwd, { recursive: true, force: true }));
+
+  const result = runWrapper(['--cwd', tmpCwd, '--', process.execPath, '-e', 'process.exit(42)']);
+
+  assert.equal(result.status, 42, `子命令退出码 42 应被透传，实际: ${result.status}`);
+});
+
+// ─── 测试 20: 错误参数不得调用 runtime 安装（确定性证明）──────────────────────
+
+test('错误参数路径不得调用 runtime 安装（快速退出且不创建临时目录）', () => {
+  // 记录运行前 os.tmpdir() 中所有 flow-architect-test-runtime-* 目录
+  const tmpRoot = os.tmpdir();
+  const beforeDirs = new Set(
+    fs.readdirSync(tmpRoot)
+      .filter(name => name.startsWith('flow-architect-test-runtime-'))
+  );
+
+  const start = Date.now();
+
+  // --cwd 缺少值，应立即退出
+  const result = runWrapper(['--cwd']);
+
+  const elapsed = Date.now() - start;
+
+  assert.notEqual(result.status, 0, '应非零退出');
+  const stderr = result.stderr || '';
+  assert.ok(
+    stderr.includes('缺少 --cwd 参数'),
+    `应包含校验错误消息: ${stderr}`
+  );
+
+  // 确定性证明 1：错误参数路径必须在合理时间内完成（2 秒内）
+  // 安装 runtime 通常需要 10+ 秒，2 秒保证安装未发生
+  assert.ok(elapsed < 2000, `错误参数应快速退出，实际耗时 ${elapsed}ms`);
+
+  // 确定性证明 2：不得创建新的 flow-architect-test-runtime-* 临时目录
+  const afterDirs = new Set(
+    fs.readdirSync(tmpRoot)
+      .filter(name => name.startsWith('flow-architect-test-runtime-'))
+  );
+  const newDirs = [...afterDirs].filter(name => !beforeDirs.has(name));
+  assert.equal(newDirs.length, 0, `错误参数不得创建临时目录，发现: ${newDirs.join(', ')}`);
+});
+
+// ─── 测试 22: 自定义命令参数中的 --cwd 不应被包装器误解析 ───────────────────────
+
+test('自定义命令参数中的 --cwd 不应被包装器误解析', (t) => {
+  // 自定义命令: node --input-type=module -e "probe" some-arg --cwd some-value --other
+  // 首参数是 node（非 --cwd），后续参数包含 --cwd，应原样传给下游命令
+  const probe = `
+    // node -e 模式下 process.argv[1] 是第一个传入参数
+    process.stdout.write(JSON.stringify({
+      argv: process.argv.slice(1),
+      exitCode: 0,
+    }));
+    process.exit(0);
+  `;
+
+  // 包装器收到: node --input-type=module -e "probe" some-arg --cwd some-value --other
+  // 首参数 node 不是 --cwd，走自定义命令分支：testCmd=node, testArgs=[--input-type=module, -e, probe, some-arg, --cwd, some-value, --other]
+  const result = runWrapper([
+    process.execPath, '--input-type=module', '-e', probe,
+    'some-arg', '--cwd', 'some-value', '--other'
+  ]);
+
+  assert.equal(result.status, 0, `包装器应成功退出: ${result.stderr}`);
+  const info = parseJsonFromOutput(result.stdout);
+  assert.ok(info, '子进程应输出有效 JSON');
+  assert.deepEqual(info.argv, ['some-arg', '--cwd', 'some-value', '--other'],
+    '下游命令应收到完整的原始参数（含 --cwd）');
+});
+
+// ─── 测试 23: 首参数为 --cwd 时应解析包装器语法 ─────────────────────────────────
+
+test('首参数为 --cwd 时应解析包装器语法', (t) => {
+  const tmpCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cwd-first-'));
+  t.after(() => fs.rmSync(tmpCwd, { recursive: true, force: true }));
+
+  const probe = `
+    process.stdout.write(JSON.stringify({
+      cwd: process.cwd(),
+      cacheDir: process.env.FLOW_ARCHITECT_CACHE_DIR || '',
+    }));
+  `;
+
+  const result = runWrapper(['--cwd', tmpCwd, '--', process.execPath, '-e', probe]);
+
+  assert.equal(result.status, 0, `包装器应成功退出: ${result.stderr}`);
+  const info = parseJsonFromOutput(result.stdout);
+  assert.ok(info, '子进程应输出有效 JSON');
+  const expectedCwd = fs.realpathSync(tmpCwd);
+  const actualCwd = fs.realpathSync(info.cwd);
+  assert.equal(actualCwd, expectedCwd, '首参数为 --cwd 时应解析包装器语法');
+  assert.ok(info.cacheDir.length > 0, '子进程应获得 FLOW_ARCHITECT_CACHE_DIR');
+});
+
+// ─── 测试 21: 临时缓存在子命令结束后被清理 ──────────────────────────────────
+
+test('临时缓存在子命令结束后被清理', (t) => {
+  const tmpCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cwd-cleanup-'));
+  t.after(() => fs.rmSync(tmpCwd, { recursive: true, force: true }));
+
+  // 子进程输出 FLOW_ARCHITECT_CACHE_DIR 路径，随后包装器退出
+  const probe = `
+    process.stdout.write(process.env.FLOW_ARCHITECT_CACHE_DIR || '');
+    process.exit(0);
+  `;
+
+  const result = runWrapper(['--cwd', tmpCwd, '--', process.execPath, '--input-type=module', '-e', probe]);
+
+  assert.equal(result.status, 0, `包装器应成功退出: ${result.stderr}`);
+  const cacheDir = result.stdout.trim();
+  assert.ok(cacheDir.length > 0, '子进程应输出 cacheDir');
+
+  // 验证缓存目录已被清理（包装器退出后）
+  assert.ok(!fs.existsSync(cacheDir), `临时缓存应被清理: ${cacheDir}`);
+});
