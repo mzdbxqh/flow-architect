@@ -155,18 +155,20 @@ function checkComponentCached(cacheDir, state, component, runtimeVersion) {
 
 // ─── checkRuntime ──────────────────────────────────────────────────────
 
-export function checkRuntime({ pluginRoot, cacheDir, env = {} }) {
+export function checkRuntime({ pluginRoot, cacheDir, env = {}, cacheOnly = false }) {
   const manifest = readManifest(pluginRoot);
   const runtimeVersion = manifest.runtime_version;
   const state = readCacheState(cacheDir, runtimeVersion);
   const components = [];
 
   for (const component of manifest.components) {
-    // 1) 优先检查插件本地依赖（损坏缓存不能遮蔽可用的插件本地依赖）
-    const localNm = path.join(pluginRoot, 'node_modules');
-    if (fs.existsSync(localNm) && componentReadyFromDir(localNm, component)) {
-      components.push({ name: component.name, status: 'READY', source: 'plugin' });
-      continue;
+    // 1) 检查插件本地依赖（cacheOnly 模式跳过）
+    if (!cacheOnly) {
+      const localNm = path.join(pluginRoot, 'node_modules');
+      if (fs.existsSync(localNm) && componentReadyFromDir(localNm, component)) {
+        components.push({ name: component.name, status: 'READY', source: 'plugin' });
+        continue;
+      }
     }
 
     // 2) 检查缓存（仅当状态文件完好时）

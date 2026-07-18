@@ -50,7 +50,7 @@ Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审
 ### 3.1 从 GitHub 安装稳定版
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.3.0
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.3.1
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```

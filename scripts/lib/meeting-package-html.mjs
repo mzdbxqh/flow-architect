@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { XMLParser } from 'fast-xml-parser';
+import { requireRuntimePackage } from './runtime-loader.mjs';
 import { extractBpmn } from '../extract-bpmn.mjs';
 import { createMeetingPayload, decodeMeetingPayload, encodeMeetingPayload, computeContentHash, validateQuestions, validateMetadata, validatePayload } from './meeting-package-contract.mjs';
 
@@ -11,6 +11,7 @@ const RUNTIME = path.join(ROOT, 'runtime', 'meeting-package');
 const DATA_RE = /<script id="fa-package-data" type="application\/json">([A-Za-z0-9+/=]+)<\/script>/;
 
 export function validateProcessId(bpmnXml, processId) {
+  const { XMLParser } = requireRuntimePackage('core', 'fast-xml-parser');
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' });
   const parsed = parser.parse(bpmnXml);
   const definitions = parsed?.definitions ?? parsed?.['bpmn:definitions'];

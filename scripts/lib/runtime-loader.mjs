@@ -1,7 +1,8 @@
 /**
  * Runtime Loader — 从隔离 Marketplace 插件加载运行时依赖。
  *
- * 加载顺序：插件本地 → 外部缓存。
+ * 加载顺序：manifest 校验 → verified user cache → 结构化错误。
+ * 禁止从插件本地 node_modules 加载（cache-only 模式）。
  * 缓存加载前必须通过 runtime manager 的状态校验。
  * 未知组件或未声明包一律结构化拒绝。
  */
@@ -128,42 +129,23 @@ function validateSpecifier(pluginRoot, component, specifier) {
   };
 }
 
-// ─── 本地优先查找 ───────────────────────────────────────────────────────
-
-/**
- * 在插件本地 node_modules 中查找包。
- * 仅接受 manifest 声明的精确版本。
- * 返回 { require } 或 null。
- */
-function findLocalWithVersion(pluginRoot, specifier, packageName, expectedVersion) {
-  const localNm = path.join(pluginRoot, 'node_modules');
-  if (!fs.existsSync(localNm)) return null;
-  const pkgJsonPath = path.join(localNm, packageName, 'package.json');
-  if (!fs.existsSync(pkgJsonPath)) return null;
-  try {
-    const req = createRequire(path.join(pluginRoot, 'package.json'));
-    req.resolve(specifier);
-    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
-    if (String(pkg.version).trim() === expectedVersion) {
-      return { require: req };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+// ─── Cache-only 模式 ──────────────────────────────────────────────────────
+// 删除本地优先查找路径，只允许从 verified user cache 加载。
+// 即使插件根存在同版本本地包，也不得加载。
 
 // ─── 缓存加载（带完整验证）─────────────────────────────────────────────
 
 /**
  * 从 manager 验证过的缓存中查找包。
  * 要求：state 完好、组件 READY、lock SHA 匹配、精确版本匹配。
+ * Cache-only 模式：即使插件根存在本地包，也只从缓存加载。
  * 返回 { require } 或抛出 RuntimeCapabilityError。
  */
 function findInCache(pluginRoot, cacheDir, manifest, component, specifier) {
   let runtimeStatus;
   try {
-    runtimeStatus = checkRuntime({ pluginRoot, cacheDir, env: process.env });
+    // cacheOnly: true 跳过插件本地 node_modules 检查
+    runtimeStatus = checkRuntime({ pluginRoot, cacheDir, env: process.env, cacheOnly: true });
   } catch (cause) {
     throw new RuntimeCapabilityError(
       `Runtime cache validation failed for component ${component}: ${cause.message}`,
@@ -175,22 +157,25 @@ function findInCache(pluginRoot, cacheDir, manifest, component, specifier) {
   }
 
   const componentStatus = runtimeStatus.components.find(item => item.name === component);
-  if (componentStatus?.status !== 'READY' || componentStatus.source !== 'cache') {
-    throw new RuntimeCapabilityError(
-      `Component ${component} is not READY in the verified runtime cache`,
-      component,
-      specifier,
-      getSetupCommands()
+
+  // cacheOnly 模式下，checkRuntime 只检查缓存，source 始终为 'cache'
+  if (componentStatus?.status === 'READY' && componentStatus.source === 'cache') {
+    const componentDir = path.join(
+      cacheDir,
+      'runtimes',
+      manifest.runtime_version,
+      component
     );
+    return { require: createRequire(path.join(componentDir, 'package.json')) };
   }
 
-  const componentDir = path.join(
-    cacheDir,
-    'runtimes',
-    manifest.runtime_version,
-    component
+  // 组件不在缓存中（MISSING、CORRUPT）
+  throw new RuntimeCapabilityError(
+    `Component ${component} is not READY in the verified runtime cache`,
+    component,
+    specifier,
+    getSetupCommands()
   );
-  return { require: createRequire(path.join(componentDir, 'package.json')) };
 }
 
 // ─── 同步 requireRuntimePackage ─────────────────────────────────────────
@@ -212,30 +197,13 @@ export function requireRuntimePackage(component, specifier, options = {}) {
   // 校验 component 和 specifier
   const { manifest, packageName, expectedVersion } = validateSpecifier(pluginRoot, component, specifier);
 
-  // 1. 本地优先（精确版本验证）
-  const local = findLocalWithVersion(pluginRoot, specifier, packageName, expectedVersion);
-  if (local) {
-    try {
-      return local.require(specifier);
-    } catch (e) {
-      // 已定位但执行失败 → 包装为能力错误，保留 cause
-      throw new RuntimeCapabilityError(
-        `Package ${specifier} execution failed in component ${component}: ${e.message}`,
-        component, specifier, getSetupCommands(), e
-      );
-    }
-  }
-
-  // 2. 缓存加载（完整验证）
+  // Cache-only: 只从 verified user cache 加载，不使用本地 node_modules
   try {
     const cache = findInCache(pluginRoot, cacheDir, manifest, component, specifier);
     return cache.require(specifier);
   } catch (e) {
     if (e instanceof RuntimeCapabilityError) {
-      // 如果是已知的能力错误（状态/版本/lock 问题），检查是否因缓存入口损坏需要保留 cause
-      // findInCache 不加载模块，只验证；真正加载在 cache.require(specifier) 中
-      // 如果上面 cache.require 成功就不会到这里
-      // 如果 findInCache 抛出能力错误，直接传播
+      // 如果是已知的能力错误（状态/版本/lock 问题），直接传播
       throw e;
     }
     // cache.require 执行失败 → 包装，保留 cause
@@ -265,23 +233,7 @@ export async function importRuntimePackage(component, specifier, options = {}) {
   // 校验 component 和 specifier
   const { manifest, packageName, expectedVersion } = validateSpecifier(pluginRoot, component, specifier);
 
-  // 1. 本地优先
-  const local = findLocalWithVersion(pluginRoot, specifier, packageName, expectedVersion);
-  if (local) {
-    try {
-      const resolvedPath = local.require.resolve(specifier);
-      const loaded = await import(pathToFileURL(resolvedPath).href);
-      return loaded.default ?? loaded;
-    } catch (e) {
-      if (e instanceof RuntimeCapabilityError) throw e;
-      throw new RuntimeCapabilityError(
-        `Package ${specifier} execution failed in component ${component}: ${e.message}`,
-        component, specifier, getSetupCommands(), e
-      );
-    }
-  }
-
-  // 2. 缓存加载
+  // Cache-only: 只从 verified user cache 加载，不使用本地 node_modules
   try {
     const cache = findInCache(pluginRoot, cacheDir, manifest, component, specifier);
     const resolvedPath = cache.require.resolve(specifier);

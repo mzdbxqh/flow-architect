@@ -152,6 +152,19 @@ module.exports = Ajv2020;
 module.exports.default = Ajv2020;
 `;
 
+    case 'ajv-formats':
+      return `
+// 确定性 ajv-formats 夹具
+module.exports = function addFormats(ajv) {
+  // 最小格式注册：对 'date-time' 格式做基本校验
+  ajv.addFormat('date-time', /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}/);
+  ajv.addFormat('email', /^.+@.+$/);
+  ajv.addFormat('uri', /^https?:\\/\\//);
+  return ajv;
+};
+module.exports.default = module.exports;
+`;
+
     case 'yaml':
       return `
 // 确定性 yaml 夹具

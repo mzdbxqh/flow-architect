@@ -11,8 +11,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Ajv2020 from 'ajv/dist/2020.js';
-import addFormats from 'ajv-formats';
+import { importRuntimePackage } from './runtime-loader.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const schemasDir = join(__dirname, '../../references/schemas');
@@ -22,6 +21,12 @@ let _validators = null;
 
 async function loadValidators() {
   if (_validators) return _validators;
+
+  // 通过 runtime loader 加载，兼容 CJS/ESM 导出形态
+  const Ajv2020Module = await importRuntimePackage('core', 'ajv/dist/2020.js');
+  const Ajv2020 = Ajv2020Module.default ?? Ajv2020Module;
+  const addFormatsModule = await importRuntimePackage('core', 'ajv-formats');
+  const addFormats = addFormatsModule.default ?? addFormatsModule;
 
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   addFormats(ajv);

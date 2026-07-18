@@ -7,23 +7,16 @@ settings:
 importers:
 
   .:
-    dependencies:
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.61.1
+        version: 1.61.1
       ajv:
         specifier: 8.20.0
         version: 8.20.0
       ajv-formats:
         specifier: 3.0.1
         version: 3.0.1(ajv@8.20.0)
-      fast-xml-parser:
-        specifier: 4.5.7
-        version: 4.5.7
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
-    devDependencies:
-      '@playwright/test':
-        specifier: 1.61.1
-        version: 1.61.1
       bpmn-js:
         specifier: 18.21.0
         version: 18.21.0
@@ -33,6 +26,9 @@ importers:
       exceljs:
         specifier: 4.4.0
         version: 4.4.0
+      fast-xml-parser:
+        specifier: 4.5.7
+        version: 4.5.7
       jszip:
         specifier: 3.10.1
         version: 3.10.1
@@ -42,6 +38,9 @@ importers:
       pdfjs-dist:
         specifier: 4.10.38
         version: 4.10.38
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
 packages:
 

@@ -12,7 +12,7 @@ import { validateContract } from '../scripts/lib/contract-validation.mjs';
 
 const FIXTURE_DIR = path.resolve(
   import.meta.dirname,
-  '../../../test/fixtures/e2e/public-procurement'
+  './fixtures/e2e/public-procurement'
 );
 
 function runReview() {

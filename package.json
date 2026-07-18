@@ -1,7 +1,8 @@
 {
   "name": "@flow-architect/plugin",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
+  "packageManager": "pnpm@10.30.0",
   "engines": {
     "node": ">=22"
   },
@@ -14,15 +15,14 @@
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
     "test:browser": "node --test test/meeting-package-browser.test.mjs test/meeting-f2-browser.test.mjs test/meeting-f3-browser.test.mjs test/process-draft-browser-e2e.test.mjs",
     "test:contract": "node scripts/check-skills.mjs && node scripts/build-adapters.mjs --check",
-    "test:smoke": "node --test test/integrated-review.test.mjs"
+    "test:smoke": "node --test test/integrated-review.test.mjs",
+    "public:release:verify": "node scripts/verify-public-release.mjs"
   },
-  "dependencies": {
+  "devDependencies": {
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "fast-xml-parser": "4.5.7",
-    "yaml": "2.9.0"
-  },
-  "devDependencies": {
+    "yaml": "2.9.0",
     "@playwright/test": "1.61.1",
     "bpmn-js": "18.21.0",
     "esbuild": "0.28.1",
