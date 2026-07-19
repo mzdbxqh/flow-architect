@@ -8,9 +8,14 @@ Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审
 - **一图两表：** 实际封装在同一个离线 HTML 的四个页签：流程图、流程卡片、L5 活动一览表、待确认问题。
 - **活动一览表字段：** 包含活动名称、描述、角色与 RASCI/OARP、SLA/LT、工具、输入、处理概要、输出、自工序完结标准、参考制度/标准/规范。
 - **模型不绘图：** 模型只输出受 Schema 约束的结构化业务事实和不确定项，不生成 BPMN XML、DI、坐标、折点、SVG 或 HTML；确定性程序负责编译、布局、重排与导出。
-- **有限工具箱：** HTML 使用有限业务工具箱。
+- **有限工具箱：** HTML 使用有限业务工具箱，所有图标为内联 SVG（无需字体加载，严格 CSP 和离线条件下正常工作）。
+- **编辑按钮选择态：** 工具栏编辑按钮在未选中元素时禁用，选中图元素后启用，避免无效操作。
+- **业务对话框：** 中间事件、结束事件、泳道、网关、顺序流均通过业务对话框操作，带空值校验，取消不改合同。
+- **顺序流门禁：** 自环、从结束事件出发、指向开始事件均被拦截。
+- **首访引导条：** 首次打开显示操作说明引导条，可关闭并持久化到 `localStorage`。
+- **标签页画布显隐：** 切换到非流程图标签页时 BPMN 画布完全隐藏。
 - **结构操作后确定性重排：** 每次结构操作后按固定算法全图重排，不保留手工坐标为权威状态。
-- **五类导出：** HTML、BPMN、SVG、问题 JSON、完整 V2 JSON；不导出 XLSX。
+- **五类导出：** HTML、BPMN、SVG、问题 JSON、完整 V2 JSON；不导出 XLSX。所有导出经 JSON Schema 门禁校验（CSP 安全的 Ajv 预编译）。
 
 ## 1. 能评审什么
 
@@ -50,7 +55,7 @@ Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审
 ### 3.1 从 GitHub 安装稳定版
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.3.1
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.0
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```

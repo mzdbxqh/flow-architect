@@ -4,6 +4,13 @@
  * 使用 Ajv + 真实 process-draft.schema.json 及其引用 Schema，
  * 对当前完整草稿执行与服务端构建器相同语义的 V2 Schema 校验。
  * 浏览器端校验必须来自可打包的确定性合同，不得联网，也不得复制会漂移的字段列表。
+ *
+ * 注意：本模块在 Node 侧（测试）以运行时 compile 方式使用。
+ * 浏览器 bundle 中，export-controller 对本模块的导入会在构建期被
+ * scripts/build-meeting-editor.mjs 重定向到 Ajv standalone 预编译版本
+ * （scripts/build-draft-validator-standalone.mjs），因为会议包 CSP
+ * 不允许 unsafe-eval，运行时 compile 在浏览器中必然失败。
+ * 修改本文件的 Schema 注册顺序或错误映射时，必须同步修改该生成器。
  */
 import Ajv2020 from 'ajv/dist/2020.js';
 

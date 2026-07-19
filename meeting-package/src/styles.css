@@ -1,14 +1,46 @@
+/* ─── 设计令牌 ───────────────────────────────────────────────────────── */
+:root {
+  --fa-primary: #1565c0;
+  --fa-primary-strong: #0d47a1;
+  --fa-primary-soft: #e8f0fe;
+  --fa-primary-border: #c7d9f5;
+  --fa-danger: #c62828;
+  --fa-danger-strong: #b71c1c;
+  --fa-danger-soft: #fdecea;
+  --fa-warning-bg: #fff8e1;
+  --fa-warning-border: #f0c75e;
+  --fa-warning-text: #8a6d1a;
+  --fa-text: #1f2329;
+  --fa-text-secondary: #5f6368;
+  --fa-text-disabled: #9aa0a6;
+  --fa-border: #e0e3e7;
+  --fa-border-strong: #cbd0d6;
+  --fa-bg: #f5f6f8;
+  --fa-surface: #ffffff;
+  --fa-surface-subtle: #fafbfc;
+  --fa-radius-sm: 4px;
+  --fa-radius: 6px;
+  --fa-radius-lg: 10px;
+  --fa-shadow-sm: 0 1px 2px rgba(60, 64, 67, 0.12), 0 1px 3px rgba(60, 64, 67, 0.08);
+  --fa-shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.25);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* hidden 属性优先于任何 display 设置（修复面板切换时残留空白区域） */
+[hidden] {
+  display: none !important;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.5;
-  color: #1a1a1a;
-  background: #f5f5f5;
+  color: var(--fa-text);
+  background: var(--fa-bg);
 }
 
 #fa-app {
@@ -17,52 +49,211 @@ body {
   height: 100vh;
 }
 
+/* ─── 顶部工具栏 ─────────────────────────────────────────────────────── */
 #fa-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 12px;
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
+  padding: 8px 16px;
+  background: var(--fa-surface);
+  border-bottom: 1px solid var(--fa-border);
 }
 
 #fa-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 #fa-revision {
-  font-size: 14px;
-  color: #666;
-  margin-left: 8px;
+  font-size: 12px;
+  color: var(--fa-text-secondary);
+  background: var(--fa-bg);
+  border: 1px solid var(--fa-border);
+  border-radius: 999px;
+  padding: 1px 10px;
+  white-space: nowrap;
 }
 
-/* Tab navigation */
+#fa-edit-controls,
+#fa-export-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#fa-edit-controls {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--fa-border);
+}
+
+#fa-export-controls {
+  margin-left: auto;
+  padding-left: 12px;
+  border-left: 1px solid var(--fa-border);
+}
+
+/* ─── 按钮 ───────────────────────────────────────────────────────────── */
+.fa-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.fa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--fa-text);
+  background: var(--fa-surface);
+  border: 1px solid var(--fa-border-strong);
+  border-radius: var(--fa-radius);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.fa-btn:hover:not(:disabled) {
+  background: var(--fa-surface-subtle);
+  border-color: var(--fa-text-disabled);
+}
+
+.fa-btn:focus-visible {
+  outline: 2px solid var(--fa-primary);
+  outline-offset: 1px;
+}
+
+.fa-btn:disabled {
+  color: var(--fa-text-disabled);
+  background: var(--fa-surface-subtle);
+  border-color: var(--fa-border);
+  cursor: not-allowed;
+}
+
+.fa-btn:disabled .fa-icon {
+  opacity: 0.6;
+}
+
+.fa-btn--primary {
+  color: #fff;
+  background: var(--fa-primary);
+  border-color: var(--fa-primary);
+  font-weight: 600;
+}
+
+.fa-btn--primary:hover:not(:disabled) {
+  background: var(--fa-primary-strong);
+  border-color: var(--fa-primary-strong);
+}
+
+.fa-btn--danger {
+  color: var(--fa-danger);
+}
+
+.fa-btn--danger:hover:not(:disabled) {
+  background: var(--fa-danger-soft);
+  border-color: var(--fa-danger);
+}
+
+/* ─── 未导出修改徽标 ─────────────────────────────────────────────────── */
+#fa-dirty-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fa-warning-text);
+  background: var(--fa-warning-bg);
+  border: 1px solid var(--fa-warning-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
+#fa-dirty-indicator::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fa-warning-border);
+}
+
+/* ─── 首访引导条 ─────────────────────────────────────────────────────── */
+#fa-guide-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #174ea6;
+  background: var(--fa-primary-soft);
+  border-bottom: 1px solid var(--fa-primary-border);
+}
+
+#fa-guide-banner > .fa-icon {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+#fa-guide-banner p {
+  flex: 1;
+}
+
+#fa-guide-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: var(--fa-radius-sm);
+  cursor: pointer;
+}
+
+#fa-guide-dismiss:hover {
+  background: rgba(21, 101, 192, 0.12);
+}
+
+/* ─── 标签页导航 ─────────────────────────────────────────────────────── */
 #fa-tabs {
   display: flex;
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
-  padding: 0 12px;
+  background: var(--fa-surface);
+  border-bottom: 1px solid var(--fa-border);
+  padding: 0 16px;
 }
 
 #fa-tabs [role="tab"] {
-  padding: 8px 16px;
+  padding: 9px 16px;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
   font-size: 14px;
-  color: #666;
+  color: var(--fa-text-secondary);
   transition: color 0.2s, border-color 0.2s;
 }
 
-#fa-tabs [role="tab"]:hover {
-  color: #1a1a1a;
+#fa-tabs [role="tab"]:hover:not(:disabled) {
+  color: var(--fa-text);
+}
+
+#fa-tabs [role="tab"]:disabled {
+  color: var(--fa-text-disabled);
+  cursor: not-allowed;
 }
 
 #fa-tabs [role="tab"][aria-selected="true"] {
-  color: #1565c0;
-  border-bottom-color: #1565c0;
+  color: var(--fa-primary);
+  border-bottom-color: var(--fa-primary);
   font-weight: 600;
 }
 
@@ -81,41 +272,52 @@ body {
 
 #fa-canvas {
   flex: 1;
-  background: #fff;
+  background: var(--fa-surface);
 }
 
-/* Card panel */
+/* 画布容器获得焦点时不显示整框 outline（选中元素自身有高亮） */
+#fa-canvas:focus,
+#fa-canvas .djs-container:focus,
+#fa-canvas .djs-container:focus-visible,
+#fa-canvas svg:focus,
+#fa-canvas svg:focus-visible {
+  outline: none;
+}
+
+/* ─── 流程卡片 ───────────────────────────────────────────────────────── */
 #fa-card-panel {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  background: #fff;
 }
 
 .fa-card-section {
-  margin-bottom: 20px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 12px;
+  margin: 0 auto 16px;
+  max-width: 960px;
+  border: 1px solid var(--fa-border);
+  border-radius: var(--fa-radius-lg);
+  background: var(--fa-surface);
+  box-shadow: var(--fa-shadow-sm);
+  padding: 16px 18px;
 }
 
 .fa-card-section h2 {
   font-size: 15px;
   font-weight: 600;
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #eee;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--fa-border);
 }
 
 .fa-field {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .fa-field label {
   display: block;
   font-size: 13px;
-  color: #444;
-  margin-bottom: 2px;
+  color: var(--fa-text-secondary);
+  margin-bottom: 3px;
 }
 
 .fa-field input[type="text"],
@@ -123,10 +325,26 @@ body {
 .fa-field select,
 .fa-field input[type="number"] {
   width: 100%;
-  padding: 4px 8px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
+  padding: 6px 10px;
+  border: 1px solid var(--fa-border-strong);
+  border-radius: var(--fa-radius-sm);
   font-size: 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.fa-field input[type="text"]:focus,
+.fa-field textarea:focus,
+.fa-field select:focus,
+.fa-field input[type="number"]:focus {
+  outline: none;
+  border-color: var(--fa-primary);
+  box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.15);
+}
+
+.fa-field input:disabled,
+.fa-field select:disabled {
+  background: var(--fa-surface-subtle);
+  color: var(--fa-text-secondary);
 }
 
 .fa-field textarea {
@@ -141,7 +359,7 @@ body {
 .fa-field-label {
   display: block;
   font-size: 13px;
-  color: #444;
+  color: var(--fa-text-secondary);
   margin-bottom: 4px;
   font-weight: 500;
 }
@@ -153,7 +371,7 @@ body {
 .fa-array-title {
   display: block;
   font-size: 13px;
-  color: #444;
+  color: var(--fa-text-secondary);
   margin-bottom: 4px;
   font-weight: 500;
 }
@@ -172,33 +390,34 @@ body {
 
 .fa-array-list li input {
   flex: 1;
-  padding: 3px 6px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
+  padding: 4px 8px;
+  border: 1px solid var(--fa-border-strong);
+  border-radius: var(--fa-radius-sm);
   font-size: 13px;
 }
 
 .fa-array-add,
 .fa-array-remove {
   font-size: 12px;
-  padding: 2px 8px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #f5f5f5;
+  padding: 3px 10px;
+  border: 1px solid var(--fa-border-strong);
+  border-radius: var(--fa-radius-sm);
+  background: var(--fa-surface-subtle);
   cursor: pointer;
 }
 
 .fa-array-add:hover {
-  background: #e3f2fd;
+  background: var(--fa-primary-soft);
+  border-color: var(--fa-primary-border);
 }
 
 .fa-array-remove {
-  color: #c62828;
+  color: var(--fa-danger);
   border-color: #ef9a9a;
 }
 
 .fa-array-remove:hover {
-  background: #ffebee;
+  background: var(--fa-danger-soft);
 }
 
 .fa-sla-row {
@@ -210,9 +429,9 @@ body {
 
 .fa-sla-row input,
 .fa-sla-row select {
-  padding: 3px 6px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
+  padding: 4px 8px;
+  border: 1px solid var(--fa-border-strong);
+  border-radius: var(--fa-radius-sm);
   font-size: 13px;
 }
 
@@ -220,12 +439,11 @@ body {
   width: 80px;
 }
 
-/* Activity panel */
+/* ─── 活动一览表 ─────────────────────────────────────────────────────── */
 #fa-activity-panel {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  background: #fff;
   display: flex;
   flex-direction: column;
 }
@@ -235,22 +453,30 @@ body {
 }
 
 .fa-activity-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 6px 16px;
-  background: #1565c0;
+  background: var(--fa-primary);
   color: #fff;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--fa-radius);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .fa-activity-add:hover {
-  background: #0d47a1;
+  background: var(--fa-primary-strong);
 }
 
 .fa-activity-table-wrap {
   flex: 1;
   overflow-x: auto;
+  background: var(--fa-surface);
+  border: 1px solid var(--fa-border);
+  border-radius: var(--fa-radius-lg);
+  box-shadow: var(--fa-shadow-sm);
 }
 
 #fa-activity-table {
@@ -261,13 +487,14 @@ body {
 
 #fa-activity-table th,
 #fa-activity-table td {
-  padding: 6px 8px;
-  border: 1px solid #e0e0e0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--fa-border);
   text-align: left;
 }
 
 #fa-activity-table th {
-  background: #f5f5f5;
+  background: var(--fa-surface-subtle);
+  color: var(--fa-text-secondary);
   font-weight: 600;
   position: sticky;
   top: 0;
@@ -278,18 +505,21 @@ body {
 }
 
 .fa-activity-row:hover {
-  background: #e3f2fd;
+  background: var(--fa-primary-soft);
 }
 
 .fa-activity-selected {
-  background: #bbdefb;
+  background: var(--fa-primary-border) !important;
 }
 
-/* Activity detail panel */
+/* ─── 活动详情面板 ───────────────────────────────────────────────────── */
 .fa-activity-detail {
-  border-top: 1px solid #e0e0e0;
-  padding: 12px;
-  background: #fafafa;
+  border: 1px solid var(--fa-border);
+  border-radius: var(--fa-radius-lg);
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: var(--fa-surface);
+  box-shadow: var(--fa-shadow-sm);
   max-height: 50vh;
   overflow-y: auto;
 }
@@ -302,10 +532,10 @@ body {
 .fa-detail-close {
   float: right;
   font-size: 12px;
-  padding: 2px 8px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #f5f5f5;
+  padding: 3px 10px;
+  border: 1px solid var(--fa-border-strong);
+  border-radius: var(--fa-radius-sm);
+  background: var(--fa-surface-subtle);
   cursor: pointer;
 }
 
@@ -339,42 +569,45 @@ body {
 }
 
 .fa-confirmation-info code {
-  background: #f5f5f5;
+  background: var(--fa-bg);
   padding: 1px 4px;
-  border-radius: 2px;
+  border-radius: var(--fa-radius-sm);
 }
 
 .fa-activity-delete {
-  padding: 4px 12px;
-  background: #c62828;
+  padding: 5px 14px;
+  background: var(--fa-danger);
   color: #fff;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--fa-radius);
   cursor: pointer;
   font-size: 13px;
 }
 
 .fa-activity-delete:hover {
-  background: #b71c1c;
+  background: var(--fa-danger-strong);
 }
 
-/* Questions panel */
+/* ─── 待确认问题 ─────────────────────────────────────────────────────── */
 #fa-questions-panel {
   overflow-y: auto;
 }
 
 #fa-questions {
   width: 100%;
-  background: #fff;
+  max-width: 960px;
+  margin: 0 auto;
   overflow-y: auto;
-  padding: 12px;
+  padding: 16px;
 }
 
 #fa-questions article {
   margin-bottom: 12px;
-  padding: 8px;
-  background: #f9f9f9;
-  border-radius: 4px;
+  padding: 12px 16px;
+  background: var(--fa-surface);
+  border: 1px solid var(--fa-border);
+  border-radius: var(--fa-radius-lg);
+  box-shadow: var(--fa-shadow-sm);
 }
 
 #fa-questions button {
@@ -385,25 +618,35 @@ body {
   border: none;
   cursor: pointer;
   font-size: 14px;
+  font-weight: 600;
+  color: var(--fa-text);
 }
 
 #fa-questions textarea {
   width: 100%;
   min-height: 60px;
-  margin-top: 4px;
-  padding: 4px;
-  border: 1px solid #ccc;
-  border-radius: 2px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--fa-border-strong);
+  border-radius: var(--fa-radius-sm);
   font-size: 14px;
+  font-family: inherit;
+}
+
+#fa-questions textarea:focus {
+  outline: none;
+  border-color: var(--fa-primary);
+  box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.15);
 }
 
 #fa-questions select {
   width: 100%;
-  margin-top: 4px;
-  padding: 4px;
-  border: 1px solid #ccc;
-  border-radius: 2px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--fa-border-strong);
+  border-radius: var(--fa-radius-sm);
   font-size: 14px;
+  background: var(--fa-surface);
 }
 
 .fa-question-badge {
@@ -423,17 +666,105 @@ body {
 }
 
 [aria-current="true"] {
-  background: #e3f2fd;
+  background: var(--fa-primary-soft);
 }
 
-/* Not applicable indicator */
+/* ─── 对话框 ─────────────────────────────────────────────────────────── */
+dialog {
+  border: none;
+  border-radius: var(--fa-radius-lg);
+  box-shadow: var(--fa-shadow-lg);
+  padding: 20px 22px;
+  min-width: 360px;
+  max-width: 520px;
+  color: var(--fa-text);
+  /* 全局 reset 清掉了 UA 的 margin:auto，显式恢复以保证模态居中 */
+  margin: auto;
+}
+
+dialog::backdrop {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+dialog p {
+  font-size: 13px;
+  color: var(--fa-text-secondary);
+  margin-bottom: 12px;
+}
+
+dialog form label {
+  display: block;
+  font-size: 13px;
+  color: var(--fa-text-secondary);
+  margin-bottom: 10px;
+}
+
+dialog form label input[type="text"],
+dialog form label select {
+  display: block;
+  width: 100%;
+  margin-top: 3px;
+  padding: 6px 10px;
+  border: 1px solid var(--fa-border-strong);
+  border-radius: var(--fa-radius-sm);
+  font-size: 14px;
+  background: var(--fa-surface);
+}
+
+dialog form label input[type="text"]:focus {
+  outline: none;
+  border-color: var(--fa-primary);
+  box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.15);
+}
+
+dialog form label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fa-text);
+}
+
+dialog menu {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+dialog menu button {
+  padding: 6px 16px;
+  font-size: 13px;
+  border: 1px solid var(--fa-border-strong);
+  border-radius: var(--fa-radius);
+  background: var(--fa-surface);
+  color: var(--fa-text);
+  cursor: pointer;
+}
+
+dialog menu button:hover {
+  background: var(--fa-surface-subtle);
+}
+
+dialog menu button[type="submit"] {
+  background: var(--fa-primary);
+  border-color: var(--fa-primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+dialog menu button[type="submit"]:hover {
+  background: var(--fa-primary-strong);
+}
+
+/* ─── 不适用提示 ─────────────────────────────────────────────────────── */
 .fa-not-applicable {
   padding: 40px;
   text-align: center;
-  color: #666;
+  color: var(--fa-text-secondary);
   font-size: 15px;
 }
 
+/* ─── bpmn-js 工具箱 ─────────────────────────────────────────────────── */
 /* Keep only the limited business palette visible; hide professional UI chrome. */
 .djs-context-pad,
 .djs-popup,
@@ -445,6 +776,24 @@ body {
 
 .djs-palette {
   display: block !important;
+  background: var(--fa-surface);
+  border: 1px solid var(--fa-border);
+  border-radius: var(--fa-radius-lg);
+  box-shadow: var(--fa-shadow-sm);
+  margin: 8px;
+  padding: 4px 0;
+  width: 48px;
+}
+
+.djs-palette .group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.djs-palette .group + .group {
+  border-top: 1px solid var(--fa-border);
 }
 
 .djs-palette .entry,
@@ -466,4 +815,22 @@ body {
 .djs-palette .entry[data-action="connect"],
 .djs-palette .entry[data-action="delete"] {
   display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin: 1px 0;
+  border-radius: var(--fa-radius);
+  cursor: pointer;
+}
+
+.djs-palette .entry[data-action]:hover {
+  background: var(--fa-primary-soft);
+}
+
+.djs-palette .entry img {
+  width: 20px;
+  height: 20px;
+  display: block;
+  pointer-events: none;
 }

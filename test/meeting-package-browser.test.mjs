@@ -427,8 +427,10 @@ test('palette sequence-flow action asks for a target and updates the determinist
   const before = await page.evaluate(() =>
     window.__FLOW_ARCHITECT__.store.snapshot().diagram.flows.length);
   await page.locator('[data-element-id="StartEvent_1"]').click();
-  page.once('dialog', dialog => dialog.accept('EndEvent_1'));
   await page.locator('.djs-palette [data-action="connect"]:visible').click();
+  await page.locator('#fa-connect-dialog').waitFor({ state: 'visible' });
+  await page.locator('#fa-connect-target').selectOption({ label: '结束' });
+  await page.getByRole('button', { name: '确认连接' }).click();
   await page.waitForFunction(
     expected => window.__FLOW_ARCHITECT__.store.snapshot().diagram.flows.length === expected,
     before + 1,
@@ -468,20 +470,22 @@ test('empty structural dialog input is rejected without closing or mutating the 
 test('palette end and lane actions update the contract through deterministic layout', async t => {
   const { page } = await openV2Fixture(t);
   await page.locator('[data-element-id="Task_Review"]').click();
-  page.once('dialog', dialog => dialog.accept('采购申请已拒绝'));
   await page.locator('.djs-palette [data-action="create.end"]:visible').click();
+  await page.locator('#fa-end-dialog').waitFor({ state: 'visible' });
+  await page.locator('#fa-end-input').fill('采购申请已拒绝');
+  await page.getByRole('button', { name: '确认新增' }).click();
   await page.waitForFunction(() =>
     window.__FLOW_ARCHITECT__.store.snapshot().process_card.end_results.length === 2);
 
-  const answers = ['法务', 'Role-legal'];
-  const answerDialog = dialog => dialog.accept(answers.shift());
-  page.on('dialog', answerDialog);
   await page.locator('.djs-palette [data-action="create.lane"]:visible').click();
+  await page.locator('#fa-lane-dialog').waitFor({ state: 'visible' });
+  await page.locator('#fa-lane-name').fill('法务');
+  await page.locator('#fa-lane-role').fill('Role-legal');
+  await page.getByRole('button', { name: '确认新增泳道' }).click();
   await page.waitForFunction(() =>
     window.__FLOW_ARCHITECT__.store.snapshot().diagram.lanes.some(
       lane => lane.role_id === 'Role-legal' && lane.name === '法务',
     ));
-  page.off('dialog', answerDialog);
 });
 
 test('palette internal confirmation creates a serial confirmation task only after all gates pass', async t => {

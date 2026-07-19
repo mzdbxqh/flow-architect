@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import esbuild from 'esbuild';
+import { generateDraftValidatorStandalone, generateBrowserSchemaValidator } from './build-draft-validator-standalone.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,20 +10,51 @@ const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(ROOT, 'meeting-package', 'src');
 const RUNTIME = path.join(ROOT, 'runtime', 'meeting-package');
 
+/**
+ * 浏览器端 Schema 校验器替换插件。
+ *
+ * 会议包 CSP 不允许 unsafe-eval，Ajv 运行时 compile 在浏览器中必失败。
+ * 构建时在 Node 侧预编译 standalone 校验器，并将 export-controller 对
+ * ./schema-validator.js 的导入重定向到预编译版本（Node 测试不受影响）。
+ */
+function createPrecompiledValidatorPlugin(workDir) {
+  const standalonePath = path.join(workDir, 'draft-validator.standalone.mjs');
+  const wrapperPath = path.join(workDir, 'schema-validator.browser.mjs');
+  fs.writeFileSync(standalonePath, generateDraftValidatorStandalone());
+  fs.writeFileSync(wrapperPath, generateBrowserSchemaValidator('./draft-validator.standalone.mjs'));
+  return {
+    name: 'fa-precompiled-draft-validator',
+    setup(buildApi) {
+      buildApi.onResolve({ filter: /^\.\/schema-validator\.js$/ }, (args) => {
+        if (args.importer.endsWith('export-controller.js')) {
+          return { path: wrapperPath };
+        }
+        return null;
+      });
+    },
+  };
+}
+
 export async function buildMeetingEditor({ write = true, check = false } = {}) {
-  const result = await esbuild.build({
-    entryPoints: [path.join(SRC, 'app.js')],
-    bundle: true,
-    minify: true,
-    platform: 'browser',
-    target: ['chrome120', 'edge120'],
-    write: false,
-    outdir: path.join(ROOT, 'temp-build'),
-    loader: { '.css': 'css' },
-    entryNames: '[name]',
-    chunkNames: '[name]',
-    assetNames: '[name]',
-  });
+  // workDir 必须位于包内，standalone 代码中的 require("ajv/dist/runtime/*") 才能被 esbuild 解析打包
+  const cacheParent = path.join(ROOT, 'node_modules', '.cache');
+  fs.mkdirSync(cacheParent, { recursive: true });
+  const workDir = fs.mkdtempSync(path.join(cacheParent, 'fa-meeting-build-'));
+  try {
+    const result = await esbuild.build({
+      entryPoints: [path.join(SRC, 'app.js')],
+      bundle: true,
+      minify: true,
+      platform: 'browser',
+      target: ['chrome120', 'edge120'],
+      write: false,
+      outdir: path.join(ROOT, 'temp-build'),
+      loader: { '.css': 'css' },
+      entryNames: '[name]',
+      chunkNames: '[name]',
+      assetNames: '[name]',
+      plugins: [createPrecompiledValidatorPlugin(workDir)],
+    });
 
   const jsFile = result.outputFiles.find(f => f.path.endsWith('.js'));
   const cssFile = result.outputFiles.find(f => f.path.endsWith('.css'));
@@ -57,6 +89,9 @@ export async function buildMeetingEditor({ write = true, check = false } = {}) {
   }
 
   return { ...output, problems: [] };
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
 }
 
 const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));

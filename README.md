@@ -89,8 +89,15 @@ The generated HTML:
 - Opens and edits offline without network access
 - Shows and edits the process diagram, process card, and activity catalog together
 - Supports bidirectional navigation between questions and process elements
-- Uses a limited BPMN toolbox and deterministic full re-layout after structural operations
+- Uses a limited BPMN toolbox with inline SVG icons (no font loading, works under strict CSP)
+- Toolbar edit buttons are disabled until a diagram element is selected
+- All structural operations (intermediate events, end events, lanes, gateways, sequence flows) use styled business dialogs with validation
+- Sequence flow connections filter out self-loops and invalid targets
+- A first-visit guide banner explains the workflow; dismissible and localStorage-persisted
+- Diagram panel is fully hidden when viewing other tabs
+- Deterministic full re-layout after every structural operation
 - Exports new HTML versions, BPMN, SVG, questions JSON, and the complete V2 JSON
+- All exports gated by JSON Schema validation (CSP-safe Ajv standalone precompilation)
 
 ## Confidence Degradation
 

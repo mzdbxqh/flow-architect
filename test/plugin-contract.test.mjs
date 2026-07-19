@@ -41,14 +41,14 @@ test('plugin.json skills path resolves to existing directory', () => {
   assert.ok(fs.existsSync(resolved), `skills path "${parsed.skills}" must resolve to an existing directory`);
 });
 
-test('all public plugin manifests use version 0.3.1', () => {
+test('all public plugin manifests use version 0.4.0', () => {
   const manifests = [
     '.codex-plugin/plugin.json',
     'adapters/codex/.codex-plugin/plugin.json',
     'adapters/claude/.claude-plugin/plugin.json',
   ];
   for (const manifest of manifests) {
-    assert.equal(readJson(manifest).version, '0.3.1', `${manifest} must use version 0.3.1`);
+    assert.equal(readJson(manifest).version, '0.4.0', `${manifest} must use version 0.4.0`);
   }
 });
 
@@ -73,7 +73,7 @@ test('claude marketplace points to the generated adapter', () => {
   assert.equal(marketplace.plugins.length, 1);
   assert.equal(marketplace.plugins[0].name, 'flow-architect');
   assert.equal(marketplace.plugins[0].source, './adapters/claude');
-  assert.equal(marketplace.plugins[0].version, '0.3.1');
+  assert.equal(marketplace.plugins[0].version, '0.4.0');
 });
 
 test('legacy Claude adapter marketplace is not published', () => {
@@ -112,6 +112,29 @@ for (const skillName of ENTRY_SKILLS) {
       `Entry skill "${skillName}" must NOT have a category in frontmatter`);
   });
 }
+
+// --- test:browser script contract ---
+
+test('test:browser uses test-with-runtime.mjs for runtime bootstrap', () => {
+  const pkg = readJson('package.json');
+  const browserScript = pkg.scripts['test:browser'];
+  assert.ok(browserScript, 'test:browser script must exist');
+  assert.ok(browserScript.includes('test-with-runtime.mjs'),
+    'test:browser must route through test-with-runtime.mjs for runtime bootstrap');
+});
+
+test('test:browser includes all three new browser test files', () => {
+  const pkg = readJson('package.json');
+  const browserScript = pkg.scripts['test:browser'];
+  for (const file of [
+    'test/meeting-export-downloads-browser.test.mjs',
+    'test/meeting-structural-dialogs-browser.test.mjs',
+    'test/meeting-usability-browser.test.mjs',
+  ]) {
+    assert.ok(browserScript.includes(file),
+      `test:browser must include ${file}`);
+  }
+});
 
 // --- Plugin adapter loading tests ---
 

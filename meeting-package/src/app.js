@@ -182,9 +182,37 @@ import * as structuralCommands from './structural-commands.js';
   const diagramController = new DiagramController(modeler, store.snapshot().questions, { store, autoLayout });
   const exportController = new ExportController({ modeler, payload, store, compileBpmn });
 
+  // --- Guide banner ---
+  const guideBanner = document.querySelector('#fa-guide-banner');
+  const guideDismiss = document.querySelector('#fa-guide-dismiss');
+  let guideSeen = false;
+  try { guideSeen = localStorage.getItem('fa-guide-v1-dismissed') === '1'; } catch { /* file:// 等环境下忽略 */ }
+  if (guideBanner && guideSeen) guideBanner.hidden = true;
+  if (guideDismiss && guideBanner) {
+    guideDismiss.addEventListener('click', () => {
+      guideBanner.hidden = true;
+      try { localStorage.setItem('fa-guide-v1-dismissed', '1'); } catch { /* 忽略持久化失败 */ }
+    });
+  }
+
+  // --- Selection-dependent edit controls ---
+  // 编辑按钮在未选中图元素时禁用，避免“点了没反应/弹 alert”的事后报错体验。
+  const selectionButtons = ['#fa-rename', '#fa-insert-task', '#fa-add-gateway', '#fa-delete']
+    .map(selector => document.querySelector(selector))
+    .filter(Boolean);
+  function updateSelectionButtons() {
+    const hasSelection = Boolean(diagramController.selected);
+    for (const button of selectionButtons) {
+      button.disabled = !hasSelection;
+    }
+  }
+  modeler.on('selection.changed', () => updateSelectionButtons());
+  updateSelectionButtons();
+
   // --- Palette business event routing ---
   let pendingDeleteTarget = null;
   let pendingConfirmationActivityId = null;
+  let pendingActionSourceId = null;
   let currentGatewayType = 'XOR';
   const eventBus = modeler.get('eventBus');
 
@@ -245,62 +273,45 @@ import * as structuralCommands from './structural-commands.js';
       case 'create.intermediate': {
         const selected = diagramController.selected;
         if (!selected) { alert('请先选择一个节点'); return; }
-        const name = prompt('中间事件名称');
-        if (!name) return;
-        const doIntermediate = (store) => structuralCommands.addIntermediateEventAfter(
-          store,
-          selected.id,
-          { name, event_type: 'INTERMEDIATE_MESSAGE_CATCH' },
-        );
-        if (autoLayout) {
-          autoLayout.applyStructureChange(doIntermediate, '添加中间事件').catch(e => alert(e.message));
-        } else {
-          try { doIntermediate(store); } catch (e) { alert(e.message); }
-        }
+        pendingActionSourceId = selected.id;
+        document.querySelector('#fa-intermediate-input').value = '';
+        document.querySelector('#fa-intermediate-dialog').showModal();
         break;
       }
       case 'create.end': {
         const selected = diagramController.selected;
         if (!selected) { alert('请先选择一个节点'); return; }
-        const name = prompt('结束结果名称');
-        if (!name) return;
-        const doEnd = (store) => structuralCommands.addEndResultAfter(
-          store,
-          selected.id,
-          { name },
-        );
-        if (autoLayout) {
-          autoLayout.applyStructureChange(doEnd, '添加结束事件').catch(e => alert(e.message));
-        } else {
-          try { doEnd(store); } catch (e) { alert(e.message); }
-        }
+        pendingActionSourceId = selected.id;
+        document.querySelector('#fa-end-input').value = '';
+        document.querySelector('#fa-end-dialog').showModal();
         break;
       }
       case 'create.lane': {
-        const name = prompt('泳道名称');
-        if (!name) return;
-        const roleId = prompt('角色 ID');
-        if (!roleId) return;
-        const doLane = (store) => structuralCommands.addLane(store, { name, role_id: roleId });
-        if (autoLayout) {
-          autoLayout.applyStructureChange(doLane, '添加泳道').catch(e => alert(e.message));
-        } else {
-          try { doLane(store); } catch (e) { alert(e.message); }
-        }
+        document.querySelector('#fa-lane-name').value = '';
+        document.querySelector('#fa-lane-role').value = '';
+        document.querySelector('#fa-lane-dialog').showModal();
         break;
       }
       case 'connect': {
         const selected = diagramController.selected;
         if (!selected) { alert('请先选择顺序流的源节点'); return; }
-        const targetId = prompt('请输入顺序流目标节点 ID');
-        if (!targetId) return;
-        const connect = store => structuralCommands.connectNodes(
-          store,
-          selected.id,
-          targetId.trim(),
-          null,
-        );
-        autoLayout.applyStructureChange(connect, '添加顺序流').catch(e => alert(e.message));
+        if (selected.type === 'bpmn:EndEvent') {
+          alert('FA-DRAFT-FLOW-001: 不允许从结束事件出发创建连接');
+          return;
+        }
+        // 目标候选：排除自身（自环）和 START_EVENT（门禁规则 FA-DRAFT-FLOW-001）
+        const candidates = store.snapshot().diagram.nodes.filter(node =>
+          node.node_id !== selected.id && node.node_type !== 'START_EVENT');
+        if (candidates.length === 0) { alert('没有可连接的目标节点'); return; }
+        pendingActionSourceId = selected.id;
+        const select = document.querySelector('#fa-connect-target');
+        select.replaceChildren(...candidates.map(node => {
+          const option = document.createElement('option');
+          option.value = node.node_id;
+          option.textContent = node.name || node.node_id;
+          return option;
+        }));
+        document.querySelector('#fa-connect-dialog').showModal();
         break;
       }
       case 'delete': {
@@ -450,6 +461,96 @@ import * as structuralCommands from './structural-commands.js';
   document.querySelector('#fa-delete-cancel').addEventListener('click', () => {
     pendingDeleteTarget = null;
     document.querySelector('#fa-delete-confirm-dialog').close();
+  });
+
+  // 顺序流对话框：确认/取消
+  document.querySelector('#fa-connect-confirm').addEventListener('click', async (event) => {
+    event.preventDefault();
+    const targetId = document.querySelector('#fa-connect-target').value;
+    if (!targetId) { alert('请选择目标节点'); return; }
+    if (!pendingActionSourceId) { alert('请先选择顺序流的源节点'); return; }
+    const connect = store => structuralCommands.connectNodes(store, pendingActionSourceId, targetId, null);
+    try {
+      await autoLayout.applyStructureChange(connect, '添加顺序流');
+      pendingActionSourceId = null;
+      document.querySelector('#fa-connect-dialog').close();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+
+  document.querySelector('#fa-connect-cancel').addEventListener('click', () => {
+    pendingActionSourceId = null;
+    document.querySelector('#fa-connect-dialog').close();
+  });
+
+  // 中间事件对话框：确认/取消
+  document.querySelector('#fa-intermediate-confirm').addEventListener('click', async (event) => {
+    event.preventDefault();
+    const name = document.querySelector('#fa-intermediate-input').value.trim();
+    if (!name) { alert('中间事件名称不能为空'); return; }
+    if (!pendingActionSourceId) { alert('请先选择一个节点'); return; }
+    const doIntermediate = (store) => structuralCommands.addIntermediateEventAfter(
+      store,
+      pendingActionSourceId,
+      { name, event_type: 'INTERMEDIATE_MESSAGE_CATCH' },
+    );
+    try {
+      await autoLayout.applyStructureChange(doIntermediate, '添加中间事件');
+      pendingActionSourceId = null;
+      document.querySelector('#fa-intermediate-dialog').close();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+
+  document.querySelector('#fa-intermediate-cancel').addEventListener('click', () => {
+    pendingActionSourceId = null;
+    document.querySelector('#fa-intermediate-dialog').close();
+  });
+
+  // 结束事件对话框：确认/取消
+  document.querySelector('#fa-end-confirm').addEventListener('click', async (event) => {
+    event.preventDefault();
+    const name = document.querySelector('#fa-end-input').value.trim();
+    if (!name) { alert('结束结果名称不能为空'); return; }
+    if (!pendingActionSourceId) { alert('请先选择一个节点'); return; }
+    const doEnd = (store) => structuralCommands.addEndResultAfter(
+      store,
+      pendingActionSourceId,
+      { name },
+    );
+    try {
+      await autoLayout.applyStructureChange(doEnd, '添加结束事件');
+      pendingActionSourceId = null;
+      document.querySelector('#fa-end-dialog').close();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+
+  document.querySelector('#fa-end-cancel').addEventListener('click', () => {
+    pendingActionSourceId = null;
+    document.querySelector('#fa-end-dialog').close();
+  });
+
+  // 泳道对话框：确认/取消
+  document.querySelector('#fa-lane-confirm').addEventListener('click', async (event) => {
+    event.preventDefault();
+    const name = document.querySelector('#fa-lane-name').value.trim();
+    const roleId = document.querySelector('#fa-lane-role').value.trim();
+    if (!name || !roleId) { alert('泳道名称和角色 ID 均不能为空'); return; }
+    const doLane = (store) => structuralCommands.addLane(store, { name, role_id: roleId });
+    try {
+      await autoLayout.applyStructureChange(doLane, '添加泳道');
+      document.querySelector('#fa-lane-dialog').close();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+
+  document.querySelector('#fa-lane-cancel').addEventListener('click', () => {
+    document.querySelector('#fa-lane-dialog').close();
   });
 
   document.querySelector('#fa-export-html').addEventListener('click', () => {

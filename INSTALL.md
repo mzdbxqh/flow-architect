@@ -14,7 +14,7 @@ The plugin has no Python runtime dependency and no project-developed npm package
 Install the stable GitHub release:
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.3.1
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.0
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```
@@ -64,7 +64,7 @@ claude --plugin-dir "$PWD/adapters/claude"
 ## Upgrading from v0.2.x
 
 1. Uninstall the old plugin: `/plugin uninstall flow-architect@flow-architect` (Claude) or `codex plugin remove flow-architect@flow-architect` (Codex).
-2. Install v0.3.1 following the instructions above.
+2. Install v0.4.0 following the instructions above.
 3. Run `/flow-architect:setup` to re-initialize the runtime cache. The setup command is idempotent and reuses existing verified caches.
 
 ## Upgrading from v0.1.x

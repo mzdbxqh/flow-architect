@@ -2,6 +2,34 @@
 
 All notable changes to Flow Architect are documented in this file.
 
+## [0.4.0] - 2026-07-20
+
+### Added
+
+- **Selection-dependent edit controls:** Toolbar buttons (rename, insert activity, add gateway, delete) are disabled until a diagram element is selected, preventing confused clicks.
+- **First-visit guide banner:** New users see a guide banner explaining the meeting package workflow; dismissible with `localStorage` persistence, graceful degradation when `localStorage` is unavailable.
+- **Business dialogs for all structural operations:** Intermediate events, end events, lanes, AND/OR gateways, and sequence flows now use styled `<dialog>` elements instead of native `prompt`/`alert`, with empty-field validation.
+- **Sequence flow candidate filtering:** Connection dialog filters out self-loops and START_EVENT targets; connections from END_EVENT are rejected with code FA-DRAFT-FLOW-001.
+- **AND/OR gateway browser coverage:** AND and OR gateways can now be created through the full browser UI dialog path (previously only XOR had browser E2E coverage).
+- **Inline SVG palette icons:** Toolbox entries use data URI SVG icons instead of bpmn-icon font glyphs, working under strict CSP (`font-src 'none'`) and offline conditions.
+- **Tab canvas visibility:** Diagram panel is fully hidden when switching to non-diagram tabs, eliminating residual whitespace.
+- **Root `.claude-plugin/plugin.json`:** Generated deterministically by `scripts/build-adapters.mjs` for direct local plugin loading; `skills/` and `commands/` paths resolve correctly from the public repo root.
+- **`SECURITY.md`:** Vulnerability reporting guidance, supported versions, and responsible disclosure policy.
+- **`CONTRIBUTING.md`:** Development environment setup, TDD workflow, build/test/verify commands, and commit boundary rules.
+- **ADR-004:** Documents the CSP-safe Ajv standalone precompilation strategy for browser-side schema validation.
+- **Three new browser E2E test files:** `meeting-export-downloads-browser.test.mjs`, `meeting-structural-dialogs-browser.test.mjs`, `meeting-usability-browser.test.mjs` covering export reliability, dialog interactions, and visual usability.
+- **`test:browser` script extended** to include all seven browser test files.
+
+### Changed
+
+- **Version bumped to 0.4.0** across `package.json`, `build-adapters.mjs` (`PLUGIN_VERSION`), root and adapter `plugin.json` manifests, and marketplace manifests.
+- **Runtime plugin compatibility extended** to `>=0.1.2 <0.5.0` in all `manifest.json` files and `runtime-manager.mjs`.
+
+### Security/Compatibility
+
+- **Strict CSP preserved:** No `unsafe-eval` or `unsafe-inline` in script-src; Ajv standalone precompilation ensures all exports work under the existing CSP policy.
+- **Offline-first icons:** All toolbox icons are inline SVG data URIs, requiring no network or font loading.
+
 ## [0.3.1] - 2026-07-18
 
 ### Fixed

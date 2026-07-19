@@ -106,7 +106,7 @@ test('published dependency declaration keeps exact core and test-only optional p
   }
 });
 
-test('Chinese guide documents the supported Marketplace setup path for v0.3.1', () => {
+test('Chinese guide documents the supported Marketplace setup path for v0.4.0', () => {
   const guide = read('docs/zh-CN/user-guide.md');
   assert.match(guide, /\/plugin marketplace add mzdbxqh\/flow-architect/);
   assert.match(guide, /\/plugin install flow-architect@flow-architect/);
@@ -130,7 +130,7 @@ test('top-level installation documents do not advertise the superseded v0.1.1 pa
   }
 });
 
-test('stable install references use v0.3.x across README.zh-CN, INSTALL, user-guide, help command and help skill', () => {
+test('stable install references use current version across README.zh-CN, INSTALL, user-guide, help command and help skill', () => {
   const filesWithVersion = [
     { file: 'README.zh-CN.md', content: read('README.zh-CN.md') },
     { file: 'INSTALL.md', content: read('INSTALL.md') },
@@ -140,6 +140,6 @@ test('stable install references use v0.3.x across README.zh-CN, INSTALL, user-gu
   ];
   for (const { file, content } of filesWithVersion) {
     assert.doesNotMatch(content, /v0\.2\.0/, `${file} must not reference the superseded v0.2.0`);
-    assert.match(content, /v0\.3\.[01]/, `${file} must reference v0.3.0 or v0.3.1`);
+    assert.match(content, /v0\.3\.[01]|v0\.4\.0/, `${file} must reference v0.3.x or v0.4.0`);
   }
 });

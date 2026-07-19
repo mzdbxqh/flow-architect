@@ -5,7 +5,7 @@ import os from 'node:os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PLUGIN_VERSION = '0.3.1';
+const PLUGIN_VERSION = '0.4.0';
 
 /**
  * Build adapter outputs for both Codex and Claude platforms.
@@ -120,6 +120,27 @@ export function buildAdapterOutputs(pluginRoot) {
   }, null, 2) + '\n';
   outputs.set('.codex-plugin/plugin.json', {
     content: Buffer.from(rootCodexPluginJson),
+    mode: 0o644
+  });
+
+  // Generate root .claude-plugin/plugin.json for direct local plugin loading.
+  // When the public subproject is used as a Claude Code plugin directory,
+  // skills/ and commands/ resolve relative to the plugin root.
+  const rootClaudePluginJson = JSON.stringify({
+    name: 'flow-architect',
+    version: PLUGIN_VERSION,
+    description: 'Process architecture review, draft, and meeting package skill family',
+    author: { name: 'flow-architect contributors' },
+    license: 'Apache-2.0',
+    keywords: ['architecture', 'review', 'draft', 'meeting', 'bpmn', 'process', 'diagram'],
+    skills: './skills/',
+    commands: [
+      './commands/help.md',
+      './commands/setup.md'
+    ]
+  }, null, 2) + '\n';
+  outputs.set('.claude-plugin/plugin.json', {
+    content: Buffer.from(rootClaudePluginJson),
     mode: 0o644
   });
 

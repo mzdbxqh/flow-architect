@@ -12,21 +12,26 @@
     <header id="fa-toolbar">
       <h1 id="fa-title"></h1>
       <span id="fa-revision"></span>
-      <nav id="fa-edit-controls">
-        <button type="button" id="fa-rename" aria-label="修改名称">修改名称</button>
-        <button type="button" id="fa-insert-task" aria-label="后插活动">后插活动</button>
-        <button type="button" id="fa-add-gateway" aria-label="增加判断">增加判断</button>
-        <button type="button" id="fa-delete" aria-label="删除活动">删除活动</button>
+      <nav id="fa-edit-controls" aria-label="编辑">
+        <button type="button" id="fa-rename" class="fa-btn" aria-label="修改名称" title="修改所选元素的名称" disabled><svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>修改名称</button>
+        <button type="button" id="fa-insert-task" class="fa-btn" aria-label="后插活动" title="在所选活动之后插入一个新活动" disabled><svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M12 8.5v7M8.5 12h7"/></svg>后插活动</button>
+        <button type="button" id="fa-add-gateway" class="fa-btn" aria-label="增加判断" title="在所选活动之后追加判断分支" disabled><svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 21.5 12 12 21.5 2.5 12Z"/></svg>增加判断</button>
+        <button type="button" id="fa-delete" class="fa-btn fa-btn--danger" aria-label="删除活动" title="删除当前选中的元素" disabled><svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16M9.5 6V4.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V6M6.5 6.5l1 12a2 2 0 0 0 2 1.8h5a2 2 0 0 0 2-1.8l1-12"/></svg>删除活动</button>
       </nav>
-      <nav id="fa-export-controls">
-        <button type="button" id="fa-export-html" aria-label="导出新版本">导出新版本</button>
-        <button type="button" id="fa-export-bpmn" aria-label="导出 BPMN">导出 BPMN</button>
-        <button type="button" id="fa-export-svg" aria-label="导出 SVG">导出 SVG</button>
-        <button type="button" id="fa-export-questions" aria-label="导出问题">导出问题</button>
-        <button type="button" id="fa-export-full-json" aria-label="导出完整 JSON">导出完整 JSON</button>
+      <nav id="fa-export-controls" aria-label="导出">
+        <button type="button" id="fa-export-html" class="fa-btn fa-btn--primary" aria-label="导出新版本" title="生成包含当前全部修改的新版本 HTML，用于回传"><svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11m0 0 4-4m-4 4-4-4"/><path d="M4.5 16.5V18a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-1.5"/></svg>导出新版本</button>
+        <button type="button" id="fa-export-bpmn" class="fa-btn" aria-label="导出 BPMN" title="导出 BPMN 2.0 XML 文件"><svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 2.5H7a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M13.5 2.5V8H19"/></svg>导出 BPMN</button>
+        <button type="button" id="fa-export-svg" class="fa-btn" aria-label="导出 SVG" title="导出流程图 SVG 图片"><svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m20 16-4.2-4.2L6.5 21"/></svg>导出 SVG</button>
+        <button type="button" id="fa-export-questions" class="fa-btn" aria-label="导出问题" title="导出待确认问题清单"><svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.2a2.6 2.6 0 0 1 5 .8c0 1.7-2.6 2.2-2.6 3.5"/><path d="M12 16.8h.01"/></svg>导出问题</button>
+        <button type="button" id="fa-export-full-json" class="fa-btn" aria-label="导出完整 JSON" title="导出完整结构化数据（JSON）"><svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 3.5H7.8a2 2 0 0 0-2 2V9a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3.5a2 2 0 0 0 2 2h.7"/><path d="M15.5 3.5h.7a2 2 0 0 1 2 2V9a2 2 0 0 0 2 2 2 2 0 0 0-2 2v3.5a2 2 0 0 1-2 2h-.7"/></svg>导出完整 JSON</button>
       </nav>
       <span id="fa-dirty-indicator" hidden>存在未导出修改</span>
     </header>
+    <div id="fa-guide-banner" role="note">
+      <svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 7.5h.01"/></svg>
+      <p>这是一个可评审、可修改的流程讨论包：请在「待确认问题」页逐条填写结论并更新状态；所有修改只保存在当前页面中，完成后请点击右上角「导出新版本」并回传生成的文件。</p>
+      <button type="button" id="fa-guide-dismiss" aria-label="关闭引导"><svg class="fa-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 7 7 17M7 7l10 10"/></svg></button>
+    </div>
     <nav id="fa-tabs" role="tablist">
       <button type="button" role="tab" id="fa-tab-diagram" aria-selected="true" aria-controls="fa-diagram-panel" tabindex="0">流程图</button>
       <button type="button" role="tab" id="fa-tab-card" aria-selected="false" aria-controls="fa-card-panel" tabindex="-1">流程卡片</button>
@@ -83,6 +88,31 @@
           <button type="button" id="fa-delete-cancel">取消</button>
           <button type="submit" id="fa-delete-confirm">确认删除</button>
         </menu>
+      </form>
+    </dialog>
+    <dialog id="fa-connect-dialog">
+      <form method="dialog">
+        <label>目标节点<select id="fa-connect-target" aria-label="目标节点" required></select></label>
+        <menu><button type="button" id="fa-connect-cancel">取消</button><button type="submit" id="fa-connect-confirm">确认连接</button></menu>
+      </form>
+    </dialog>
+    <dialog id="fa-intermediate-dialog">
+      <form method="dialog">
+        <label>中间事件名称<input type="text" id="fa-intermediate-input" aria-label="中间事件名称" required></label>
+        <menu><button type="button" id="fa-intermediate-cancel">取消</button><button type="submit" id="fa-intermediate-confirm">确认新增</button></menu>
+      </form>
+    </dialog>
+    <dialog id="fa-end-dialog">
+      <form method="dialog">
+        <label>结束结果名称<input type="text" id="fa-end-input" aria-label="结束结果名称" required></label>
+        <menu><button type="button" id="fa-end-cancel">取消</button><button type="submit" id="fa-end-confirm">确认新增</button></menu>
+      </form>
+    </dialog>
+    <dialog id="fa-lane-dialog">
+      <form method="dialog">
+        <label>泳道名称<input type="text" id="fa-lane-name" aria-label="泳道名称" required></label>
+        <label>角色 ID<input type="text" id="fa-lane-role" aria-label="角色 ID" required></label>
+        <menu><button type="button" id="fa-lane-cancel">取消</button><button type="submit" id="fa-lane-confirm">确认新增泳道</button></menu>
       </form>
     </dialog>
   </div>
