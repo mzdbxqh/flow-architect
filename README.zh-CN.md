@@ -46,11 +46,19 @@ Claude Code Marketplace（推荐）：
 
 **流程图：** BPMN 2.0 XML、Mermaid、SVG、PNG、JPEG、扫描 PDF。
 
+## 安全起步
+
+<!-- release-skill:capability:safe-first-command -->
+
+最安全的第一条命令是 **`/flow-architect:help`** — 它是只读的，会展示所有可用技能、运行时状态、支持格式、示例和诊断信息，不会修改任何文件。
+
 ## 能力边界
+
+<!-- release-skill:capability:external-write-boundary -->
 
 评审技能为**只读**：检查现有制品并输出结构化 Finding，不修改原始输入。
 
-创建技能（`flow-architect-draft-process`、`flow-architect-build-meeting-package`）在用户指定的独立运行目录创建新制品，不修改原始输入。初稿生成全程确定性（零 LLM）：抽取、分批、BPMN 生成、HTML 打包均为纯代码；LLM 仅在逐批语义解释时调用。两条路径互补：初稿产出可评审的制品，评审技能评估这些制品。
+创建技能（`flow-architect-draft-process`、`flow-architect-build-meeting-package`）**仅在**用户授权的独立运行目录创建新制品，不修改原始输入。初稿生成全程确定性（零 LLM）：抽取、分批、BPMN 生成、HTML 打包均为纯代码；LLM 仅在逐批语义解释时调用。两条路径互补：初稿产出可评审的制品，评审技能评估这些制品。
 
 ## 流程初稿 — 格式支持
 

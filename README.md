@@ -25,11 +25,19 @@ The default entry skill (`flow-architect`) inspects your input files, determines
 
 **Process diagrams:** BPMN 2.0 XML, Mermaid, SVG, PNG, JPEG, scanned PDF.
 
+## Getting Started Safely
+
+<!-- release-skill:capability:safe-first-command -->
+
+The safest first command is **`/flow-architect:help`** — it is read-only, shows all available skills, runtime status, supported formats, examples, and diagnostics without modifying any files.
+
 ## Capability Boundary
+
+<!-- release-skill:capability:external-write-boundary -->
 
 Review skills are **read-only**: they inspect existing artifacts and produce structured findings without modifying, creating, or fixing any user files.
 
-Creation skills (`flow-architect-draft-process`, `flow-architect-build-meeting-package`) generate new artifacts in a user-authorized run directory, without modifying original inputs. Draft generation is deterministic (zero LLM for extraction, batching, BPMN generation, and HTML packaging); LLM is only invoked during per-batch semantic interpretation. The two paths are complementary: drafts produce reviewable artifacts, and review skills evaluate them.
+Creation skills (`flow-architect-draft-process`, `flow-architect-build-meeting-package`) generate new artifacts **only** in a user-authorized run directory, without modifying original inputs. Draft generation is deterministic (zero LLM for extraction, batching, BPMN generation, and HTML packaging); LLM is only invoked during per-batch semantic interpretation. The two paths are complementary: drafts produce reviewable artifacts, and review skills evaluate them.
 
 ## Process Draft — Format Support
 
