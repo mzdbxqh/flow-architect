@@ -40,7 +40,7 @@ test('release project binds the published v0.4.0 baseline and maps every new qui
   const content = fs.readFileSync(projectPath, 'utf8');
 
   // previousPublicBaseline must point at the published v0.4.0 tag and exact commit
-  assert.match(content, /refs\/tags\/v0\.4\.0\^\{\}/, 'baseline ref must be the published v0.4.0 tag');
+  assert.match(content, /ref:\s*["']?refs\/tags\/v0\.4\.0["']?/, 'baseline ref must be the published lightweight v0.4.0 tag');
   assert.match(content, /9f0d3d2c21fbdf3f558022a9947407504dd763b9/, 'baseline commit must be exact');
   assert.doesNotMatch(content, /555deb81e087a969a6e1171b00970979841e6375/, 'stale v0.3.1 baseline commit must be replaced');
 
