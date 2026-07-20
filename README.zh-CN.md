@@ -25,6 +25,34 @@ Claude Code Marketplace（推荐）：
 
 完整的安装、入口选择、提示词示例、更新、卸载和故障排查见[中文用户手册](docs/zh-CN/user-guide.md)。
 
+### 从源码验证（贡献者）
+
+如需从源码验证插件或参与开发：
+
+```bash
+git clone https://github.com/mzdbxqh/flow-architect.git
+cd flow-architect
+corepack enable
+pnpm install --frozen-lockfile
+pnpm test
+```
+
+此方式仅供贡献者使用；普通用户应通过上方的市场安装方式。
+
+## 最小验证示例
+
+安装完成后，运行帮助命令验证是否正常工作：
+
+```bash
+# Claude Code
+/flow-architect:help
+
+# Codex
+$flow-architect-help
+```
+
+此只读命令会展示所有可用技能、运行时状态、支持格式、示例和诊断信息，不会修改任何文件。如果看到能力表格和运行时状态，说明安装成功。
+
 ## 入口 Skill
 
 | Skill | 用途 |
@@ -180,6 +208,28 @@ runs/flow-architect/<run-id>/
 ```
 
 运行根目录由用户或目标项目决定，不写入已安装插件目录。
+
+## 故障排查
+
+### 安装失败
+
+- **Codex：** 运行 `codex plugin list` 检查插件是否已注册。如果未注册，运行 `codex plugin marketplace list` 验证市场访问。
+- **Claude Code：** 运行 `/plugin list` 验证安装。如果插件未出现，尝试 `/reload-plugins` 或参见[中文用户手册](docs/zh-CN/user-guide.md)。
+
+### 帮助命令不可见
+
+- **Claude Code：** 确保安装后运行了 `/reload-plugins`。如果仍不可见，尝试重启 Claude Code 会话。
+- **Codex：** 运行 `codex plugin list` 验证插件已安装。帮助命令应显示为 `$flow-architect-help`。
+
+### 运行时组件未就绪
+
+- 运行 `/flow-architect:setup`（Claude Code）或 `$flow-architect-setup`（Codex）初始化 core 和可选组件。
+- 运行 `/flow-architect:help` 或 `$flow-architect-help` 检查运行时状态和诊断信息。
+- 参见[中文用户手册](docs/zh-CN/user-guide.md)了解缓存诊断和恢复步骤。
+
+### PPTX 支持缺失
+
+- PPTX 处理需要额外组件。通过 `/flow-architect:setup` 或 `$flow-architect-setup` 安装，并在提示时选择 PPTX 选项。
 
 ## 隐私边界
 

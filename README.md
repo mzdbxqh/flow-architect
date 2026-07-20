@@ -2,7 +2,55 @@
 
 Flow Architect is a process architecture and diagram review skill family for Codex and Claude Code, with creation capabilities for process drafts and offline meeting packages.
 
-For installation and usage instructions, see [INSTALL.md](INSTALL.md) or the [Chinese user guide](docs/zh-CN/user-guide.md).
+## Quick Installation
+
+**Codex (stable):**
+
+```bash
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.0
+codex plugin add flow-architect@flow-architect
+```
+
+**Claude Code Marketplace (recommended):**
+
+```bash
+/plugin marketplace add mzdbxqh/flow-architect
+/plugin install flow-architect@flow-architect
+/reload-plugins
+/flow-architect:setup
+```
+
+`setup` installs core components and lets you choose optional ones (PDF, DOCX, XLSX). Dependencies are written to user cache, not into Git or plugin directories.
+
+For detailed installation, usage examples, update, uninstall, and troubleshooting, see the [full installation guide](INSTALL.md) or the [Chinese user guide](docs/zh-CN/user-guide.md).
+
+### Verifying from Source (Contributors)
+
+To validate the plugin from source or contribute to development:
+
+```bash
+git clone https://github.com/mzdbxqh/flow-architect.git
+cd flow-architect
+corepack enable
+pnpm install --frozen-lockfile
+pnpm test
+```
+
+This is for contributors only; regular users should install from marketplace as described above.
+
+## Minimal Verification Example
+
+After installation, run the help command to verify everything is working:
+
+```bash
+# Claude Code
+/flow-architect:help
+
+# Codex
+$flow-architect-help
+```
+
+This read-only command displays all available skills, runtime status, supported formats, examples, and diagnostics without modifying any files. If you see the capability table and runtime status, the installation is successful.
 
 ## Entry Skills
 
@@ -139,6 +187,28 @@ runs/flow-architect/<run-id>/
 ```
 
 The run root directory is determined by the user or target project; it is not written into the installed plugin directory.
+
+## Troubleshooting
+
+### Installation Fails
+
+- **Codex:** Run `codex plugin list` to check if the plugin is registered. If not, verify marketplace access with `codex plugin marketplace list`.
+- **Claude Code:** Run `/plugin list` to verify installation. If the plugin doesn't appear, try `/reload-plugins` or see the [full installation guide](INSTALL.md).
+
+### Help Command Not Visible
+
+- **Claude Code:** Ensure you've run `/reload-plugins` after installation. If still not visible, try restarting the Claude Code session.
+- **Codex:** Run `codex plugin list` to verify the plugin is installed. The help command should appear as `$flow-architect-help`.
+
+### Runtime Components Not Ready
+
+- Run `/flow-architect:setup` (Claude Code) or `$flow-architect-setup` (Codex) to initialize core and optional components.
+- Run `/flow-architect:help` or `$flow-architect-help` to check runtime status and diagnostics.
+- See the [full installation guide](INSTALL.md) for cache diagnostics and recovery steps.
+
+### PPTX Support Missing
+
+- PPTX processing requires additional components. Install via `/flow-architect:setup` or `$flow-architect-setup` and select the PPTX option when prompted.
 
 ## Privacy Boundary
 
