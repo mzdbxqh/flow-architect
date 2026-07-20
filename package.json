@@ -1,6 +1,6 @@
 {
   "name": "@flow-architect/plugin",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "packageManager": "pnpm@10.30.0",
   "engines": {
@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "pnpm build:meeting && node scripts/build-adapters.mjs",
+    "build:adapters": "node scripts/build-adapters.mjs",
     "build:check": "pnpm build:meeting:check && node scripts/build-adapters.mjs --check",
     "build:meeting": "node scripts/build-meeting-editor.mjs",
     "build:meeting:check": "node scripts/build-meeting-editor.mjs --check",

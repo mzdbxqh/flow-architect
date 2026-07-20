@@ -1,6 +1,6 @@
 ---
 name: flow-architect-setup
-description: 当用户明确要求初始化 Flow Architect 核心组件或可选的 PDF、DOCX、XLSX 运行时组件时使用
+description: 当用户明确要求初始化 Flow Architect 核心组件或可选的 PDF、DOCX、XLSX、PPTX 运行时组件时使用
 ---
 
 # Flow Architect Setup
@@ -9,13 +9,13 @@ description: 当用户明确要求初始化 Flow Architect 核心组件或可选
 
 ## 插件定位
 
-从当前 `SKILL.md` 的绝对路径向上两级得到插件根 `PLUGIN_ROOT`；不得依赖当前工作目录。Claude Code 用户优先使用短入口 `/flow-architect:setup`。
+从当前 `SKILL.md` 的绝对路径向上两级得到插件根 `PLUGIN_ROOT`；不得依赖当前工作目录。Claude Code 用户优先使用短入口 `/flow-architect:setup`，Codex 用户使用 `$flow-architect-setup`。
 
 ## 固定流程
 
 1. 执行 `node "$PLUGIN_ROOT/scripts/runtime-manager.mjs" check --json`。此步只读。
-2. 默认选择 `core`；询问用户是否增加 `pdf`、`docx`、`xlsx`，按 `core,pdf,docx,xlsx` 排序去重。
-3. 执行 `node "$PLUGIN_ROOT/scripts/runtime-manager.mjs" plan --components <components> --json`。此步只读。
+2. 默认选择 `core`；询问用户是否增加 `pdf`、`docx`、`xlsx`、`pptx`，按 `core,pdf,docx,xlsx,pptx` 排序去重。可选组件以 `runtime/manifest.json` 为唯一事实来源，不得自行增减。
+3. 执行 `node "$PLUGIN_ROOT/scripts/runtime-manager.mjs" plan --components <components> --json`。此步只读。组件排序、精确版本、缓存位置、联网与写入影响均由该确定性脚本产生。
 4. 展示组件、精确包版本、缓存目标、联网/写入影响和 `plan_sha256`，要求用户对该计划明确确认。
 5. 只有明确确认后，执行 `node "$PLUGIN_ROOT/scripts/runtime-manager.mjs" install --components <components> --accept-plan <plan_sha256> --json`。
 6. 执行 `node "$PLUGIN_ROOT/scripts/runtime-manager.mjs" doctor --json`，报告已启用能力、未安装 optional 的降级能力和下一步评审入口。

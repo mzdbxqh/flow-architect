@@ -1,0 +1,15 @@
+{
+  "request": "请只读评审这些架构文件和流程图",
+  "intent": null,
+  "facts": {
+    "architecture_count": 2,
+    "diagram_count": 1,
+    "has_v2_draft": false
+  },
+  "params": {
+    "target_paths": [
+      "a.md",
+      "b.bpmn"
+    ]
+  }
+}

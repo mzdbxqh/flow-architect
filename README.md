@@ -7,7 +7,7 @@ Flow Architect is a process architecture and diagram review skill family for Cod
 **Codex (stable):**
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.0
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.1
 codex plugin add flow-architect@flow-architect
 ```
 
@@ -20,7 +20,7 @@ codex plugin add flow-architect@flow-architect
 /flow-architect:setup
 ```
 
-`setup` installs core components and lets you choose optional ones (PDF, DOCX, XLSX). Dependencies are written to user cache, not into Git or plugin directories.
+`setup` installs core components and lets you choose optional ones (PDF, DOCX, XLSX, PPTX). Dependencies are written to user cache, not into Git or plugin directories.
 
 For detailed installation, usage examples, update, uninstall, and troubleshooting, see the [full installation guide](INSTALL.md) or the [Chinese user guide](docs/zh-CN/user-guide.md).
 
@@ -64,6 +64,7 @@ This read-only command displays all available skills, runtime status, supported 
 | `flow-architect-draft-process` | Generate L5 BPMN process drafts from multiple source materials (deterministic, zero-LLM extraction and generation) |
 | `flow-architect-help` | Show capabilities, runtime status, examples, and diagnostics |
 | `flow-architect-setup` | Initialize core and user-selected optional runtime components |
+| `flow-architect-quickstart` | Formal natural-language entry; enumerates candidate public methods deterministically and routes to the chosen strict entry after user confirmation |
 
 The default entry skill (`flow-architect`) inspects your input files, determines which artifact families are present, and routes to the appropriate review flow. The three flow skills can also be invoked directly when you know which review you need.
 

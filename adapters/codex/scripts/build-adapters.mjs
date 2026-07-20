@@ -5,7 +5,7 @@ import os from 'node:os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PLUGIN_VERSION = '0.4.0';
+const PLUGIN_VERSION = '0.4.1';
 
 /**
  * Build adapter outputs for both Codex and Claude platforms.
@@ -63,7 +63,8 @@ export function buildAdapterOutputs(pluginRoot) {
         skills: './skills/',
         commands: [
           './commands/help.md',
-          './commands/setup.md'
+          './commands/setup.md',
+          './commands/quickstart.md'
         ]
       }, null, 2) + '\n';
       outputs.set(`${adapterPrefix}/.claude-plugin/plugin.json`, {
@@ -136,7 +137,8 @@ export function buildAdapterOutputs(pluginRoot) {
     skills: './skills/',
     commands: [
       './commands/help.md',
-      './commands/setup.md'
+      './commands/setup.md',
+      './commands/quickstart.md'
     ]
   }, null, 2) + '\n';
   outputs.set('.claude-plugin/plugin.json', {

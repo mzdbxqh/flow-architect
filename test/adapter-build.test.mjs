@@ -76,3 +76,50 @@ test('meeting package runtime is copied to both adapters', () => {
     assert.ok(outputs.has(`adapters/${adapter}/skills/flow-architect-build-meeting-package/SKILL.md`));
   }
 });
+
+test('three fixed entries are projected to both hosts by the generator', () => {
+  const outputs = buildAdapterOutputs(new URL('..', import.meta.url));
+
+  // Codex discovers all three entries through skills
+  for (const skill of ['flow-architect-help', 'flow-architect-setup', 'flow-architect-quickstart']) {
+    assert.ok(outputs.has(`adapters/codex/skills/${skill}/SKILL.md`), `codex adapter missing ${skill}`);
+    assert.ok(outputs.has(`adapters/claude/skills/${skill}/SKILL.md`), `claude adapter missing ${skill}`);
+  }
+
+  // Claude commands carry the three entries in both the adapter and root manifests
+  assert.ok(outputs.has('adapters/claude/commands/help.md'));
+  assert.ok(outputs.has('adapters/claude/commands/setup.md'));
+  assert.ok(outputs.has('adapters/claude/commands/quickstart.md'));
+
+  for (const manifestKey of ['adapters/claude/.claude-plugin/plugin.json', '.claude-plugin/plugin.json']) {
+    const manifest = JSON.parse(outputs.get(manifestKey).content.toString('utf8'));
+    assert.deepEqual(
+      manifest.commands,
+      ['./commands/help.md', './commands/setup.md', './commands/quickstart.md'],
+      `${manifestKey} must declare exactly the three fixed commands`
+    );
+    assert.equal(manifest.version, '0.4.1', `${manifestKey} must use version 0.4.1`);
+  }
+});
+
+test('shared catalog, quickstart route script and schema are projected to both adapters', () => {
+  const outputs = buildAdapterOutputs(new URL('..', import.meta.url));
+  for (const adapter of ['codex', 'claude']) {
+    assert.ok(outputs.has(`adapters/${adapter}/references/capability-catalog.json`), `${adapter} missing capability catalog`);
+    assert.ok(outputs.has(`adapters/${adapter}/references/schemas/quickstart-route.schema.json`), `${adapter} missing quickstart route schema`);
+    assert.ok(outputs.has(`adapters/${adapter}/scripts/quickstart-route.mjs`), `${adapter} missing quickstart route script`);
+    assert.ok(outputs.has(`adapters/${adapter}/skills/flow-architect-quickstart/SKILL.md`), `${adapter} missing quickstart skill`);
+  }
+
+  // The shared files are byte-identical across adapters
+  for (const rel of [
+    'references/capability-catalog.json',
+    'references/schemas/quickstart-route.schema.json',
+    'scripts/quickstart-route.mjs',
+    'skills/flow-architect-quickstart/SKILL.md',
+  ]) {
+    const codex = outputs.get(`adapters/codex/${rel}`);
+    const claude = outputs.get(`adapters/claude/${rel}`);
+    assert.ok(codex.content.equals(claude.content), `${rel} must be byte-identical across adapters`);
+  }
+});

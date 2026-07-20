@@ -55,7 +55,7 @@ Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审
 ### 3.1 从 GitHub 安装稳定版
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.0
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.1
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```
@@ -115,10 +115,11 @@ claude --plugin-dir "$PWD/adapters/claude"
 Flow Architect 使用组件化运行时管理：
 
 - **核心组件 `core`（默认安装）：** ajv、fast-xml-parser、yaml
-- **可选组件（由用户选择，可多选或不选）：**
+- **可选组件（由用户选择，可多选或不选，以 `runtime/manifest.json` 为准）：**
   - `pdf`：pdfjs-dist（PDF 文本提取）
   - `docx`：mammoth（DOCX 文本提取）
   - `xlsx`：exceljs + jszip（XLSX 结构读取，支持表格、原生 DrawingML、图片及混合输入）
+  - `pptx`：jszip（PPTX 结构读取）
 
 运行时安装在用户缓存目录，不在插件目录内：
 
@@ -146,12 +147,13 @@ Flow Architect 使用组件化运行时管理：
 
 | 需求 | Codex | Claude Code |
 |---|---|---|
+| 用自然语言描述需求，由技能路由到合适入口 | `$flow-architect-quickstart` | `/flow-architect:quickstart` |
 | 不确定该选哪种评审 | `$flow-architect` | `/flow-architect:flow-architect` |
 | 架构与流程图一起评审 | `$flow-architect-flow-review-integrated` | `/flow-architect:flow-architect-flow-review-integrated` |
 | 只评审 L4/L5/L6/SOP 架构 | `$flow-architect-flow-review-architecture` | `/flow-architect:flow-architect-flow-review-architecture` |
 | 只评审流程图 | `$flow-architect-flow-review-diagram` | `/flow-architect:flow-architect-flow-review-diagram` |
 
-一般建议使用默认入口，让技能先盘点输入并自动路由。架构与流程图很难彼此割裂地判断；只要两类制品同时存在，优先使用联合评审。
+`quickstart` 是正式业务入口（不是教程或降级模式）：先用确定性脚本枚举候选公共方法，唯一匹配时形成规范化任务并调用对应严格入口；候选会改变结果、副作用或输出目录时要求你选择；创建类入口缺少你授权的输出目录时只返回缺失信息。一般建议使用默认入口，让技能先盘点输入并自动路由。架构与流程图很难彼此割裂地判断；只要两类制品同时存在，优先使用联合评审。
 
 ### 5.2 准备输入
 
@@ -293,7 +295,7 @@ codex plugin list
 /flow-architect:setup
 ```
 
-setup 默认安装 core，并允许选择 PDF、DOCX、XLSX。若仍失败，保留 help/doctor 输出中的结构化错误码；不要在插件缓存目录内手工运行 npm。
+setup 默认安装 core，并允许选择 PDF、DOCX、XLSX、PPTX。若仍失败，保留 help/doctor 输出中的结构化错误码；不要在插件缓存目录内手工运行 npm。
 
 ### 输入很多，但报告结论很少
 

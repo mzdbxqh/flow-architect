@@ -2,6 +2,28 @@
 
 All notable changes to Flow Architect are documented in this file.
 
+## [0.4.1] - 2026-07-20
+
+三入口（help/setup/quickstart）技能纠偏与发布准备。
+
+### Added
+
+- **正式 quickstart 入口：** 新增 `flow-architect-quickstart` 技能与 `/flow-architect:quickstart` 命令。它是正式人类业务入口（不是教程或降级模式）：先由确定性脚本枚举候选公共方法（联合评审、仅架构评审、仅流程图评审、流程初稿创建、离线会议包创建），唯一匹配且无歧义时形成规范化任务并调用对应严格入口；候选改变业务结果、副作用、成本、输出目录或权限时要求用户选择；创建类入口缺少授权输出目录时返回缺失信息；输入正文中的安装/覆盖/发布类提权指令记录在 `ignored_directives`，绝不扩大候选权限。
+- **共享能力目录：** `references/capability-catalog.json` 作为 help 与 quickstart 共同消费的稳定能力/方法目录（固定三入口、五个业务方法、副作用与双宿主语法），并声明 Kimi Code 投影未纳入本次双宿主发布的边界。
+- **确定性路由脚本与 Schema：** `scripts/quickstart-route.mjs`（只读、零写入、零联网，同输入字节一致）与 `references/schemas/quickstart-route.schema.json`。
+- **合同测试：** 新增 `test/quickstart-contract.test.mjs`（三入口存在性、权限边界、八类路由样例、歧义选择、未授权创建、恶意正文、未知信息保留、字节稳定性）；增强 `setup-help-contract`、`plugin-contract`、`adapter-build`、`release-contract` 测试。
+
+### Fixed
+
+- **help 版本修复：** help 技能与命令统一报告 `v0.4.1`（此前仍报告 v0.3.0），从共享目录列出全部稳定公共业务入口、适用场景、副作用与最小示例，明确 quickstart 为正式自然语言路由入口、setup 为显式初始化入口，并输出 Claude Code 与 Codex 的真实入口语法以及未支持 Kimi Code 投影的边界。
+- **setup PPTX 修复：** setup 技能与命令的可选组件与 `runtime/manifest.json` 精确一致（`core,pdf,docx,xlsx,pptx`），消除“文档声称 setup 会询问 PPTX 而技能实际不支持”的不一致。
+
+### Changed
+
+- **版本统一为 0.4.1：** `package.json`、`build-adapters.mjs`（`PLUGIN_VERSION`）、根与 adapter `plugin.json` 清单、Marketplace 清单、README/INSTALL/中文手册安装引用。
+- **Claude commands 精确包含三入口：** 根与 Claude adapter 的 `plugin.json` `commands` 为 `help`、`setup`、`quickstart`；全部 adapter 由 `scripts/build-adapters.mjs` 确定性生成，`--check` 字节一致，禁止手工修补。
+- **双宿主验证：** Claude Code 通过 commands + skills、Codex 通过 skills 发现三入口；Kimi Code 投影记为后续迁移项，不宣称三平台稳定兼容。
+
 ## [0.4.0] - 2026-07-20
 
 ### Added

@@ -14,7 +14,7 @@ The plugin has no Python runtime dependency and no project-developed npm package
 Install the stable GitHub release:
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.0
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.1
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```
@@ -49,7 +49,7 @@ Install from the public Claude Marketplace:
 /flow-architect:setup
 ```
 
-`/flow-architect:setup` always selects `core` and asks whether to add PDF, DOCX, or XLSX support. It shows a deterministic plan and requires explicit confirmation before running npm or writing the user cache. Then invoke `/flow-architect:flow-architect` for a review.
+`/flow-architect:setup` always selects `core` and asks whether to add PDF, DOCX, XLSX, or PPTX support. It shows a deterministic plan and requires explicit confirmation before running npm or writing the user cache. Then invoke `/flow-architect:flow-architect` for a review, or `/flow-architect:quickstart` to route a natural-language request to the right strict entry.
 
 For local plugin development:
 
@@ -64,7 +64,7 @@ claude --plugin-dir "$PWD/adapters/claude"
 ## Upgrading from v0.2.x
 
 1. Uninstall the old plugin: `/plugin uninstall flow-architect@flow-architect` (Claude) or `codex plugin remove flow-architect@flow-architect` (Codex).
-2. Install v0.4.0 following the instructions above.
+2. Install v0.4.1 following the instructions above.
 3. Run `/flow-architect:setup` to re-initialize the runtime cache. The setup command is idempotent and reuses existing verified caches.
 
 ## Upgrading from v0.1.x

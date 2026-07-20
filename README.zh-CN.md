@@ -7,7 +7,7 @@ Flow Architect 是面向 Codex 与 Claude Code 的流程架构与流程图评审
 Codex 稳定版：
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.0
+codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.1
 codex plugin add flow-architect@flow-architect
 ```
 
@@ -21,7 +21,7 @@ Claude Code Marketplace（推荐）：
 /flow-architect:setup
 ```
 
-`setup` 默认安装 core，并让用户选择 PDF、DOCX、XLSX；依赖写入用户缓存，不写入 Git 仓库或插件目录。
+`setup` 默认安装 core，并让用户选择 PDF、DOCX、XLSX、PPTX；依赖写入用户缓存，不写入 Git 仓库或插件目录。
 
 完整的安装、入口选择、提示词示例、更新、卸载和故障排查见[中文用户手册](docs/zh-CN/user-guide.md)。
 
@@ -65,6 +65,7 @@ $flow-architect-help
 | `flow-architect-draft-process` | 从多种来源材料生成 L5 BPMN 流程初稿（确定性抽取与生成，零 LLM） |
 | `flow-architect-help` | 查看能力、格式、状态、示例和诊断 |
 | `flow-architect-setup` | 初始化 core 和用户选择的可选运行时组件 |
+| `flow-architect-quickstart` | 正式自然语言路由入口；确定性枚举候选公共方法，在用户选择或补全后路由到对应严格入口 |
 
 默认入口 Skill（`flow-architect`）盘点输入文件、识别制品族并路由至对应评审流程。三个流程 Skill 也可在已知评审需求时直接调用。
 
