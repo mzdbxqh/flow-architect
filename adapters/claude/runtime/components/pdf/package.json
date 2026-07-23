@@ -1,0 +1,9 @@
+{
+  "name": "@flow-architect/runtime-pdf",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Flow Architect runtime PDF dependencies",
+  "dependencies": {
+    "pdfjs-dist": "4.10.38"
+  }
+}

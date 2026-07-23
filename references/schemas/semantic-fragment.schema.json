@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "semantic-fragment",
+  "title": "Semantic Fragment",
+  "description": "语义片段公共信封（V2 only），包含 task_kind、batch_id、batch_sha256 和 payload。payload 按 task_kind 绑定到对应子 Schema。",
+  "type": "object",
+  "required": ["schema_version", "task_kind", "batch_id", "batch_sha256", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "2.0.0",
+      "description": "Schema 版本号"
+    },
+    "task_kind": {
+      "type": "string",
+      "enum": ["PROCESS_CARD", "ACTIVITY_CATALOG", "CONTROL_FLOW"],
+      "description": "任务类型标识"
+    },
+    "batch_id": {
+      "type": "string",
+      "pattern": "^EB-[a-zA-Z0-9_-]+$",
+      "description": "关联的证据批次 ID"
+    },
+    "batch_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "关联批次的 SHA-256 哈希"
+    },
+    "payload": {
+      "type": "object",
+      "description": "V2 任务类型特定的载荷，按 task_kind 绑定到对应子 Schema 验证"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "task_kind": { "const": "PROCESS_CARD" } },
+        "required": ["task_kind"]
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "process-card-fragment" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "task_kind": { "const": "ACTIVITY_CATALOG" } },
+        "required": ["task_kind"]
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "activity-fragment" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "task_kind": { "const": "CONTROL_FLOW" } },
+        "required": ["task_kind"]
+      },
+      "then": {
+        "properties": {
+          "payload": { "$ref": "control-flow-fragment" }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0",
+  "plugin_name": "flow-architect",
+  "plugin_version": "0.5.0",
+  "description": "三入口（help/setup/quickstart）共同消费的稳定能力与方法目录。help 从这里列出公共入口与边界，quickstart 从这里枚举候选方法；严格业务入口的完整协议不在此复制。",
+  "fixed_entries": [
+    {
+      "id": "help",
+      "role": "只读帮助入口",
+      "skill": "flow-architect-help",
+      "claude_entry": "/flow-architect:help",
+      "codex_entry": "$flow-architect-help",
+      "side_effects": "零写入、零联网",
+      "model_invocable": true
+    },
+    {
+      "id": "setup",
+      "role": "显式初始化入口",
+      "skill": "flow-architect-setup",
+      "claude_entry": "/flow-architect:setup",
+      "codex_entry": "$flow-architect-setup",
+      "side_effects": "写用户缓存并访问 npm Registry，必须人工触发、展示计划并明确确认",
+      "model_invocable": false
+    },
+    {
+      "id": "quickstart",
+      "role": "正式自然语言路由入口",
+      "skill": "flow-architect-quickstart",
+      "claude_entry": "/flow-architect:quickstart",
+      "codex_entry": "$flow-architect-quickstart",
+      "side_effects": "路由阶段零写入、零联网；业务副作用只来自用户选择并授权的严格入口",
+      "model_invocable": true
+    }
+  ],
+  "methods": [
+    {
+      "id": "review-integrated",
+      "title": "联合评审",
+      "kind": "review",
+      "skill": "flow-architect-flow-review-integrated",
+      "claude_entry": "/flow-architect:flow-architect-flow-review-integrated",
+      "codex_entry": "$flow-architect-flow-review-integrated",
+      "side_effects": "只读评审，仅写独立运行目录的评审制品，不修改原始输入",
+      "requires_output_dir": false,
+      "network": false,
+      "applicable_when": "架构制品与图件制品同时存在",
+      "input_families": ["architecture", "diagram"]
+    },
+    {
+      "id": "review-architecture",
+      "title": "仅架构评审",
+      "kind": "review",
+      "skill": "flow-architect-flow-review-architecture",
+      "claude_entry": "/flow-architect:flow-architect-flow-review-architecture",
+      "codex_entry": "$flow-architect-flow-review-architecture",
+      "side_effects": "只读评审，仅写独立运行目录的评审制品，不修改原始输入",
+      "requires_output_dir": false,
+      "network": false,
+      "applicable_when": "仅存在架构制品",
+      "input_families": ["architecture"]
+    },
+    {
+      "id": "review-diagram",
+      "title": "仅流程图评审",
+      "kind": "review",
+      "skill": "flow-architect-flow-review-diagram",
+      "claude_entry": "/flow-architect:flow-architect-flow-review-diagram",
+      "codex_entry": "$flow-architect-flow-review-diagram",
+      "side_effects": "只读评审，仅写独立运行目录的评审制品，不修改原始输入",
+      "requires_output_dir": false,
+      "network": false,
+      "applicable_when": "仅存在图件制品",
+      "input_families": ["diagram"]
+    },
+    {
+      "id": "create-process-draft",
+      "title": "流程初稿创建",
+      "kind": "create",
+      "skill": "flow-architect-draft-process",
+      "claude_entry": "/flow-architect:draft-process",
+      "codex_entry": "$flow-architect-draft-process",
+      "side_effects": "在用户授权的独立运行目录创建新制品，不修改原始输入",
+      "requires_output_dir": true,
+      "network": false,
+      "applicable_when": "用户明确要求从来源材料创建流程初稿，并给出授权运行目录",
+      "input_families": ["source_material"],
+      "intent_signals": {
+        "description": "方法意图信号的唯一来源：quickstart 路由从这里读取组合意图关键词，脚本与文档不再各自复制。action_verbs 与 artifact_nouns 同时出现（且动词非「…的…」定语用法）才构成创建流程初稿的组合意图。",
+        "action_verbs": ["生成", "创建", "绘制", "转换", "产出", "画"],
+        "artifact_nouns": ["bpmn", "流程图", "流程草稿", "流程初稿"]
+      }
+    },
+    {
+      "id": "create-meeting-package",
+      "title": "离线会议包创建",
+      "kind": "create",
+      "skill": "flow-architect-build-meeting-package",
+      "claude_entry": "/flow-architect:build-meeting-package",
+      "codex_entry": "$flow-architect-build-meeting-package",
+      "side_effects": "在用户授权的独立运行目录创建离线 HTML 会议包，不修改原始输入",
+      "requires_output_dir": true,
+      "network": false,
+      "applicable_when": "用户明确要求从完整 V2 草稿创建会议包，并给出授权运行目录",
+      "input_families": ["v2_draft"]
+    }
+  ],
+  "platforms": [
+    {
+      "id": "claude_code",
+      "supported": true,
+      "discovery": "commands + skills",
+      "syntax": "/flow-architect:<command-or-skill>"
+    },
+    {
+      "id": "codex",
+      "supported": true,
+      "discovery": "skills",
+      "syntax": "$<skill>"
+    },
+    {
+      "id": "kimi_code",
+      "supported": false,
+      "discovery": null,
+      "syntax": null,
+      "note": "Kimi Code 投影未纳入本次双宿主发布，记为后续迁移项；不宣称三平台稳定兼容。"
+    }
+  ]
+}

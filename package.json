@@ -1,0 +1,57 @@
+{
+  "name": "@flow-architect/plugin",
+  "version": "0.5.0",
+  "type": "module",
+  "packageManager": "pnpm@10.30.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm build:meeting && node scripts/build-adapters.mjs",
+    "build:adapters": "node scripts/build-adapters.mjs",
+    "build:check": "pnpm build:meeting:check && node scripts/build-adapters.mjs --check",
+    "build:meeting": "node scripts/build-meeting-editor.mjs",
+    "build:meeting:check": "node scripts/build-meeting-editor.mjs --check",
+    "check:skills": "node scripts/check-skills.mjs",
+    "test": "node scripts/test-with-runtime.mjs",
+    "test:browser": "node scripts/test-with-runtime.mjs test/meeting-package-browser.test.mjs test/meeting-f2-browser.test.mjs test/meeting-f3-browser.test.mjs test/process-draft-browser-e2e.test.mjs test/meeting-export-downloads-browser.test.mjs test/meeting-structural-dialogs-browser.test.mjs test/meeting-usability-browser.test.mjs",
+    "test:contract": "node scripts/check-skills.mjs && node scripts/build-adapters.mjs --check",
+    "test:smoke": "node --test test/integrated-review.test.mjs",
+    "public:release:verify": "node scripts/verify-public-release.mjs"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "fast-xml-parser": "4.5.7",
+    "yaml": "2.9.0",
+    "@playwright/test": "1.61.1",
+    "bpmn-js": "18.21.0",
+    "esbuild": "0.28.1",
+    "exceljs": "4.4.0",
+    "jszip": "3.10.1",
+    "mammoth": "1.12.0",
+    "pdfjs-dist": "4.10.38"
+  },
+  "files": [
+    "skills/",
+    "references/",
+    "scripts/",
+    "agents/",
+    "adapters/",
+    "docs/",
+    "commands/",
+    "runtime/",
+    ".agents/",
+    ".claude-plugin/",
+    ".codex-plugin/",
+    "INSTALL.md",
+    "README.md",
+    "README.zh-CN.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "NOTICE",
+    "package.json"
+  ],
+  "license": "Apache-2.0"
+}

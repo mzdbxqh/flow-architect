@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "activity-catalog",
+  "title": "Activity Catalog",
+  "description": "L5 活动一览表，每个活动对应一个 L5 业务活动",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "activity_id", "name", "description", "activity_type",
+      "responsibility_model", "role_assignments", "tools",
+      "inputs", "process_summary", "outputs",
+      "completion_criteria", "references",
+      "main_task_id", "completeness"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "activity_id": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+        "description": "活动稳定 ID"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "description": "活动名称"
+      },
+      "description": {
+        "type": "string",
+        "description": "活动描述"
+      },
+      "activity_type": {
+        "type": "string",
+        "enum": ["STANDARD", "REVIEW_MEETING", "DECISION_ACTIVITY"],
+        "description": "活动类型"
+      },
+      "responsibility_model": {
+        "type": "string",
+        "enum": ["RASCI", "OARP"],
+        "description": "责任模型"
+      },
+      "role_assignments": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["role_id", "responsibility"],
+          "additionalProperties": false,
+          "properties": {
+            "role_id": { "type": "string", "minLength": 1 },
+            "responsibility": { "type": "string", "enum": ["R", "A", "S", "C", "I", "O", "P"] }
+          }
+        },
+        "description": "角色分工"
+      },
+      "sla": {
+        "type": ["object", "null"],
+        "properties": {
+          "value": { "type": "number", "minimum": 0 },
+          "unit": { "type": "string", "enum": ["MINUTE", "HOUR", "WORKING_DAY", "CALENDAR_DAY", "WEEK", "MONTH"] },
+          "start_condition": { "type": "string" },
+          "end_condition": { "type": "string" },
+          "raw_text": { "type": "string" }
+        },
+        "additionalProperties": false,
+        "description": "SLA/LT，可选"
+      },
+      "tools": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "当前承载工具"
+      },
+      "inputs": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "活动输入"
+      },
+      "process_summary": {
+        "type": "string",
+        "description": "IPO 中的 Process 概要"
+      },
+      "outputs": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "活动输出"
+      },
+      "completion_criteria": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "自工序完结标准"
+      },
+      "references": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "参考制度/标准/规范"
+      },
+      "main_task_id": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+        "description": "唯一主 Task 的稳定 ID"
+      },
+      "confirmation": {
+        "type": ["object", "null"],
+        "properties": {
+          "confirmation_task_id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$" },
+          "confirm_role_id": { "type": "string", "minLength": 1 },
+          "co_completes": { "type": "boolean" },
+          "confirm_bears_final_responsibility": { "type": "boolean" },
+          "no_formal_approval_meeting": { "type": "boolean" }
+        },
+        "required": ["confirmation_task_id", "confirm_role_id", "co_completes", "confirm_bears_final_responsibility", "no_formal_approval_meeting"],
+        "additionalProperties": false,
+        "description": "确认从 Task，可选"
+      },
+      "completeness": {
+        "type": "string",
+        "enum": ["COMPLETE", "NEEDS_CONFIRMATION", "CONFLICTED"],
+        "description": "完整度状态"
+      },
+      "evidence_refs": {
+        "type": "array",
+        "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" },
+        "description": "活动来源证据块引用（跨片段合并后的并集）"
+      }
+    }
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Material Packet",
+  "description": "分域材料包 Schema，用于领域 Worker 消费的有界材料包",
+  "type": "object",
+  "required": [
+    "packet_id",
+    "stage_id",
+    "markdown_refs",
+    "chunk_ids",
+    "lineage",
+    "context_budget",
+    "status"
+  ],
+  "properties": {
+    "packet_id": {
+      "type": "string",
+      "pattern": "^MP-[a-f0-9]{12}$",
+      "description": "稳定材料包 ID"
+    },
+    "stage_id": {
+      "type": "string",
+      "pattern": "^(review|draft)-(l4|l5|l6|sop|bpmn|visual|consistency|hierarchy)$",
+      "description": "阶段标识"
+    },
+    "markdown_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^normalized/"
+      },
+      "minItems": 1,
+      "maxItems": 100,
+      "description": "归一化 Markdown 分片引用路径"
+    },
+    "chunk_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^C-[a-f0-9]{12}$"
+      },
+      "minItems": 1,
+      "maxItems": 100,
+      "description": "包含的 chunk ID 列表"
+    },
+    "lineage": {
+      "type": "object",
+      "required": ["source_artifacts", "source_blocks"],
+      "properties": {
+        "source_artifacts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^A-[a-f0-9]{12}$"
+          },
+          "description": "来源 artifact ID"
+        },
+        "source_blocks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^B-[a-f0-9]{12}$"
+          },
+          "description": "来源 block ID"
+        },
+        "refined_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "提炼来源 batch ID"
+        }
+      },
+      "additionalProperties": false
+    },
+    "context_budget": {
+      "type": "object",
+      "required": ["status", "total"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["BUDGET_OK", "BUDGET_ATTENTION", "BUDGET_SPLIT_REQUIRED"]
+        },
+        "total": {
+          "type": "object",
+          "properties": {
+            "estimated_tokens": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "status": {
+      "type": "string",
+      "enum": ["RUNNABLE", "BUDGET_ATTENTION", "BUDGET_SPLIT_REQUIRED", "BLOCKED"],
+      "description": "材料包状态"
+    },
+    "domain_tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 10,
+      "description": "领域标签"
+    },
+    "created_at": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

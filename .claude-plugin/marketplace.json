@@ -1,0 +1,30 @@
+{
+  "name": "flow-architect",
+  "description": "Process architecture review, draft, and meeting package skills for Claude Code",
+  "owner": {
+    "name": "flow-architect contributors"
+  },
+  "plugins": [
+    {
+      "name": "flow-architect",
+      "source": "./adapters/claude",
+      "description": "Process architecture review, draft, and meeting package skill family",
+      "version": "0.5.0",
+      "author": {
+        "name": "flow-architect contributors"
+      },
+      "repository": "https://github.com/ifoohoo/flow-architect",
+      "license": "Apache-2.0",
+      "keywords": [
+        "architecture",
+        "review",
+        "draft",
+        "meeting",
+        "bpmn",
+        "process",
+        "diagram"
+      ],
+      "category": "productivity"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@flow-architect/runtime-pptx",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Flow Architect PPTX runtime dependencies",
+  "dependencies": {
+    "jszip": "3.10.1"
+  }
+}

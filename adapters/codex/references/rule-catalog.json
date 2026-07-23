@@ -1,0 +1,771 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0.0",
+  "rules": [
+    {
+      "rule_id": "FA-L4-001",
+      "title": "四维边界检查",
+      "category": "L4",
+      "default_severity": "BLOCKER",
+      "applicability": "L4 子流程步骤必须在单一四维边界（部门、系统、时间、地点）内操作。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-001"
+    },
+    {
+      "rule_id": "FA-L4-002",
+      "title": "四维归因检查",
+      "category": "L4",
+      "default_severity": "CRITICAL",
+      "applicability": "每个 L4 步骤必须对四个维度（谁、哪个系统、何时、何地）进行明确归因。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-002"
+    },
+    {
+      "rule_id": "FA-L4-003",
+      "title": "末端组织检查",
+      "category": "L4",
+      "default_severity": "CRITICAL",
+      "applicability": "L4 步骤不得路由到没有进一步定义动作的组织单元。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-003"
+    },
+    {
+      "rule_id": "FA-L4-004",
+      "title": "跨组织异常处理",
+      "category": "L4",
+      "default_severity": "MAJOR",
+      "applicability": "跨组织交接必须明确记录异常处理方式。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-004"
+    },
+    {
+      "rule_id": "FA-L4-005",
+      "title": "数量一致性检查",
+      "category": "L4",
+      "default_severity": "MAJOR",
+      "applicability": "L4 步骤中引用的输入输出数量必须在关联步骤间保持一致。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l4-review.md#FA-L4-005"
+    },
+    {
+      "rule_id": "FA-L4-006",
+      "title": "等待步骤校验",
+      "category": "L4",
+      "default_severity": "MAJOR",
+      "applicability": "等待或挂起步骤必须定义明确的超时或升级条件。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-006"
+    },
+    {
+      "rule_id": "FA-L4-007",
+      "title": "重复入口检测",
+      "category": "L4",
+      "default_severity": "MAJOR",
+      "applicability": "L4 流程不得对同一触发条件包含重复的入口点。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l4-review.md#FA-L4-007"
+    },
+    {
+      "rule_id": "FA-L4-008",
+      "title": "系统切换检查",
+      "category": "L4",
+      "default_severity": "CRITICAL",
+      "applicability": "单个 L4 步骤内系统间的切换必须明确记录。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-008"
+    },
+    {
+      "rule_id": "FA-L4-009",
+      "title": "冗余审批检测",
+      "category": "L4",
+      "default_severity": "MINOR",
+      "applicability": "未增加业务价值或与先前审批重复的审批步骤应予以标记。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l4-review.md#FA-L4-009"
+    },
+    {
+      "rule_id": "FA-L4-010",
+      "title": "L4 步骤完整性",
+      "category": "L4",
+      "default_severity": "CRITICAL",
+      "applicability": "每个 L4 步骤必须具备名称、分配角色、输入、输出以及后继步骤或终止条件。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l4-review.md#FA-L4-010"
+    },
+    {
+      "rule_id": "FA-L5-001",
+      "title": "单一主责角色",
+      "category": "L5",
+      "default_severity": "CRITICAL",
+      "applicability": "每个 L5 子流程必须有且仅有一个主要负责角色。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l5-review.md#FA-L5-001"
+    },
+    {
+      "rule_id": "FA-L5-002",
+      "title": "业务产出四问",
+      "category": "L5",
+      "default_severity": "MAJOR",
+      "applicability": "每个 L5 产出必须回答：交付什么？交付给谁？什么格式？何时交付？",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l5-review.md#FA-L5-002"
+    },
+    {
+      "rule_id": "FA-L5-003",
+      "title": "动宾命名规范",
+      "category": "L5",
+      "default_severity": "MAJOR",
+      "applicability": "L5 流程名称必须遵循动宾结构（如「审批申请」「校验数据」）。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l5-review.md#FA-L5-003"
+    },
+    {
+      "rule_id": "FA-L5-004",
+      "title": "R0 反模式：缺失输入",
+      "category": "L5",
+      "default_severity": "BLOCKER",
+      "applicability": "L5 流程不得在没有明确定义的触发条件或输入工件的情况下启动。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l5-review.md#FA-L5-004"
+    },
+    {
+      "rule_id": "FA-L5-005",
+      "title": "R1 反模式：孤立输出",
+      "category": "L5",
+      "default_severity": "BLOCKER",
+      "applicability": "L5 输出必须连接到下游消费者或作为最终交付物。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l5-review.md#FA-L5-005"
+    },
+    {
+      "rule_id": "FA-L5-006",
+      "title": "R2 反模式：角色错配",
+      "category": "L5",
+      "default_severity": "CRITICAL",
+      "applicability": "分配的角色必须在给定系统上下文中具备执行所描述操作的能力。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l5-review.md#FA-L5-006"
+    },
+    {
+      "rule_id": "FA-L5-007",
+      "title": "R3 反模式：系统错配",
+      "category": "L5",
+      "default_severity": "CRITICAL",
+      "applicability": "引用的系统必须支持分配角色所描述的操作。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l5-review.md#FA-L5-007"
+    },
+    {
+      "rule_id": "FA-L5-008",
+      "title": "IPO 结构检查",
+      "category": "L5",
+      "default_severity": "MAJOR",
+      "applicability": "每个 L5 流程必须具备可识别的输入、处理、输出结构。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l5-review.md#FA-L5-008"
+    },
+    {
+      "rule_id": "FA-L5-009",
+      "title": "良品条件定义",
+      "category": "L5",
+      "default_severity": "MAJOR",
+      "applicability": "L5 产出必须定义何为良品：即可衡量的质量标准。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l5-review.md#FA-L5-009"
+    },
+    {
+      "rule_id": "FA-L5-010",
+      "title": "工具解耦",
+      "category": "L5",
+      "default_severity": "MINOR",
+      "applicability": "L5 流程描述应独立于具体工具实现来描述业务逻辑。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l5-review.md#FA-L5-010"
+    },
+    {
+      "rule_id": "FA-L6-001",
+      "title": "一口气粒度",
+      "category": "L6",
+      "default_severity": "MAJOR",
+      "applicability": "每个 L6 步骤必须能在一口气内描述完（约 15 秒口述时长）。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l6-review.md#FA-L6-001"
+    },
+    {
+      "rule_id": "FA-L6-002",
+      "title": "L6 动宾命名",
+      "category": "L6",
+      "default_severity": "MAJOR",
+      "applicability": "L6 步骤名称必须遵循动宾结构，与父级 L5 命名保持一致。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l6-review.md#FA-L6-002"
+    },
+    {
+      "rule_id": "FA-L6-003",
+      "title": "仅含业务语义",
+      "category": "L6",
+      "default_severity": "CRITICAL",
+      "applicability": "L6 步骤必须描述业务动作，而非技术系统操作。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l6-review.md#FA-L6-003"
+    },
+    {
+      "rule_id": "FA-L6-004",
+      "title": "工具泄漏检测",
+      "category": "L6",
+      "default_severity": "MAJOR",
+      "applicability": "L6 步骤不得包含具体工具名称、API 端点或数据库表的引用。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l6-review.md#FA-L6-004"
+    },
+    {
+      "rule_id": "FA-L6-005",
+      "title": "角色泄漏检测",
+      "category": "L6",
+      "default_severity": "MAJOR",
+      "applicability": "L6 步骤不得嵌入属于 L4 或 L5 层的角色分配信息。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/l6-review.md#FA-L6-005"
+    },
+    {
+      "rule_id": "FA-L6-006",
+      "title": "L6 步骤完整性",
+      "category": "L6",
+      "default_severity": "CRITICAL",
+      "applicability": "每个 L6 步骤必须具备名称、输入引用、输出引用以及父级 L5 的关联。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/l6-review.md#FA-L6-006"
+    },
+    {
+      "rule_id": "FA-SOP-001",
+      "title": "场景上下文声明",
+      "category": "SOP",
+      "default_severity": "CRITICAL",
+      "applicability": "每份 SOP 必须声明其适用的业务场景或上下文。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-001"
+    },
+    {
+      "rule_id": "FA-SOP-002",
+      "title": "六信号检查",
+      "category": "SOP",
+      "default_severity": "MAJOR",
+      "applicability": "SOP 必须识别触发信号：何人、何事、何时、何地、何因、何法，覆盖每个流程入口。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-002"
+    },
+    {
+      "rule_id": "FA-SOP-003",
+      "title": "特化字段定义",
+      "category": "SOP",
+      "default_severity": "MAJOR",
+      "applicability": "SOP 必须指定特化字段，如适用的产品线、区域或部门。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-003"
+    },
+    {
+      "rule_id": "FA-SOP-004",
+      "title": "L6 引用非空检查",
+      "category": "SOP",
+      "default_severity": "CRITICAL",
+      "applicability": "SOP 每个条目必须引用至少一个 L6 步骤，或说明为何无 L6 分解。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-004"
+    },
+    {
+      "rule_id": "FA-SOP-005",
+      "title": "SOP 归因",
+      "category": "SOP",
+      "default_severity": "MAJOR",
+      "applicability": "SOP 条目必须将归属权归于特定角色或组织单元。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-005"
+    },
+    {
+      "rule_id": "FA-SOP-006",
+      "title": "引用有效性检查",
+      "category": "SOP",
+      "default_severity": "BLOCKER",
+      "applicability": "SOP 到 L4/L5/L6 节点的所有引用必须指向架构模型中已存在的节点。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-006"
+    },
+    {
+      "rule_id": "FA-SOP-007",
+      "title": "适用范围声明",
+      "category": "SOP",
+      "default_severity": "MAJOR",
+      "applicability": "SOP 必须声明其适用范围：通用、有条件、或仅限例外情况。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/sop-review.md#FA-SOP-007"
+    },
+    {
+      "rule_id": "FA-HIER-001",
+      "title": "孤立节点检测",
+      "category": "HIERARCHY",
+      "default_severity": "BLOCKER",
+      "applicability": "每个节点（根节点除外）必须有有效的父引用。不允许存在孤立节点。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-001"
+    },
+    {
+      "rule_id": "FA-HIER-002",
+      "title": "悬空引用检测",
+      "category": "HIERARCHY",
+      "default_severity": "BLOCKER",
+      "applicability": "所有 parent_id 和关系引用必须指向已存在的节点。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-002"
+    },
+    {
+      "rule_id": "FA-HIER-003",
+      "title": "环路检测",
+      "category": "HIERARCHY",
+      "default_severity": "BLOCKER",
+      "applicability": "层级结构必须是有向无环图，不允许存在环路。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-003"
+    },
+    {
+      "rule_id": "FA-HIER-004",
+      "title": "扇出上限检查",
+      "category": "HIERARCHY",
+      "default_severity": "MAJOR",
+      "applicability": "单个节点不应拥有过多子节点（超过 10 个告警，超过 20 个阻断）。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-004"
+    },
+    {
+      "rule_id": "FA-HIER-005",
+      "title": "归因冲突检测",
+      "category": "HIERARCHY",
+      "default_severity": "CRITICAL",
+      "applicability": "子节点在同一维度的归因不得与父节点归因矛盾。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-005"
+    },
+    {
+      "rule_id": "FA-HIER-006",
+      "title": "覆盖完整性检查",
+      "category": "HIERARCHY",
+      "default_severity": "MAJOR",
+      "applicability": "最底层的所有叶子节点必须能从根节点可达。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-006"
+    },
+    {
+      "rule_id": "FA-HIER-007",
+      "title": "输出链连续性",
+      "category": "HIERARCHY",
+      "default_severity": "MAJOR",
+      "applicability": "子节点的输出必须链接到父节点的输出或兄弟节点的输入。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-007"
+    },
+    {
+      "rule_id": "FA-HIER-008",
+      "title": "层级跳跃检测",
+      "category": "HIERARCHY",
+      "default_severity": "CRITICAL",
+      "applicability": "节点不得跳过层级（例如 L3 直接包含 L6）。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-008"
+    },
+    {
+      "rule_id": "FA-HIER-009",
+      "title": "命名风格一致性",
+      "category": "HIERARCHY",
+      "default_severity": "MINOR",
+      "applicability": "子节点的命名风格应与父节点保持一致。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-009"
+    },
+    {
+      "rule_id": "FA-HIER-010",
+      "title": "版本一致性检查",
+      "category": "HIERARCHY",
+      "default_severity": "MAJOR",
+      "applicability": "同一架构模型中的所有节点必须属于同一版本。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/hierarchy-review.md#FA-HIER-010"
+    },
+    {
+      "rule_id": "FA-BPMN-001",
+      "title": "开始事件存在性",
+      "category": "BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "每个 BPMN 流程必须至少有一个开始事件。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-001"
+    },
+    {
+      "rule_id": "FA-BPMN-002",
+      "title": "结束事件存在性",
+      "category": "BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "每个 BPMN 流程必须至少有一个结束事件。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-002"
+    },
+    {
+      "rule_id": "FA-BPMN-003",
+      "title": "事件类型声明",
+      "category": "BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "BPMN 图中所有事件必须声明事件定义类型。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-003"
+    },
+    {
+      "rule_id": "FA-BPMN-004",
+      "title": "网关配对检查",
+      "category": "BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "分支网关必须有同类型的对应合并网关。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-004"
+    },
+    {
+      "rule_id": "FA-BPMN-005",
+      "title": "排他网关默认流",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "每个多出口排他网关必须指定且仅指定一条默认流。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-005"
+    },
+    {
+      "rule_id": "FA-BPMN-006",
+      "title": "悬空顺序流检测",
+      "category": "BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "每条顺序流必须有有效的源和目标引用。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-006"
+    },
+    {
+      "rule_id": "FA-BPMN-007",
+      "title": "孤立任务检测",
+      "category": "BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "每个任务、子流程和事件必须至少连接到一条顺序流。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-007"
+    },
+    {
+      "rule_id": "FA-BPMN-008",
+      "title": "池与道使用规范",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "在多池图中，所有任务必须分配到泳池内的某个泳道中。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-008"
+    },
+    {
+      "rule_id": "FA-BPMN-009",
+      "title": "顺序流与消息流区分",
+      "category": "BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "顺序流必须连接同一泳池内的元素；消息流必须跨泳池连接。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-009"
+    },
+    {
+      "rule_id": "FA-BPMN-010",
+      "title": "子流程边界完整性",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "子流程应有明确定义的输入和输出连接。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-010"
+    },
+    {
+      "rule_id": "FA-BPMN-011",
+      "title": "异常与错误路径",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "涉及外部交互的流程应定义异常或错误处理路径。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-011"
+    },
+    {
+      "rule_id": "FA-BPMN-012",
+      "title": "回滚路径存在性",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "多步骤事务性流程应定义回滚或补偿路径。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-012"
+    },
+    {
+      "rule_id": "FA-BPMN-013",
+      "title": "任务标签完整性",
+      "category": "BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "BPMN 图中所有任务必须有非空名称。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-013"
+    },
+    {
+      "rule_id": "FA-BPMN-014",
+      "title": "中间事件放置",
+      "category": "BPMN",
+      "default_severity": "MINOR",
+      "applicability": "中间事件应放置在流程流中的有意义位置。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-014"
+    },
+    {
+      "rule_id": "FA-BPMN-015",
+      "title": "数据对象关联",
+      "category": "BPMN",
+      "default_severity": "MINOR",
+      "applicability": "数据对象应至少与一个任务或子流程关联。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/bpmn-review.md#FA-BPMN-015"
+    },
+    {
+      "rule_id": "FA-VIS-001",
+      "title": "连线交叉检测",
+      "category": "VISUAL",
+      "default_severity": "MAJOR",
+      "applicability": "流程连线不应相互交叉。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-001"
+    },
+    {
+      "rule_id": "FA-VIS-002",
+      "title": "流向一致性",
+      "category": "VISUAL",
+      "default_severity": "MAJOR",
+      "applicability": "所有顺序流应遵循一致的主要方向。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-002"
+    },
+    {
+      "rule_id": "FA-VIS-003",
+      "title": "回流检测",
+      "category": "VISUAL",
+      "default_severity": "CRITICAL",
+      "applicability": "流程流向不应相对于主要阅读方向出现反向。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-003"
+    },
+    {
+      "rule_id": "FA-VIS-004",
+      "title": "图表密度检查",
+      "category": "VISUAL",
+      "default_severity": "MINOR",
+      "applicability": "单个视图中不应包含过多元素。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-004"
+    },
+    {
+      "rule_id": "FA-VIS-005",
+      "title": "标签可读性",
+      "category": "VISUAL",
+      "default_severity": "MAJOR",
+      "applicability": "所有元素标签必须可读，字号充足且无截断。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-005"
+    },
+    {
+      "rule_id": "FA-VIS-006",
+      "title": "间距一致性",
+      "category": "VISUAL",
+      "default_severity": "MINOR",
+      "applicability": "图中各元素的间距应保持一致。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-006"
+    },
+    {
+      "rule_id": "FA-VIS-007",
+      "title": "颜色依赖检查",
+      "category": "VISUAL",
+      "default_severity": "MAJOR",
+      "applicability": "图表不得仅依赖颜色来传达含义。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-007"
+    },
+    {
+      "rule_id": "FA-VIS-008",
+      "title": "图例存在性",
+      "category": "VISUAL",
+      "default_severity": "MINOR",
+      "applicability": "使用自定义符号或颜色的图表应包含图例。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-008"
+    },
+    {
+      "rule_id": "FA-VIS-009",
+      "title": "标题与元信息",
+      "category": "VISUAL",
+      "default_severity": "MINOR",
+      "applicability": "图表应有标题或标注以标识所描述的流程。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-009"
+    },
+    {
+      "rule_id": "FA-VIS-010",
+      "title": "最小元素间距",
+      "category": "VISUAL",
+      "default_severity": "MINOR",
+      "applicability": "相邻元素之间必须有足够间距以便视觉区分。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/visual-review.md#FA-VIS-010"
+    },
+    {
+      "rule_id": "FA-CONS-001",
+      "title": "L4 到子流程映射",
+      "category": "CONSISTENCY",
+      "default_severity": "BLOCKER",
+      "applicability": "每个 L4 子流程节点必须在图表中有对应的子流程元素。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-001"
+    },
+    {
+      "rule_id": "FA-CONS-002",
+      "title": "L5 到任务映射",
+      "category": "CONSISTENCY",
+      "default_severity": "CRITICAL",
+      "applicability": "每个 L5 流程节点必须在图表中有对应的任务元素。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-002"
+    },
+    {
+      "rule_id": "FA-CONS-003",
+      "title": "角色到泳道映射",
+      "category": "CONSISTENCY",
+      "default_severity": "CRITICAL",
+      "applicability": "分配给架构节点的角色应与图表中的泳道对应。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-003"
+    },
+    {
+      "rule_id": "FA-CONS-004",
+      "title": "交付物到数据对象映射",
+      "category": "CONSISTENCY",
+      "default_severity": "MAJOR",
+      "applicability": "输入输出交付物应在图表中有对应的数据对象元素。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-004"
+    },
+    {
+      "rule_id": "FA-CONS-005",
+      "title": "跨组织消息流映射",
+      "category": "CONSISTENCY",
+      "default_severity": "MAJOR",
+      "applicability": "跨组织交互应以消息流元素表示。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-005"
+    },
+    {
+      "rule_id": "FA-CONS-006",
+      "title": "异常路径映射",
+      "category": "CONSISTENCY",
+      "default_severity": "MAJOR",
+      "applicability": "架构中的异常处理路径应在图表中有所体现。",
+      "deterministic_check": false,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-006"
+    },
+    {
+      "rule_id": "FA-CONS-007",
+      "title": "架构完整性覆盖",
+      "category": "CONSISTENCY",
+      "default_severity": "CRITICAL",
+      "applicability": "所有 L4 和 L5 架构节点必须在图表模型中有所体现。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-007"
+    },
+    {
+      "rule_id": "FA-CONS-008",
+      "title": "图表多余元素",
+      "category": "CONSISTENCY",
+      "default_severity": "MINOR",
+      "applicability": "图表中没有对应架构节点的元素可能表示未记录的流程。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/consistency-review.md#FA-CONS-008"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-001",
+      "title": "泳道不得使用个人姓名",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "泳道必须表达业务角色，不得使用可识别的个人姓名作为角色或泳道名。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-001"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-002",
+      "title": "每个 L5 活动恰有一个 MAIN_TASK",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "每个 L5 活动必须恰好有一个 MAIN_TASK 节点绑定，三方 ID 和名称一致。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-002"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-003",
+      "title": "主 Task 泳道与 RASCI/R 或 OARP/O 一致",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "普通活动主 Task 位于 RASCI 的 R 泳道；评审/决策活动位于 OARP 的 O 泳道。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-003"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-004",
+      "title": "确认从 Task 三条件",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "确认从 Task 仅在三项声明全真、确认角色存在且不同于主责角色时成立。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-004"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-005",
+      "title": "正式审批不得作为确认从 Task",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "正式审批、正式评审会议或独立决策不得建模为确认从 Task，应为独立 L5。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-005"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-006",
+      "title": "XOR/OR 必须有条件或默认路径",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "XOR/OR 拆分的业务分支必须具有结构化条件或明确默认路径。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-006"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-007",
+      "title": "结束事件必须有业务结果名称",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "MAJOR",
+      "applicability": "业务结束事件必须有可区分的业务结果名称，并与流程卡片终点集合一致。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-007"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-008",
+      "title": "Link Catch/Throw 成对",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "CRITICAL",
+      "applicability": "Link Catch/Throw 必须按名称或显式引用成对，方向正确且不得悬空。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-008"
+    },
+    {
+      "rule_id": "FA-ACT-BPMN-009",
+      "title": "同一 L5 不得映射并行主 Task",
+      "category": "ACTIVITY_BPMN",
+      "default_severity": "BLOCKER",
+      "applicability": "同一 L5 活动不得映射并行或多个主 Task；最多允许一个满足门禁的串行确认从 Task。",
+      "deterministic_check": true,
+      "public_reference": "references/rules/activity-bpmn-review.md#FA-ACT-BPMN-009"
+    }
+  ]
+}
