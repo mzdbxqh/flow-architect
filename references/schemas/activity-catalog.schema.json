@@ -115,6 +115,11 @@
         "type": "string",
         "enum": ["COMPLETE", "NEEDS_CONFIRMATION", "CONFLICTED"],
         "description": "完整度状态"
+      },
+      "evidence_refs": {
+        "type": "array",
+        "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" },
+        "description": "活动来源证据块引用（跨片段合并后的并集）"
       }
     }
   }

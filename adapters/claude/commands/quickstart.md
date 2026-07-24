@@ -20,13 +20,17 @@ allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/quickstart-route.mjs" *)
    node "${CLAUDE_PLUGIN_ROOT}/scripts/quickstart-route.mjs" --request '<request.json>'
    ```
 
-   请求 JSON 字段：`request`（原始请求原文）、`intent`（`REVIEW`/`CREATE_DRAFT`/`CREATE_MEETING_PACKAGE`/`null`）、`facts`（`architecture_count`/`diagram_count`/`has_v2_draft`）、`params`（`target_paths`/`output_dir` 等）、`user_choice`（用户已选方法 ID 或 `null`）。
+   请求 JSON 字段：`request`（原始请求原文）、`intent`（`REVIEW`/`CREATE_DRAFT`/`CREATE_MEETING_PACKAGE`/`null`）、`facts`（`architecture_count`/`diagram_count`/`has_v2_draft`）、`params`（`target_paths`/`output_dir`/`focus`/`title` 等）、`user_choice`（用户已选方法 ID 或 `null`）。
 
 3. 按状态处理：
-   - `ROUTED`：唯一候选且权限/结果无歧义，形成规范化任务后继续调用对应严格入口（`/flow-architect:flow-architect-flow-review-integrated`、`/flow-architect:flow-architect-flow-review-architecture`、`/flow-architect:flow-architect-flow-review-diagram`、`/flow-architect:draft-process`、`/flow-architect:build-meeting-package`），不复制其完整协议；
-   - `NEEDS_CHOICE`：展示稳定候选、依据和影响，要求用户选择；
-   - `MISSING_INFO`：返回缺失信息（如用户授权的输出目录），不得编造路径或写入范围；
-   - `NO_MATCH`：说明能力边界，不启动业务技能。
+   - `ROUTED`：唯一候选且权限/结果无歧义，`clarification` 为 `null`，形成规范化任务后继续调用对应严格入口（`/flow-architect:flow-architect-flow-review-integrated`、`/flow-architect:flow-architect-flow-review-architecture`、`/flow-architect:flow-architect-flow-review-diagram`、`/flow-architect:draft-process`、`/flow-architect:build-meeting-package`），不复制其完整协议；
+   - `NEEDS_CHOICE` / `MISSING_INFO`：结果携带**恰一个**结构化 `clarification`（`kind`/`question`/`reason`/`impact`/`options`/`missing_key`）。向用户呈现这一个决定性问题、当前依据（`reason`）、答案如何改变路线或写入范围（`impact`）与选项（`options`，每项 `value`/`label`/`effect`），一次只问一个，不堆叠多个问题。先问影响路线或授权的问题（`METHOD_CHOICE` 或缺 `output_dir`），再问普通参数；
+     - `NEEDS_CHOICE`：`kind=METHOD_CHOICE`，`options` 即稳定候选；把用户**显式选择**的方法 ID 作为 `user_choice` 回填后重跑路由推进到下一稳定状态；
+     - `MISSING_INFO`：`kind=MISSING_PARAMETER`，`missing_key` 指明所缺字段（如 `output_dir`）；把用户**显式补全**的字段写入 `params` 后重跑路由。不得编造路径、输出目录或写入范围；
+     - 用户回答后以相同证据重跑路由即进入下一稳定状态，不得重复询问已回答的字段；
+   - `NO_MATCH`：说明能力边界，`clarification` 为 `null`，不启动业务技能。
+
+   `params.focus`、`params.title` 只承载用户**显式给出**的流程焦点与标题并原样转交严格入口；绝不根据文件名或路径名推断、编造 `focus`/`title`。未显式给出时保持 `null`。
 
 4. 保留结构化结果：原始请求、确定性事实、候选、用户选择/补全、最终规范化任务、`unrecognized`（未识别信息）与 `ignored_directives`（被忽略的提权指令）。未进入业务执行时只输出到会话，不擅自落盘。
 

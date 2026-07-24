@@ -1,5 +1,7 @@
 # Flow Architect
 
+English | [简体中文](README.zh-CN.md)
+
 Flow Architect is a process architecture and diagram review skill family for Codex and Claude Code, with creation capabilities for process drafts and offline meeting packages.
 
 ## Quick Installation
@@ -7,14 +9,14 @@ Flow Architect is a process architecture and diagram review skill family for Cod
 **Codex (stable):**
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.1
+codex plugin marketplace add ifoohoo/flow-architect --ref v0.5.1
 codex plugin add flow-architect@flow-architect
 ```
 
 **Claude Code Marketplace (recommended):**
 
 ```bash
-/plugin marketplace add mzdbxqh/flow-architect
+/plugin marketplace add ifoohoo/flow-architect
 /plugin install flow-architect@flow-architect
 /reload-plugins
 /flow-architect:setup
@@ -29,7 +31,7 @@ For detailed installation, usage examples, update, uninstall, and troubleshootin
 To validate the plugin from source or contribute to development:
 
 ```bash
-git clone https://github.com/mzdbxqh/flow-architect.git
+git clone https://github.com/ifoohoo/flow-architect.git
 cd flow-architect
 corepack enable
 pnpm install --frozen-lockfile
@@ -56,7 +58,7 @@ This read-only command displays all available skills, runtime status, supported 
 
 | Skill | Purpose |
 |---|---|
-| `flow-architect` | Default entry; inspects inputs and routes to integrated review |
+| `flow-architect` | Default entry; inspects inputs and routes to process drafting or the matching review route |
 | `flow-architect-flow-review-integrated` | Joint review of process architecture and diagrams |
 | `flow-architect-flow-review-architecture` | Review L4/L5/L6/SOP layered architecture only |
 | `flow-architect-flow-review-diagram` | Review BPMN, Mermaid, SVG, PNG, or PDF diagrams only |
@@ -66,7 +68,7 @@ This read-only command displays all available skills, runtime status, supported 
 | `flow-architect-setup` | Initialize core and user-selected optional runtime components |
 | `flow-architect-quickstart` | Formal natural-language entry; enumerates candidate public methods deterministically and routes to the chosen strict entry after user confirmation |
 
-The default entry skill (`flow-architect`) inspects your input files, determines which artifact families are present, and routes to the appropriate review flow. The three flow skills can also be invoked directly when you know which review you need.
+The default entry skill (`flow-architect`) inspects your input files and chooses a business entry: it delegates process drafting to `flow-architect-draft-process`, or routes a review to one of three routes based on the artifact families present (integrated, architecture-only, or diagram-only). The flow skills can also be invoked directly when you know which review you need.
 
 ## Supported Input Formats
 
@@ -169,23 +171,13 @@ runs/flow-architect/<run-id>/
 ├── input/
 │   └── input-manifest.json
 ├── stages/
-│   ├── 10-inspect/
-│   ├── 20-extract-architecture/
-│   ├── 21-extract-diagram/
-│   ├── 30-review-l4/
-│   ├── 31-review-l5/
-│   ├── 32-review-l6/
-│   ├── 33-review-sop/
-│   ├── 40-review-hierarchy/
-│   ├── 41-review-bpmn/
-│   ├── 42-review-visual/
-│   ├── 50-review-consistency/
-│   └── 60-validate/
+│   └── <stage-id>/
+│       └── result.json
+├── review-verdict.json
 └── final/
-    ├── result.json
-    ├── review-verdict.json
-    └── review-report.md
 ```
+
+Each review stage (e.g. `extract-architecture`, `review-l4`, `review-bpmn`, `review-consistency`) writes its result to `stages/<stage-id>/result.json`; the final verdict `review-verdict.json` is written to the run root together with a summary report. Process-draft runs additionally use `stages/semantic/` (batch queue and semantic fragments) and `stages/merge/` (merged facts and merge report), with final artifacts in `final/`: `process.bpmn`, `questions.json`, `clarification-agenda.md`, `process-draft.json`, and the offline HTML meeting package.
 
 The run root directory is determined by the user or target project; it is not written into the installed plugin directory.
 

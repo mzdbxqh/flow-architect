@@ -83,6 +83,7 @@ function auditPack() {
     'test/',
     'artifacts/',
     'docs/process/',
+    'runs/',
     '.tgz',
   ];
   for (const f of forbidden) {

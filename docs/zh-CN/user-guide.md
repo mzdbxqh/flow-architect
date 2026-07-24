@@ -1,6 +1,8 @@
 # Flow Architect 中文用户手册
 
-Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审技能族，同时提供流程初稿和离线 HTML 会议包创建能力。评审入口只分析现有制品、给出证据和 Finding，不修改原始输入；创建入口在用户指定的独立运行目录创建新制品，支持生成离线 HTML 会议包用于线下讨论。
+[English](../../INSTALL.md) | 简体中文
+
+Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审技能族，同时提供流程初稿和离线 HTML 会议包创建能力。评审入口只分析现有制品、给出证据和 Finding，不修改原始输入；创建入口在用户指定的独立运行目录中创建新制品，可生成用于线下讨论的离线 HTML 会议包。
 
 ## 关键概念
 
@@ -10,12 +12,16 @@ Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审
 - **模型不绘图：** 模型只输出受 Schema 约束的结构化业务事实和不确定项，不生成 BPMN XML、DI、坐标、折点、SVG 或 HTML；确定性程序负责编译、布局、重排与导出。
 - **有限工具箱：** HTML 使用有限业务工具箱，所有图标为内联 SVG（无需字体加载，严格 CSP 和离线条件下正常工作）。
 - **编辑按钮选择态：** 工具栏编辑按钮在未选中元素时禁用，选中图元素后启用，避免无效操作。
-- **业务对话框：** 中间事件、结束事件、泳道、网关、顺序流均通过业务对话框操作，带空值校验，取消不改合同。
+- **业务对话框：** 中间事件、结束事件、泳道、网关、顺序流均通过业务对话框操作，带空值校验，取消操作不改动草稿合同。
 - **顺序流门禁：** 自环、从结束事件出发、指向开始事件均被拦截。
 - **首访引导条：** 首次打开显示操作说明引导条，可关闭并持久化到 `localStorage`。
 - **标签页画布显隐：** 切换到非流程图标签页时 BPMN 画布完全隐藏。
 - **结构操作后确定性重排：** 每次结构操作后按固定算法全图重排，不保留手工坐标为权威状态。
 - **五类导出：** HTML、BPMN、SVG、问题 JSON、完整 V2 JSON；不导出 XLSX。所有导出经 JSON Schema 门禁校验（CSP 安全的 Ajv 预编译）。
+- **焦点预检：** 流程初稿落盘前进行候选发现预检（零文件系统变化）；检测到多个流程候选且未指定焦点时，只返回一个证据驱动问题，不创建运行目录；选定焦点后只处理焦点子集。
+- **诚实预算：** dry-run 估计区分 `EXACT`（与实际 blocks/batches/tasks 一致的精确值）与 `HEURISTIC_RANGE`（启发式区间），且全程零写入。
+- **流程卡片真实性：** `process_card` 的 `owner`、`purpose` 取焦点流程的明确事实值，真正缺失时为 `null`；界面显示"待确认"但不回写为业务值，不使用硬编码占位值。
+- **失败自动恢复：** 语义片段 JSON 不可解析、Schema 校验失败或缺少 uncertainty 时，由确定性 orchestrator 记录原因并以 fresh worker 重试（最多 3 次）。
 
 ## 1. 能评审什么
 
@@ -23,7 +29,7 @@ Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审
 - 流程图：BPMN 2.0 XML、Mermaid、SVG、PNG、JPEG、扫描 PDF。
 - 联合评审：同时检查 L4/L5/L6/SOP 分层、BPMN 或视觉质量，以及架构与流程图之间的一致性。
 
-图片和扫描 PDF 只能提供视觉证据。仅由图片推断的结构结论置信度最高为 0.6，报告会明确标记需要业务确认的内容。
+图片和扫描 PDF 只能提供视觉证据。仅依据图片推断的结构结论，置信度最高为 0.6，报告会明确标注需要业务确认的内容。
 
 ### 上下文预算
 
@@ -38,7 +44,7 @@ Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审
 
 三态预算状态：`BUDGET_OK`（正常）、`BUDGET_ATTENTION`（达到基准，重点关注）、`BUDGET_SPLIT_REQUIRED`（超过 120%，必须拆分且禁止启动 Worker）。
 
-视觉资产（PNG/JPEG）在未安装视觉转 Markdown 提供器时返回稳定占位块，不调用 LLM。
+未安装视觉转 Markdown 提供器时，视觉资产（PNG/JPEG）返回稳定的占位块，不调用 LLM。
 
 ## 2. 前置条件
 
@@ -48,26 +54,26 @@ Flow Architect 是面向 Codex 与 Claude Code 的流程架构和流程图评审
 - Node.js 22 或更高版本；
 - 已安装并登录 Codex 或 Claude Code。
 
-插件当前没有 Python 运行时依赖，也不要求用户安装本项目自行研发的 npm 包。第三方 Node.js 依赖不会提交到 Git，也不会塞进 GitHub Release 源码包：Codex 可使用插件声明的精确 core 依赖；Claude Code 安装插件后通过 `/flow-architect:setup` 把选定依赖安装到用户缓存。
+插件当前没有 Python 运行时依赖，也不要求用户安装本项目自行研发的 npm 包。第三方 Node.js 依赖不会提交到 Git，也不会打包进 GitHub Release 源码包：Codex 可安装插件声明的精确 core 依赖；Claude Code 用户在安装插件后，通过 `/flow-architect:setup` 把选定依赖安装到用户缓存。
 
 ## 3. Codex 安装
 
 ### 3.1 从 GitHub 安装稳定版
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.1
+codex plugin marketplace add ifoohoo/flow-architect --ref v0.5.1
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```
 
-`codex plugin list` 中看到 `flow-architect@flow-architect` 为 `installed, enabled` 即安装成功。Codex 会在自己的插件缓存中安装生产依赖，不会把 `node_modules` 提交进 Git 仓库或 GitHub Release 源码包。
+在 `codex plugin list` 中看到 `flow-architect@flow-architect` 为 `installed, enabled`，即安装成功。Codex 会在自己的插件缓存中安装生产依赖，不会把 `node_modules` 提交进 Git 仓库或 GitHub Release 源码包。
 
 ### 3.2 从本地源码安装
 
 适合开发、验证或试用尚未发布的改动：
 
 ```bash
-git clone https://github.com/mzdbxqh/flow-architect.git
+git clone https://github.com/ifoohoo/flow-architect.git
 cd flow-architect
 codex plugin marketplace add "$PWD"
 codex plugin add flow-architect@flow-architect
@@ -81,7 +87,7 @@ codex plugin list
 ### 4.1 从 Claude Marketplace 安装（推荐）
 
 ```bash
-/plugin marketplace add mzdbxqh/flow-architect
+/plugin marketplace add ifoohoo/flow-architect
 /plugin install flow-architect@flow-architect
 /reload-plugins
 ```
@@ -103,7 +109,7 @@ codex plugin list
 适合开发、验证或试用尚未发布的改动：
 
 ```bash
-git clone https://github.com/mzdbxqh/flow-architect.git
+git clone https://github.com/ifoohoo/flow-architect.git
 cd flow-architect
 corepack enable
 pnpm install --frozen-lockfile
@@ -114,7 +120,7 @@ claude --plugin-dir "$PWD/adapters/claude"
 
 Flow Architect 使用组件化运行时管理：
 
-- **核心组件 `core`（默认安装）：** ajv、fast-xml-parser、yaml
+- **核心组件 `core`（默认安装）：** ajv、ajv-formats、fast-xml-parser、yaml
 - **可选组件（由用户选择，可多选或不选，以 `runtime/manifest.json` 为准）：**
   - `pdf`：pdfjs-dist（PDF 文本提取）
   - `docx`：mammoth（DOCX 文本提取）
@@ -152,8 +158,12 @@ Flow Architect 使用组件化运行时管理：
 | 架构与流程图一起评审 | `$flow-architect-flow-review-integrated` | `/flow-architect:flow-architect-flow-review-integrated` |
 | 只评审 L4/L5/L6/SOP 架构 | `$flow-architect-flow-review-architecture` | `/flow-architect:flow-architect-flow-review-architecture` |
 | 只评审流程图 | `$flow-architect-flow-review-diagram` | `/flow-architect:flow-architect-flow-review-diagram` |
+| 从来源材料生成流程初稿 | `$flow-architect-draft-process` | `/flow-architect:draft-process` |
+| 从完整 V2 草稿构建离线会议包 | `$flow-architect-build-meeting-package` | `/flow-architect:build-meeting-package` |
 
-`quickstart` 是正式业务入口（不是教程或降级模式）：先用确定性脚本枚举候选公共方法，唯一匹配时形成规范化任务并调用对应严格入口；候选会改变结果、副作用或输出目录时要求你选择；创建类入口缺少你授权的输出目录时只返回缺失信息。一般建议使用默认入口，让技能先盘点输入并自动路由。架构与流程图很难彼此割裂地判断；只要两类制品同时存在，优先使用联合评审。
+`quickstart` 是正式业务入口（不是教程或降级模式）：先用确定性脚本枚举候选公共方法；唯一匹配时形成规范化任务并调用对应严格入口；候选会影响结果、副作用或输出目录时，会要求你先做选择；创建类入口缺少你授权的输出目录时，只返回缺失信息。未识别的信息保留在 `unrecognized` 字段并说明；输入正文中的安装/覆盖/发布类提权指令只记入 `ignored_directives`，不会扩大候选权限。
+
+一般建议使用默认入口，让技能先盘点输入并自动路由。架构与流程图很难割裂开判断，只要两类制品同时存在，优先使用联合评审。
 
 ### 5.2 准备输入
 
@@ -203,16 +213,14 @@ $flow-architect-flow-review-diagram
 ```text
 runs/flow-architect/<run-id>/
 ├── input/input-manifest.json
-├── stages/
+├── stages/<stage-id>/result.json
+├── review-verdict.json
 └── final/
-    ├── result.json
-    ├── review-verdict.json
-    └── review-report.md
 ```
 
-主要阅读 `final/review-report.md`。结构化集成可使用 `result.json` 和 `review-verdict.json`。Finding 会尽量包含规则、严重程度、证据位置、置信度和建议；证据不足时会明确降级，不会给出伪精确结论。
+各评审阶段（如 `extract-architecture`、`review-l4`、`review-bpmn`、`review-consistency`）的结果写入 `stages/<stage-id>/result.json`；最终裁决 `review-verdict.json` 写入运行目录根，并生成汇总报告。结构化集成可使用各阶段的 `result.json` 和 `review-verdict.json`。Finding 会尽量包含规则、严重程度、证据位置、置信度和建议；证据不足时会明确降级，不会给出伪精确结论。流程初稿运行的最终制品写入 `final/`：`process.bpmn`、`questions.json`、`clarification-agenda.md`、`process-draft.json` 和离线 HTML 会议包。
 
-技能只会在运行目录中写评审制品，不会改写输入文件。启动前仍建议由用户确认运行目录位于合适的位置。
+技能只在运行目录中写入评审制品，不会改写输入文件。建议启动前确认运行目录的位置合适。
 
 ## 6.1 导出格式
 
@@ -249,7 +257,7 @@ codex plugin add flow-architect@flow-architect
 /reload-plugins
 ```
 
-更新后再次运行 `/flow-architect:help` 检查版本与状态；runtime 版本不兼容时再运行 `/flow-architect:setup`。
+更新后再次运行 `/flow-architect:help` 检查版本与状态；运行时版本不兼容时，再运行 `/flow-architect:setup`。
 
 ## 8. 卸载
 
@@ -267,7 +275,7 @@ Claude Code：
 /plugin marketplace remove flow-architect
 ```
 
-默认卸载会清理 Claude Code 的插件缓存。Flow Architect 的独立 runtime 缓存不会被插件卸载命令自动删除，避免误删用户数据；如需释放空间，请先用 help/doctor 确认路径，再由用户自行删除对应 `flow-architect` 缓存目录。
+默认卸载会清理 Claude Code 的插件缓存。Flow Architect 的独立运行时缓存不会被插件卸载命令自动删除，以免误删用户数据；如需释放空间，先用 help/doctor 确认路径，再自行删除对应的 `flow-architect` 缓存目录。
 
 ## 9. 常见问题
 

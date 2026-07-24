@@ -23,25 +23,25 @@
     },
     "level": {
       "type": "string",
-      "enum": ["L1", "L2", "L3", "L4"],
-      "description": "流程层级"
+      "enum": ["L1", "L2", "L3", "L4", "L5"],
+      "description": "流程层级；取焦点流程的显式 PROCESS_LEVEL 事实（如末端活动级流程 L5），不得为过 Schema 回退 L4"
     },
     "is_leaf": {
       "type": "boolean",
-      "description": "是否末端流程，只有末端 L4 为 true 时生成一图两表"
+      "description": "是否末端流程，只有末端 L4/L5 为 true 时生成一图两表"
     },
     "description": {
       "type": "string",
       "description": "流程描述"
     },
     "purpose": {
-      "type": "string",
-      "description": "流程目的"
+      "type": ["string", "null"],
+      "description": "流程目的；真正缺失时为 null（界面可显示「待确认」，但不得把显示文案回写为业务值）"
     },
     "owner": {
-      "type": "string",
+      "type": ["string", "null"],
       "minLength": 1,
-      "description": "流程责任人（角色引用）"
+      "description": "流程责任人（角色引用）；真正缺失时为 null（界面可显示「待确认」，但不得把显示文案回写为业务值）"
     },
     "parent_process_name": {
       "type": ["string", "null"],

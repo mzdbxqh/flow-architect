@@ -1,7 +1,6 @@
 ---
 name: flow-architect-extract-process-fragment-worker
 description: 从单个证据批次中提取流程语义片段（V2：按 task_kind 分类）
-model: sonnet
 skills:
   - flow-architect-draft-process
 disallowedTools:

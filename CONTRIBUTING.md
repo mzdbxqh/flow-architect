@@ -7,7 +7,7 @@
 - **Git**
 
 ```bash
-git clone https://github.com/mzdbxqh/flow-architect.git
+git clone https://github.com/ifoohoo/flow-architect.git
 cd flow-architect
 corepack enable
 pnpm install --frozen-lockfile

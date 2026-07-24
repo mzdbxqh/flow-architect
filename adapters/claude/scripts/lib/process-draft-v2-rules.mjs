@@ -4,7 +4,7 @@
  * 纯业务规则，不依赖 Node 内置模块，可被浏览器打包。
  *
  * 错误码:
- *   FA-DRAFT-LEAF-001     — 非末端 L4/L1-L3 不允许活动和图
+ *   FA-DRAFT-LEAF-001     — 非末端 L4/L5 或 L1-L3 不允许活动和图
  *   FA-DRAFT-ROLE-001     — RASCI 恰一个 R，OARP 恰一个 O
  *   FA-DRAFT-ROLE-002     — 同一角色不得在同一活动出现多个责任代码
  *   FA-DRAFT-BIND-001     — 每个活动恰有一个主 Task 绑定
@@ -26,6 +26,18 @@
  */
 export function isLeafL4(card) {
   return card.level === 'L4' && card.is_leaf === true;
+}
+
+/**
+ * 判断是否为「可含活动与图的末端流程」（末端 L4 或 L5）。
+ *
+ * 一图两表/活动一览的生成门禁：末端 L4 与末端 L5（活动级流程）都允许包含活动与图，
+ * 并适用起止事件一致性规则；非末端或 L1-L3 不允许。
+ * @param {{ level: string, is_leaf: boolean }} card
+ * @returns {boolean}
+ */
+export function isLeafDiagramProcess(card) {
+  return card.is_leaf === true && (card.level === 'L4' || card.level === 'L5');
 }
 
 /**
@@ -83,12 +95,12 @@ export function validateDraftBusinessRules(draft) {
   }
 
   // ── FA-DRAFT-LEAF-001: 非末端不允许活动和图 ──
-  if (!isLeafL4(card)) {
+  if (!isLeafDiagramProcess(card)) {
     if (activities.length > 0) {
       errors.push({
         code: 'FA-DRAFT-LEAF-001',
         path: '/activities',
-        message: '非末端 L4 或 L1-L3 流程不允许包含活动',
+        message: '非末端 L4/L5 或 L1-L3 流程不允许包含活动',
       });
     }
     if (diagram.task_bindings.length > 0 ||
@@ -97,7 +109,7 @@ export function validateDraftBusinessRules(draft) {
       errors.push({
         code: 'FA-DRAFT-LEAF-001',
         path: '/diagram',
-        message: '非末端 L4 或 L1-L3 流程不允许包含图',
+        message: '非末端 L4/L5 或 L1-L3 流程不允许包含图',
       });
     }
   }
@@ -436,14 +448,14 @@ export function validateDraftBusinessRules(draft) {
     }
   }
 
-  if (isLeafL4(card)) {
-    // ── FA-DRAFT-CARD-002: 末端 L4 必须恰有一个开始事件 ──
+  if (isLeafDiagramProcess(card)) {
+    // ── FA-DRAFT-CARD-002: 末端 L4/L5 必须恰有一个开始事件 ──
     const startEventCount = diagram.nodes.filter(n => n.node_type === 'START_EVENT').length;
     if (startEventCount !== 1) {
       errors.push({
         code: 'FA-DRAFT-CARD-002',
         path: '/diagram/nodes',
-        message: `末端 L4 流程必须恰好一个开始事件，当前 ${startEventCount} 个`,
+        message: `末端 L4/L5 流程必须恰好一个开始事件，当前 ${startEventCount} 个`,
       });
     } else {
       const startNode = diagram.nodes.find(n => n.node_type === 'START_EVENT');
@@ -456,13 +468,13 @@ export function validateDraftBusinessRules(draft) {
       }
     }
 
-    // ── FA-DRAFT-CARD-003: 末端 L4 必须有至少一个结束事件 ──
+    // ── FA-DRAFT-CARD-003: 末端 L4/L5 必须有至少一个结束事件 ──
     const hasEndEvent = diagram.nodes.some(n => n.node_type === 'END_EVENT');
     if (!hasEndEvent) {
       errors.push({
         code: 'FA-DRAFT-CARD-003',
         path: '/diagram/nodes',
-        message: '末端 L4 流程必须包含至少一个结束事件',
+        message: '末端 L4/L5 流程必须包含至少一个结束事件',
       });
     } else {
       const endNodes = diagram.nodes.filter(n => n.node_type === 'END_EVENT');

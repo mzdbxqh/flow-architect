@@ -51,11 +51,11 @@
       "properties": {
         "process_id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$" },
         "name": { "type": "string", "minLength": 1 },
-        "level": { "type": "string", "enum": ["L1", "L2", "L3", "L4"] },
+        "level": { "type": "string", "enum": ["L1", "L2", "L3", "L4", "L5"] },
         "is_leaf": { "type": "boolean" },
         "description": { "type": "string" },
-        "purpose": { "type": "string" },
-        "owner": { "type": "string", "minLength": 1 },
+        "purpose": { "type": ["string", "null"] },
+        "owner": { "type": ["string", "null"], "minLength": 1 },
         "parent_process_name": { "type": ["string", "null"] },
         "inputs": { "type": "array", "items": { "type": "string" } },
         "outputs": { "type": "array", "items": { "type": "string" } },
@@ -158,7 +158,8 @@
             "required": ["confirmation_task_id", "confirm_role_id", "co_completes", "confirm_bears_final_responsibility", "no_formal_approval_meeting"],
             "additionalProperties": false
           },
-          "completeness": { "type": "string", "enum": ["COMPLETE", "NEEDS_CONFIRMATION", "CONFLICTED"] }
+          "completeness": { "type": "string", "enum": ["COMPLETE", "NEEDS_CONFIRMATION", "CONFLICTED"] },
+          "evidence_refs": { "type": "array", "items": { "type": "string", "pattern": "^B-[a-zA-Z0-9_-]+$" } }
         }
       }
     },

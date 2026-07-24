@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "plugin_name": "flow-architect",
-  "plugin_version": "0.4.1",
+  "plugin_version": "0.5.1",
   "description": "三入口（help/setup/quickstart）共同消费的稳定能力与方法目录。help 从这里列出公共入口与边界，quickstart 从这里枚举候选方法；严格业务入口的完整协议不在此复制。",
   "fixed_entries": [
     {
@@ -83,7 +83,12 @@
       "requires_output_dir": true,
       "network": false,
       "applicable_when": "用户明确要求从来源材料创建流程初稿，并给出授权运行目录",
-      "input_families": ["source_material"]
+      "input_families": ["source_material"],
+      "intent_signals": {
+        "description": "方法意图信号的唯一来源：quickstart 路由从这里读取组合意图关键词，脚本与文档不再各自复制。action_verbs 与 artifact_nouns 同时出现（且动词非「…的…」定语用法）才构成创建流程初稿的组合意图。",
+        "action_verbs": ["生成", "创建", "绘制", "转换", "产出", "画"],
+        "artifact_nouns": ["bpmn", "流程图", "流程草稿", "流程初稿"]
+      }
     },
     {
       "id": "create-meeting-package",

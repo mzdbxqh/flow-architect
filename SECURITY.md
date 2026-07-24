@@ -13,7 +13,7 @@
 If you discover a security vulnerability in Flow Architect, please report it responsibly:
 
 1. **Do not open a public GitHub issue** for security vulnerabilities.
-2. Use [GitHub Security Advisories](https://github.com/mzdbxqh/flow-architect/security/advisories/new) to report the vulnerability privately.
+2. Use [GitHub Security Advisories](https://github.com/ifoohoo/flow-architect/security/advisories/new) to report the vulnerability privately.
 3. Include a description of the vulnerability, steps to reproduce, and the potential impact.
 
 You can expect an initial response within 72 hours. We will work with you to understand and address the issue before any public disclosure.

@@ -1,5 +1,7 @@
 # Installation
 
+English | [简体中文](docs/zh-CN/user-guide.md)
+
 ## Requirements
 
 - Git
@@ -14,7 +16,7 @@ The plugin has no Python runtime dependency and no project-developed npm package
 Install the stable GitHub release:
 
 ```bash
-codex plugin marketplace add mzdbxqh/flow-architect --ref v0.4.1
+codex plugin marketplace add ifoohoo/flow-architect --ref v0.5.1
 codex plugin add flow-architect@flow-architect
 codex plugin list
 ```
@@ -24,7 +26,7 @@ codex plugin list
 For a local source checkout:
 
 ```bash
-git clone https://github.com/mzdbxqh/flow-architect.git
+git clone https://github.com/ifoohoo/flow-architect.git
 cd flow-architect
 codex plugin marketplace add "$PWD"
 codex plugin add flow-architect@flow-architect
@@ -42,7 +44,7 @@ codex plugin marketplace remove flow-architect
 Install from the public Claude Marketplace:
 
 ```bash
-/plugin marketplace add mzdbxqh/flow-architect
+/plugin marketplace add ifoohoo/flow-architect
 /plugin install flow-architect@flow-architect
 /reload-plugins
 /flow-architect:help
@@ -54,7 +56,7 @@ Install from the public Claude Marketplace:
 For local plugin development:
 
 ```bash
-git clone https://github.com/mzdbxqh/flow-architect.git
+git clone https://github.com/ifoohoo/flow-architect.git
 cd flow-architect
 corepack enable
 pnpm install --frozen-lockfile
@@ -64,7 +66,7 @@ claude --plugin-dir "$PWD/adapters/claude"
 ## Upgrading from v0.2.x
 
 1. Uninstall the old plugin: `/plugin uninstall flow-architect@flow-architect` (Claude) or `codex plugin remove flow-architect@flow-architect` (Codex).
-2. Install v0.4.1 following the instructions above.
+2. Install v0.5.1 following the instructions above.
 3. Run `/flow-architect:setup` to re-initialize the runtime cache. The setup command is idempotent and reuses existing verified caches.
 
 ## Upgrading from v0.1.x

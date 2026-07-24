@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quickstart-route",
   "title": "Quickstart Route Result",
-  "description": "scripts/quickstart-route.mjs 的确定性路由输出合同。路由阶段零写入、零联网；该结果只描述候选与规范化任务，不代表已执行业务副作用。",
+  "description": "scripts/quickstart-route.mjs 的确定性路由输出合同。路由阶段零写入、零联网；该结果只描述候选与规范化任务，不代表已执行业务副作用。非终态（NEEDS_CHOICE / MISSING_INFO）恰携带一个结构化 clarification（一个问题、依据、影响、选项）；终态（ROUTED / NO_MATCH）clarification 为 null。",
   "type": "object",
   "required": [
     "status",
@@ -10,6 +10,7 @@
     "selected_method",
     "normalized_task",
     "missing",
+    "clarification",
     "ignored_directives",
     "unrecognized",
     "evidence"
@@ -60,16 +61,57 @@
         "codex_entry": { "type": "string" },
         "params": {
           "type": "object",
-          "required": ["target_paths", "output_dir"],
+          "required": ["target_paths", "output_dir", "focus", "title"],
           "additionalProperties": false,
           "properties": {
             "target_paths": { "type": "array", "items": { "type": "string" } },
-            "output_dir": { "type": ["string", "null"] }
+            "output_dir": { "type": ["string", "null"] },
+            "focus": { "type": ["string", "null"] },
+            "title": { "type": ["string", "null"] }
           }
         }
       }
     },
     "missing": { "type": "array", "items": { "type": "string" } },
+    "clarification": {
+      "description": "非终态恰有一个问题式澄清；终态为 null。options.value 只能引用 capability catalog 中的稳定方法 id，禁止自由生成方法 id。",
+      "type": ["object", "null"],
+      "required": ["kind", "question", "reason", "impact", "options", "missing_key"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["METHOD_CHOICE", "MISSING_AUTHORIZATION", "MISSING_PARAMETER"]
+        },
+        "question": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "impact": { "type": "string", "minLength": 1 },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["value", "label", "effect"],
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "string",
+                "enum": [
+                  "review-integrated",
+                  "review-architecture",
+                  "review-diagram",
+                  "create-process-draft",
+                  "create-meeting-package"
+                ]
+              },
+              "label": { "type": "string", "minLength": 1 },
+              "effect": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "missing_key": { "type": ["string", "null"] }
+      }
+    },
     "ignored_directives": { "type": "array", "items": { "type": "string" } },
     "unrecognized": { "type": "array", "items": { "type": "string" } },
     "evidence": {
@@ -96,5 +138,26 @@
         "user_choice": { "type": ["string", "null"] }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "enum": ["NEEDS_CHOICE", "MISSING_INFO"] } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": { "clarification": { "type": "object" } },
+        "required": ["clarification"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "enum": ["ROUTED", "NO_MATCH"] } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": { "clarification": { "type": "null" } }
+      }
+    }
+  ]
 }

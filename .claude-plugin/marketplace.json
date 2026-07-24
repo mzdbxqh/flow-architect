@@ -9,11 +9,11 @@
       "name": "flow-architect",
       "source": "./adapters/claude",
       "description": "Process architecture review, draft, and meeting package skill family",
-      "version": "0.4.1",
+      "version": "0.5.1",
       "author": {
         "name": "flow-architect contributors"
       },
-      "repository": "https://github.com/mzdbxqh/flow-architect",
+      "repository": "https://github.com/ifoohoo/flow-architect",
       "license": "Apache-2.0",
       "keywords": [
         "architecture",

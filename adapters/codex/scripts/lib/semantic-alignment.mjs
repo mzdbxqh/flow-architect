@@ -41,6 +41,9 @@ export function alignFragments(fragments) {
   // 7. 标准化 END_EVENT label 并合并 evidence_refs
   normalizeEndEvents(aligned);
 
+  // 8. 跨片段规范化 START_EVENT：同一业务起始事件合并为唯一 canonical
+  normalizeStartEvents(aligned);
+
   return aligned;
 }
 
@@ -483,5 +486,104 @@ function normalizeEndEventLabel(label) {
   return label
     .replace(/（结束）$/g, '')
     .replace(/\(结束\)$/g, '')
+    .trim();
+}
+
+/**
+ * 跨片段规范化 START_EVENT。
+ *
+ * 与 normalizeEndEvents 对称但语义更强：END_EVENT 仅按片段内去重并统一键，
+ * 而起始事件在一个流程中应当唯一。同一 process_key 内、规范化 label 相同的
+ * 多个 START_EVENT 被识别为同一业务起始事件，合并为**唯一一个** canonical 事实，
+ * 重写跨片段引用并合并 evidence_refs。
+ *
+ * 规则：
+ * - 仅在已校验同一 batch、且 process_key 已统一（normalizeProcessKeys）后运行，
+ *   因此结构上不会跨 batch / 跨 process 误合并；
+ * - canonical subject_key 优先取 CONTROL_FLOW 中的起始事件键（FLOW 以此引用），
+ *   无 CONTROL_FLOW 起始事件时取字典序最小键，保证相同输入字节稳定；
+ * - canonical 落点优先持有 canonical 键的 CONTROL_FLOW 条目；
+ * - 不同规范化 label 的起始事件视为真实多起点，不合并。
+ */
+function normalizeStartEvents(aligned) {
+  // 1. 收集所有 START_EVENT（连同所属片段）
+  const entries = [];
+  for (const frag of aligned) {
+    for (const fact of frag.payload.facts) {
+      if (fact.kind === 'START_EVENT') entries.push({ frag, fact });
+    }
+  }
+  if (entries.length === 0) return;
+
+  // 2. 按规范化 label 分组
+  const groups = new Map();
+  for (const entry of entries) {
+    const key = normalizeStartEventLabel(entry.fact.label);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  }
+
+  // 3. 合并重复起始事件
+  const rewrite = new Map(); // 被移除的 subject_key -> canonical subject_key
+  for (const group of groups.values()) {
+    if (group.length <= 1) continue;
+
+    // canonical subject_key：优先 CONTROL_FLOW，其次字典序最小（确定性、字节稳定）
+    const controlFlowEntry = group.find(e => e.frag.task_kind === 'CONTROL_FLOW');
+    const canonicalKey = controlFlowEntry
+      ? controlFlowEntry.fact.subject_key
+      : group.map(e => e.fact.subject_key).slice().sort()[0];
+
+    // canonical 落点：优先持有 canonical 键的条目，其次 CONTROL_FLOW，其次首个
+    const canonicalEntry =
+      group.find(e => e.fact.subject_key === canonicalKey) ||
+      controlFlowEntry ||
+      group[0];
+
+    // 合并全部 evidence_refs 到 canonical（按出现顺序去重，确定性）
+    const mergedRefs = [];
+    for (const e of group) {
+      for (const ref of (e.fact.evidence_refs || [])) {
+        if (!mergedRefs.includes(ref)) mergedRefs.push(ref);
+      }
+    }
+    canonicalEntry.fact.subject_key = canonicalKey;
+    canonicalEntry.fact.evidence_refs = mergedRefs;
+
+    // 记录重写并移除其余重复 START_EVENT
+    for (const e of group) {
+      if (e === canonicalEntry) continue;
+      if (e.fact.subject_key !== canonicalKey) {
+        rewrite.set(e.fact.subject_key, canonicalKey);
+      }
+      const idx = e.frag.payload.facts.indexOf(e.fact);
+      if (idx !== -1) e.frag.payload.facts.splice(idx, 1);
+    }
+  }
+
+  if (rewrite.size === 0) return;
+
+  // 4. 重写跨片段引用：指向被移除起始事件的 FLOW source/target 改指 canonical
+  for (const frag of aligned) {
+    for (const fact of frag.payload.facts) {
+      const attrs = fact.attributes;
+      if (!attrs) continue;
+      if (attrs.source_subject_key && rewrite.has(attrs.source_subject_key)) {
+        attrs.source_subject_key = rewrite.get(attrs.source_subject_key);
+      }
+      if (attrs.target_subject_key && rewrite.has(attrs.target_subject_key)) {
+        attrs.target_subject_key = rewrite.get(attrs.target_subject_key);
+      }
+    }
+  }
+}
+
+/**
+ * 标准化 START_EVENT label 用于去重（去除可选的「开始」后缀与首尾空白）
+ */
+function normalizeStartEventLabel(label) {
+  return label
+    .replace(/（开始）$/g, '')
+    .replace(/\(开始\)$/g, '')
     .trim();
 }

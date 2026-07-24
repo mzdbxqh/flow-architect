@@ -2,6 +2,47 @@
 
 All notable changes to Flow Architect are documented in this file.
 
+## [0.5.1] - 2026-07-24
+
+文档准确性修订：中文文档按代码实况校订，英文 README 同步修正，README 增加双语导航。
+
+### Added
+
+- **双语文档导航：** `README.md`、`README.zh-CN.md`、`INSTALL.md`、`docs/zh-CN/user-guide.md` 顶部增加对称的 English/简体中文切换链接。
+- **中文文档补写 v0.4.1/v0.5.0 用户可见能力：** 流程初稿焦点只读预检、dry-run 诚实预算（`EXACT`/`HEURISTIC_RANGE`）、确定性失败自动恢复、流程卡片真实性（nullable、禁占位值）；用户手册补充创建类入口（`draft-process`、`build-meeting-package`）与 quickstart 的 `unrecognized`/`ignored_directives` 行为说明。
+
+### Fixed
+
+- **运行目录结构描述纠错：** 中英文 README 与用户手册中虚构的编号 stages 目录（`10-inspect` 等）与 `final/` 内容清单，更正为真实布局（`stages/<stage-id>/result.json`、运行根 `review-verdict.json`、初稿 `stages/semantic`、`stages/merge` 与 `final/` 制品清单）。
+- **默认入口路由描述纠错：** 中英文 README 将默认入口描述更正为「盘点输入并路由至流程初稿或对应评审路线」（此前误写为仅路由至联合评审）。
+- **运行时组件清单：** 用户手册与 help 命令的 core 组件补登 `ajv-formats`（与 `runtime/manifest.json` 一致）。
+- **中文表达润色：** 消除翻译腔、统一三入口与运行时术语口径。
+
+## [0.5.0] - 2026-07-23
+
+流程初稿真实性与可预测生成（F003）：消除占位值、诚实预算、焦点预检与确定性恢复。
+
+### Added
+
+- **焦点只读预检：** 严格流程初稿入口在落盘前执行候选发现预检（`scripts/discover-process-candidates.mjs`、`scripts/lib/process-focus-precheck.mjs`，零文件系统变化）；多候选且无 focus 时返回一个证据驱动问题、不创建 runDir，选定焦点后只处理焦点子集且 EXACT 估计与实际 blocks/batches/tasks 一致。
+- **确定性失败自动恢复：** JSON 不可解析、Schema 失败、INFERRED 缺 uncertainty 时由确定性 orchestrator（`scripts/lib/semantic-worker-orchestrator.mjs`、`scripts/evaluate-worker-output.mjs`）记录原因并以 fresh worker 重试（≤3 次）；运行报告记录每个 task 的 attempt_count、失败原因与最终 fragment hash。
+- **dry-run 诚实预算：** 输出区分 `EXACT` 与 `HEURISTIC_RANGE`，禁止把启发式值标为精确“预计批次”；Markdown 等可安全内存抽取格式复用真实抽取与 batching，dry-run 返回精确 block/batch/task 数且零写入。
+- **合同测试与公开 fixture：** 新增 `test/process-draft-focus-preflight.test.mjs`、`test/wp7-blackbox.test.mjs` 与公开脱敏 fixture `test/fixtures/quickstart-remediation/`（合成成本预测管理材料，CM-1～CM-4 与 CM-1.4，27 blocks / 3 batches / 9 tasks）。
+
+### Fixed
+
+- **流程卡片真实性：** `process_card.owner`、`purpose` 取焦点流程的明确事实值，真正缺失时为 `null`（界面显示“待确认”但不回写为业务值），禁止 `Role-owner`、`自动生成` 等硬编码占位值；Schema、会议包、编辑器与导出链同步支持 nullable。
+- **问题焦点相关性与审计保留：** 用户问题清单只纳入焦点相关 uncertainty，排除项写入 `merge-report.json` 的 `out_of_scope_uncertainties` 与计数，不丢弃。
+- **worker 模型继承：** 语义提取 worker 删除硬编码 `model`，继承主会话模型；运行记录区分“继承策略已验证”与“实际 worker 模型 ID 不可观测”。
+- **流程层级诚实性：** 焦点流程缺失合法 `PROCESS_LEVEL` 事实时产生状态为 OPEN 的层级待确认问题，`provenance` 记 `MISSING`、`is_leaf` 派生为 `false`，不再静默回退 L4；`process_card.level` 保持 L1–L5 闭集枚举。
+- **活动主身份合并：** 单实例 kind 以 `kind:process_key:subject_key` 为主身份键合并详略不同的 label，真实冲突按确定性规则选取并记入 `merge_report.conflicts` 且生成 OPEN 冲突问题；输出按稳定键排序，与 fragment 输入顺序无关、字节稳定。
+- **跨任务确定性对齐：** 重复起止事件、描述型泳道在对齐层做确定性规范化，不与已有正式角色重复建 lane。
+
+### Changed
+
+- **版本统一为 0.5.0：** `package.json`、`build-adapters.mjs`（`PLUGIN_VERSION`）、根与 adapter `plugin.json` 清单、Marketplace 清单、共享能力目录 `plugin_version`、README/INSTALL/中文手册安装引用、help 技能与命令报告版本。
+- **仓库迁移至 ifoohoo 组织：** 公开仓库由 `mzdbxqh/flow-architect` 转移至 `ifoohoo/flow-architect`（GitHub 保留旧地址重定向），安装命令、Marketplace 清单、安全与贡献文档同步更新；LICENSE/NOTICE 增加广州市风荷科技有限公司版权与维护方说明（托管变更不构成版权转让）。
+
 ## [0.4.1] - 2026-07-20
 
 三入口（help/setup/quickstart）技能纠偏与发布准备。

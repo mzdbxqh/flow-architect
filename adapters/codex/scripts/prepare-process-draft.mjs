@@ -25,6 +25,7 @@ import { buildEvidenceBatches } from './lib/evidence-batching.mjs';
 import { validateEvidenceIndex, validateEvidenceBatch } from './lib/process-draft-contract.mjs';
 import { writeJsonAtomic } from './lib/atomic-json.mjs';
 import { normalizeEvidenceToMarkdown } from './lib/markdown-normalizer.mjs';
+import { discoverProcessCandidates, buildFocusClarification, blockMatchesProcessKey } from './lib/process-focus-precheck.mjs';
 
 /**
  * 抽取器版本 — 缓存键的一部分
@@ -33,12 +34,22 @@ const EXTRACTOR_VERSION = '1.0.0';
 const BATCH_PROTOCOL_VERSION = '2.0.0';
 const NORMALIZER_VERSION = '1.0.0';
 const FORMULA_VERSION = '1.0.0';
+const ESTIMATE_METHOD_VERSION = '2.0.0';
 const FRAGMENT_TASK_KINDS = ['PROCESS_CARD', 'ACTIVITY_CATALOG', 'CONTROL_FLOW'];
 
 /**
- * 计算内容寻址缓存键
+ * 可安全内存抽取的格式：无需可选运行时依赖、无视觉解析，
+ * dry-run 可复用真实抽取与 batching 逻辑给出精确计数且零写入。
  */
-function computeCacheKey(inputHashes, batchParams) {
+const SAFE_MEMORY_FORMATS = new Set(['md', 'bpmn', 'svg', 'mermaid']);
+
+/**
+ * 计算内容寻址缓存键
+ *
+ * 焦点（focus）纳入缓存键：不同焦点会过滤出不同的证据块与批次，
+ * 因此必须区分缓存，避免「选了 CM-1.4 却命中无焦点的全量缓存」。
+ */
+function computeCacheKey(inputHashes, batchParams, focus) {
   const keyData = {
     extractor_version: EXTRACTOR_VERSION,
     protocol_version: BATCH_PROTOCOL_VERSION,
@@ -47,6 +58,7 @@ function computeCacheKey(inputHashes, batchParams) {
     task_kinds: FRAGMENT_TASK_KINDS,
     input_hashes: inputHashes.sort(),
     batch_params: batchParams,
+    focus: focus || null,
   };
   return createHash('sha256').update(JSON.stringify(keyData)).digest('hex');
 }
@@ -289,16 +301,55 @@ async function main() {
     console.log(`  ${basename(input.path)}: ${hash.slice(0, 16)}...`);
   }
 
-  // 3. 预估批次
-  console.log('\n预估批次...');
-  const estimatedBatches = estimateBatches(validInputs);
-  console.log(`  预计批次: ${estimatedBatches}`);
+  // 3. 流程焦点只读预检（不落盘：仅内存抽取，预检前后文件系统零变化）。
+  //     单候选自动继续；多候选且无 focus 时，非 dry-run 转交一个证据驱动问题，
+  //     并在创建 runDir 之前退出，避免无焦点直接生成跨层级混合 BPMN。
+  const precheck = await discoverProcessCandidates({ inputs: inputHashes, focus });
+  const precheckCandidates = precheck.candidates;
+  let effectiveFocus = focus || null;
 
-  // 计算缓存键
+  if (precheckCandidates.length === 1 && !effectiveFocus) {
+    effectiveFocus = precheckCandidates[0].process_key;
+    console.log(`\n焦点预检: 单候选自动继续 (${effectiveFocus})`);
+  } else if (precheckCandidates.length > 1) {
+    const complete = precheckCandidates.filter(c => c.has_complete_l5).map(c => c.process_key);
+    console.log(`\n焦点预检: ${precheckCandidates.length} 个候选流程 (${precheckCandidates.map(c => c.process_key).join(', ')})`);
+    if (complete.length > 0) {
+      console.log(`  完整 L5 活动证据: ${complete.join(', ')}`);
+    }
+  }
+
+  if (!dryRun && precheckCandidates.length > 1 && !effectiveFocus) {
+    const clarification = buildFocusClarification(precheckCandidates);
+    console.log('\n=== 需要选择流程焦点（不创建运行目录）===');
+    console.log(`问题: ${clarification.question}`);
+    console.log(`依据: ${clarification.reason}`);
+    console.log(`影响: ${clarification.impact}`);
+    for (const opt of clarification.options) {
+      console.log(`  - ${opt.value}: ${opt.label} → ${opt.effect}`);
+    }
+    // 机器可解析的单一 JSON 行，供严格入口/技能转交用户选择。
+    console.log(`FOCUS_CLARIFICATION ${JSON.stringify(clarification)}`);
+    process.exit(2);
+  }
+
+  // 3b. 估计执行预算（诚实预算：区分 EXACT 与 HEURISTIC_RANGE）。
+  //     对可安全内存抽取的格式复用真实抽取与 batching，零写入给精确计数；
+  //     对需可选运行时/视觉解析的格式给区间 + 依据 + 置信度。
+  console.log('\n估计执行预算...');
+  const budget = await estimateBudget({ inputs: validInputs, focus: effectiveFocus });
+  console.log(`  预计证据块: ${formatBudgetValue(budget.blocks)} 个证据块 (${budget.method})`);
+  console.log(`  预计批次: ${formatBudgetValue(budget.batches)} 个批次 (${budget.method})`);
+  console.log(`  预计任务: ${formatBudgetValue(budget.tasks)} 个任务 (${budget.method})`);
+  console.log(`  估计依据: ${budget.basis}`);
+  console.log(`  置信度: ${budget.confidence}`);
+
+  // 计算缓存键（含焦点：不同焦点过滤出不同批次，必须区分缓存）
   const batchParams = { maxChars: 12000, maxBlocks: 12 };
   const cacheKey = computeCacheKey(
     inputHashes.map(i => i.sha256),
     batchParams,
+    effectiveFocus,
   );
 
   // 4. Dry-run 模式 — 只读，不创建 run/cache
@@ -307,10 +358,16 @@ async function main() {
     console.log('\n执行计划:');
     console.log(`  输入文件: ${validInputs.length} 个`);
     console.log(`  流程标题: ${title}`);
-    console.log(`  流程焦点: ${focus || '(未指定)'}`);
+    console.log(`  流程焦点: ${effectiveFocus || '(未指定)'}`);
+    console.log(`  候选流程: ${precheckCandidates.length > 0 ? precheckCandidates.map(c => c.process_key).join(', ') : '(未识别到候选)'}`);
     console.log(`  运行目录: ${runDir}`);
     console.log(`  缓存目录: ${cacheDir}`);
-    console.log(`  预计批次: ${estimatedBatches}`);
+    console.log(`  预计证据块: ${formatBudgetValue(budget.blocks)} 个证据块 (${budget.method})`);
+    console.log(`  预计批次: ${formatBudgetValue(budget.batches)} 个批次 (${budget.method})`);
+    console.log(`  预计任务: ${formatBudgetValue(budget.tasks)} 个任务 (${budget.method})`);
+    console.log(`  估计依据: ${budget.basis}`);
+    console.log(`  置信度: ${budget.confidence}`);
+    console.log(`  估计方法版本: ${ESTIMATE_METHOD_VERSION}`);
     console.log(`  缓存键: ${cacheKey}`);
     console.log(`  抽取器版本: ${EXTRACTOR_VERSION}`);
     console.log(`  协议版本: ${BATCH_PROTOCOL_VERSION}`);
@@ -327,14 +384,15 @@ async function main() {
     console.log(`  ${join(runDir, 'evidence/batches/*.json')}`);
     console.log(`  ${join(runDir, 'stages/semantic/queue.json')}`);
 
-    // 输出确定性计划哈希
+    // 输出确定性计划哈希（纳入估计方法版本：算法变化即视为不同计划，避免误认同一计划）。
     const planHash = createHash('sha256')
       .update(JSON.stringify({
         inputs: inputHashes.map(i => i.sha256).sort(),
         title,
-        focus,
+        focus: effectiveFocus,
         extractor_version: EXTRACTOR_VERSION,
         protocol_version: BATCH_PROTOCOL_VERSION,
+        estimate_method_version: ESTIMATE_METHOD_VERSION,
         cache_key: cacheKey,
       }))
       .digest('hex');
@@ -364,7 +422,7 @@ async function main() {
           runDir,
           inputHashes,
           title,
-          focus,
+          focus: effectiveFocus,
           warnings,
           batchParams,
         });
@@ -396,6 +454,7 @@ async function main() {
     normalizer_version: NORMALIZER_VERSION,
     formula_version: FORMULA_VERSION,
     batch_params: batchParams,
+    focus: effectiveFocus || null,
     input_hashes: inputHashes.map(i => i.sha256).sort(),
   });
 
@@ -404,7 +463,7 @@ async function main() {
   const manifest = {
     schema_version: '1.0.0',
     title,
-    focus: focus || null,
+    focus: effectiveFocus || null,
     artifacts: inputHashes.map(i => ({
       file_path: i.path,
       format: i.format,
@@ -430,19 +489,25 @@ async function main() {
         runDir,
       });
 
-      for (const block of result.blocks) {
+      // 焦点过滤：选定焦点后仅保留归属该焦点的证据块，
+      // 确保后续批次/队列/生成只见焦点流程，避免跨层级混合。
+      const blocks = effectiveFocus
+        ? result.blocks.filter(block => blockMatchesProcessKey(block, effectiveFocus))
+        : result.blocks;
+
+      for (const block of blocks) {
         await writeJsonAtomic(join(runDir, 'evidence', 'blocks', `${block.block_id}.json`), block);
         allBlocks.push(block);
       }
 
-      console.log(`    -> ${result.blocks.length} 个证据块`);
+      console.log(`    -> ${blocks.length} 个证据块${effectiveFocus ? `（焦点 ${effectiveFocus}，原始 ${result.blocks.length} 块）` : ''}`);
 
       // 归一化为 Markdown
       console.log(`    归一化为 Markdown...`);
       const normalizedDoc = await normalizeEvidenceToMarkdown({
         artifact: { path: input.path, format: input.format },
         artifactSha256: input.sha256,
-        blocks: result.blocks,
+        blocks,
         runDir,
         converterVersion: NORMALIZER_VERSION,
       });
@@ -574,6 +639,7 @@ async function main() {
       fragment_protocol_version: '2.0.0',
       task_kinds: FRAGMENT_TASK_KINDS,
       batch_params: batchParams,
+      focus: effectiveFocus || null,
       input_hashes: inputHashes.map(i => i.sha256).sort(),
       created_at: new Date().toISOString(),
     });
@@ -586,7 +652,12 @@ async function main() {
   console.log('\n=== 完成 ===');
   console.log(`证据块: ${allBlocks.length}`);
   console.log(`批次: ${batches.length}`);
+  console.log(`任务: ${queueEntries.length}`);
   console.log(`警告: ${warnings.length}`);
+
+  // 报告实际值与预算估计的偏差（诚实预算：prepare 完成后核对，避免预算长期失真）。
+  const actual = { blocks: allBlocks.length, batches: batches.length, tasks: queueEntries.length };
+  reportBudgetDeviation(budget, actual);
 
   if (warnings.length > 0) {
     console.log('\n警告列表:');
@@ -595,12 +666,123 @@ async function main() {
 }
 
 /**
- * 预估批次数
+ * 报告实际执行值与 dry-run/预算估计之间的偏差。
+ * EXACT 估计应与实际完全一致；HEURISTIC_RANGE 则核对实际是否落在估计区间内。
+ * @param {object} budget - estimateBudget 的返回。
+ * @param {{blocks:number,batches:number,tasks:number}} actual - 实际计数。
  */
-function estimateBatches(inputs) {
-  // 简单估算：每个文件平均 2-3 个块，每批 12 个块
-  const estimatedBlocks = inputs.length * 2.5;
-  return Math.ceil(estimatedBlocks / 12);
+function reportBudgetDeviation(budget, actual) {
+  console.log('\n预算核对:');
+  const rows = [
+    ['证据块', actual.blocks, budget.blocks],
+    ['批次', actual.batches, budget.batches],
+    ['任务', actual.tasks, budget.tasks],
+  ];
+  for (const [label, actualValue, estimated] of rows) {
+    if (budget.method === 'EXACT') {
+      const match = estimated === actualValue;
+      console.log(`  ${label}: 实际 ${actualValue} / 预计 ${estimated} (EXACT) → ${match ? '一致' : '偏差 ' + (actualValue - estimated)}`);
+    } else {
+      const inRange = actualValue >= estimated.min && actualValue <= estimated.max;
+      console.log(`  ${label}: 实际 ${actualValue} / 预计区间 ${estimated.min}~${estimated.max} (HEURISTIC_RANGE) → ${inRange ? '落在区间内' : '超出区间'}`);
+    }
+  }
+}
+
+/**
+ * 估计执行预算（诚实预算：区分 EXACT 与 HEURISTIC_RANGE）。
+ *
+ * - 对可安全内存抽取的格式（md/bpmn/svg/mermaid）复用真实抽取与 batching，
+ *   返回精确 block/batch/task 数，零写入；
+ * - 对需可选运行时（pdf/docx/xlsx/pptx）或视觉解析（png/jpg/jpeg）的格式，
+ *   返回区间、估计依据与置信度，绝不把启发式值标为精确「预计批次」。
+ *
+ * 焦点（focus）会过滤证据块，因此估计必须应用与真实 prepare 相同的焦点过滤，
+ * 否则 dry-run 预算与实际执行会不一致。
+ *
+ * @param {object} params
+ * @param {Array<{path:string, format:string}>} params.inputs - 有效输入文件列表
+ * @param {string|null} params.focus - 有效焦点（可能由预检自动选定）
+ * @returns {Promise<{
+ *   method: 'EXACT'|'HEURISTIC_RANGE',
+ *   blocks: number|{min:number,max:number},
+ *   batches: number|{min:number,max:number},
+ *   tasks: number|{min:number,max:number},
+ *   basis: string,
+ *   confidence: 'high'|'medium'|'low'
+ * }>}
+ */
+async function estimateBudget({ inputs, focus }) {
+  const safeInputs = inputs.filter(i => SAFE_MEMORY_FORMATS.has(i.format));
+  const unsafeInputs = inputs.filter(i => !SAFE_MEMORY_FORMATS.has(i.format));
+
+  // 仅当全部输入都可安全内存抽取时，才给出 EXACT 精确预算。
+  if (unsafeInputs.length === 0 && safeInputs.length > 0) {
+    try {
+      const allBlocks = [];
+      for (const input of safeInputs) {
+        // runDir=null：抽取器对这些纯文本格式只读、不写盘。
+        const result = await extractArtifactEvidence({
+          artifact: { path: input.path, format: input.format },
+          runDir: null,
+        });
+        const blocks = focus
+          ? result.blocks.filter(block => blockMatchesProcessKey(block, focus))
+          : result.blocks;
+        for (const block of blocks) allBlocks.push(block);
+      }
+      // 复用真实 batching 逻辑（maxChars/maxBlocks 与 prepare 一致）。
+      const batches = buildEvidenceBatches({ blocks: allBlocks, maxChars: 12000, maxBlocks: 12 });
+      const tasks = batches.length * FRAGMENT_TASK_KINDS.length;
+      return {
+        method: 'EXACT',
+        blocks: allBlocks.length,
+        batches: batches.length,
+        tasks,
+        basis: `真实内存抽取 + 真实 batching（零写入）；格式=${[...new Set(safeInputs.map(i => i.format))].join('/')}`,
+        confidence: 'high',
+      };
+    } catch {
+      // 内存抽取失败：降级为启发式区间，不谎报精确。
+    }
+  }
+
+  // 启发式区间：对需可选运行时或视觉解析的格式给出范围而非单值。
+  const safeCount = safeInputs.length;
+  const unsafeCount = unsafeInputs.length;
+  const needsVisual = unsafeInputs.some(i => ['png', 'jpg', 'jpeg'].includes(i.format));
+
+  // 经验区间：纯文本/结构化格式每文件约 3~30 块；视觉/运行时格式每文件约 1~8 块。
+  const safeMin = safeCount * 3;
+  const safeMax = safeCount * 30;
+  const unsafeMin = unsafeCount * 1;
+  const unsafeMax = unsafeCount * 8;
+  const minBlocks = Math.max(1, safeMin + unsafeMin);
+  const maxBlocks = Math.max(minBlocks, safeMax + unsafeMax);
+  const minBatches = Math.max(1, Math.ceil(minBlocks / 12));
+  const maxBatches = Math.max(minBatches, Math.ceil(maxBlocks / 12));
+
+  const reasonParts = [];
+  if (unsafeCount > 0) reasonParts.push(`${unsafeCount} 个文件需可选运行时解析`);
+  if (needsVisual) reasonParts.push('含视觉资产需视觉解析');
+  if (safeCount > 0 && unsafeCount > 0) reasonParts.push(`${safeCount} 个文件可内存抽取但与不可精确文件混合`);
+
+  return {
+    method: 'HEURISTIC_RANGE',
+    blocks: { min: minBlocks, max: maxBlocks },
+    batches: { min: minBatches, max: maxBatches },
+    tasks: { min: minBatches * FRAGMENT_TASK_KINDS.length, max: maxBatches * FRAGMENT_TASK_KINDS.length },
+    basis: `启发式区间：${reasonParts.join('；') || '无法在 dry-run 阶段精确抽取'}`,
+    confidence: needsVisual ? 'low' : 'medium',
+  };
+}
+
+/**
+ * 将预算数值格式化为可读字符串：EXACT 为单值，HEURISTIC_RANGE 为「min~max」区间。
+ */
+function formatBudgetValue(value) {
+  if (typeof value === 'number') return String(value);
+  return `${value.min}~${value.max}`;
 }
 
 /**
@@ -641,6 +823,7 @@ async function restoreRunDirFromCache({
     normalizer_version: NORMALIZER_VERSION,
     formula_version: FORMULA_VERSION,
     batch_params: batchParams,
+    focus: focus || null,
     input_hashes: inputHashes.map(i => i.sha256).sort(),
   });
 

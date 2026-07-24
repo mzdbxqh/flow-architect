@@ -5,7 +5,7 @@ import os from 'node:os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PLUGIN_VERSION = '0.4.1';
+const PLUGIN_VERSION = '0.5.1';
 
 /**
  * Build adapter outputs for both Codex and Claude platforms.
@@ -185,7 +185,7 @@ export function buildAdapterOutputs(pluginRoot) {
       author: {
         name: 'flow-architect contributors'
       },
-      repository: 'https://github.com/mzdbxqh/flow-architect',
+      repository: 'https://github.com/ifoohoo/flow-architect',
       license: 'Apache-2.0',
       keywords: ['architecture', 'review', 'draft', 'meeting', 'bpmn', 'process', 'diagram'],
       category: 'productivity'
